@@ -1,7 +1,6 @@
 use client::{Client, UserStore};
 use codestral::{CodestralEditPredictionDelegate, load_codestral_api_key};
 use collections::HashMap;
-use copilot::CopilotEditPredictionDelegate;
 use edit_prediction::{EditPredictionModel, ZedEditPredictionDelegate};
 use editor::Editor;
 use gpui::{AnyWindowHandle, App, AppContext as _, Context, Entity, WeakEntity};
@@ -28,8 +27,6 @@ pub fn init(client: Arc<Client>, user_store: Entity<UserStore>, cx: &mut App) {
             if !editor.mode().is_full() {
                 return;
             }
-
-            register_backward_compatible_actions(editor, cx);
 
             let Some(window) = window else {
                 return;
@@ -115,7 +112,6 @@ fn edit_prediction_provider_config_for_settings(cx: &App) -> Option<EditPredicti
     let provider = settings.provider;
     match provider {
         EditPredictionProvider::None => None,
-        EditPredictionProvider::Copilot => Some(EditPredictionProviderConfig::Copilot),
         EditPredictionProvider::Zed => {
             Some(EditPredictionProviderConfig::Zed(EditPredictionModel::Zeta))
         }
@@ -173,7 +169,6 @@ fn infer_prompt_format(model: &str) -> Option<EditPredictionPromptFormat> {
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum EditPredictionProviderConfig {
-    Copilot,
     Codestral,
     Zed(EditPredictionModel),
 }
@@ -181,7 +176,6 @@ enum EditPredictionProviderConfig {
 impl EditPredictionProviderConfig {
     fn name(&self) -> &'static str {
         match self {
-            EditPredictionProviderConfig::Copilot => "Copilot",
             EditPredictionProviderConfig::Codestral => "Codestral",
             EditPredictionProviderConfig::Zed(model) => match model {
                 EditPredictionModel::Zeta => "Zeta",
@@ -224,19 +218,6 @@ fn assign_edit_prediction_providers(
     }
 }
 
-fn register_backward_compatible_actions(editor: &mut Editor, cx: &mut Context<Editor>) {
-    // We renamed some of these actions to not be copilot-specific, but that
-    // would have not been backwards-compatible. So here we are re-registering
-    // the actions with the old names to not break people's keymaps.
-    editor
-        .register_action(cx.listener(
-            |editor, _: &copilot::Suggest, window: &mut Window, cx: &mut Context<Editor>| {
-                editor.show_edit_prediction(&Default::default(), window, cx);
-            },
-        ))
-        .detach();
-}
-
 fn assign_edit_prediction_provider(
     editor: &mut Editor,
     provider_config: Option<EditPredictionProviderConfig>,
@@ -251,24 +232,6 @@ fn assign_edit_prediction_provider(
     match provider_config {
         None => {
             editor.set_edit_prediction_provider::<ZedEditPredictionDelegate>(None, window, cx);
-        }
-        Some(EditPredictionProviderConfig::Copilot) => {
-            let ep_store = edit_prediction::EditPredictionStore::global(client, &user_store, cx);
-            let Some(project) = editor.project().cloned() else {
-                return;
-            };
-            let copilot =
-                ep_store.update(cx, |this, cx| this.start_copilot_for_project(&project, cx));
-
-            if let Some(copilot) = copilot {
-                if let Some(buffer) = singleton_buffer {
-                    copilot.update(cx, |copilot, cx| {
-                        copilot.register_buffer(&buffer, cx);
-                    });
-                }
-                let provider = cx.new(|_| CopilotEditPredictionDelegate::new(copilot));
-                editor.set_edit_prediction_provider(Some(provider), window, cx);
-            }
         }
         Some(EditPredictionProviderConfig::Codestral) => {
             let http_client = client.http_client();

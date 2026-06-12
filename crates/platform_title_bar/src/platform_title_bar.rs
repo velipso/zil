@@ -106,11 +106,6 @@ impl PlatformTitleBar {
             .map(|mw| mw.read(cx).sidebar_render_state(cx))
             .unwrap_or_default()
     }
-
-    pub fn is_multi_workspace_enabled(_cx: &App) -> bool {
-        // VELIPSO: figure out who uses this
-        false
-    }
 }
 
 /// Renders the platform-appropriate left-side window controls (e.g. Ubuntu/GNOME close button).

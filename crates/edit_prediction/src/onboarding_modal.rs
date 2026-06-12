@@ -1,16 +1,13 @@
 use std::sync::Arc;
 
-use crate::{EditPredictionStore, ZedPredictUpsell};
+use crate::{ZedPredictUpsell};
 use ai_onboarding::EditPredictionOnboarding;
 use client::{Client, UserStore};
 use db::kvp::Dismissable;
-use fs::Fs;
 use gpui::{
     ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, MouseDownEvent, Render,
     linear_color_stop, linear_gradient,
 };
-use language::language_settings::EditPredictionProvider;
-use settings::update_settings_file;
 use ui::prelude::*;
 use workspace::{ModalView, Workspace};
 
@@ -30,64 +27,15 @@ pub struct ZedPredictModal {
     focus_handle: FocusHandle,
 }
 
-pub(crate) fn set_edit_prediction_provider(provider: EditPredictionProvider, cx: &mut App) {
-    let fs = <dyn Fs>::global(cx);
-    update_settings_file(fs, cx, move |settings, _| {
-        settings
-            .project
-            .all_languages
-            .edit_predictions
-            .get_or_insert(Default::default())
-            .provider = Some(provider);
-    });
-}
-
 impl ZedPredictModal {
     pub fn toggle(
-        workspace: &mut Workspace,
-        user_store: Entity<UserStore>,
-        client: Arc<Client>,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
+        _workspace: &mut Workspace,
+        _user_store: Entity<UserStore>,
+        _client: Arc<Client>,
+        _window: &mut Window,
+        _cx: &mut Context<Workspace>,
     ) {
-        let project = workspace.project().clone();
-        workspace.toggle_modal(window, cx, |_window, cx| {
-            let weak_entity = cx.weak_entity();
-            let copilot = EditPredictionStore::try_global(cx)
-                .and_then(|store| store.read(cx).copilot_for_project(&project));
-            Self {
-                onboarding: cx.new(|cx| {
-                    EditPredictionOnboarding::new(
-                        user_store.clone(),
-                        client.clone(),
-                        copilot
-                            .as_ref()
-                            .is_some_and(|copilot| copilot.read(cx).status().is_configured()),
-                        Arc::new({
-                            let this = weak_entity.clone();
-                            move |_window, cx| {
-                                ZedPredictUpsell::set_dismissed(true, cx);
-                                set_edit_prediction_provider(EditPredictionProvider::Zed, cx);
-                                this.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
-                            }
-                        }),
-                        Arc::new({
-                            let this = weak_entity.clone();
-                            move |window, cx| {
-                                ZedPredictUpsell::set_dismissed(true, cx);
-                                set_edit_prediction_provider(EditPredictionProvider::Copilot, cx);
-                                this.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
-                                if let Some(copilot) = copilot.clone() {
-                                    copilot_ui::initiate_sign_in(copilot, window, cx);
-                                }
-                            }
-                        }),
-                        cx,
-                    )
-                }),
-                focus_handle: cx.focus_handle(),
-            }
-        });
+        // VELIPSO: remove
     }
 
     fn cancel(&mut self, _: &menu::Cancel, _: &mut Window, cx: &mut Context<Self>) {

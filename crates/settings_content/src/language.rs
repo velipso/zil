@@ -82,7 +82,6 @@ impl merge_from::MergeFrom for AllLanguageSettingsContent {
 pub enum EditPredictionProvider {
     None,
     #[default]
-    Copilot,
     Zed,
     Codestral,
     Ollama,
@@ -95,7 +94,6 @@ impl EditPredictionProvider {
         match self {
             EditPredictionProvider::Zed => true,
             EditPredictionProvider::None
-            | EditPredictionProvider::Copilot
             | EditPredictionProvider::Codestral
             | EditPredictionProvider::Ollama
             | EditPredictionProvider::OpenAiCompatibleApi
@@ -106,7 +104,6 @@ impl EditPredictionProvider {
     pub fn display_name(&self) -> Option<&'static str> {
         match self {
             EditPredictionProvider::Zed => Some("Zed AI"),
-            EditPredictionProvider::Copilot => Some("GitHub Copilot"),
             EditPredictionProvider::Codestral => Some("Codestral"),
             EditPredictionProvider::Mercury => Some("Mercury"),
             EditPredictionProvider::None => None,
@@ -129,8 +126,6 @@ pub struct EditPredictionSettingsContent {
     /// The mode used to display edit predictions in the buffer.
     /// Provider support required.
     pub mode: Option<EditPredictionsMode>,
-    /// Settings specific to GitHub Copilot.
-    pub copilot: Option<CopilotSettingsContent>,
     /// Settings specific to Codestral.
     pub codestral: Option<CodestralSettingsContent>,
     /// Settings specific to Ollama.
@@ -196,27 +191,6 @@ pub enum EditPredictionPromptFormatContent {
     CodeGemma,
     Codestral,
     Glm,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct CopilotSettingsContent {
-    /// HTTP/HTTPS proxy to use for Copilot.
-    ///
-    /// Default: none
-    pub proxy: Option<String>,
-    /// Disable certificate verification for the proxy (not recommended).
-    ///
-    /// Default: false
-    pub proxy_no_verify: Option<bool>,
-    /// Enterprise URI for Copilot.
-    ///
-    /// Default: none
-    pub enterprise_uri: Option<String>,
-    /// Whether the Copilot Next Edit Suggestions feature is enabled.
-    ///
-    /// Default: true
-    pub enable_next_edit_suggestions: Option<bool>,
 }
 
 #[with_fallible_options]

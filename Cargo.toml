@@ -39,8 +39,6 @@ members = [
     "crates/component",
     "crates/component_preview",
     "crates/context_server",
-    "crates/copilot",
-    "crates/copilot_chat",
     "crates/crashes",
     "crates/credentials_provider",
     "crates/csv_preview",
@@ -303,9 +301,6 @@ component = { path = "crates/component" }
 component_preview = { path = "crates/component_preview" }
 console = "0.16"
 context_server = { path = "crates/context_server" }
-copilot = { path = "crates/copilot" }
-copilot_chat = { path = "crates/copilot_chat" }
-copilot_ui = { path = "crates/copilot_ui" }
 crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"

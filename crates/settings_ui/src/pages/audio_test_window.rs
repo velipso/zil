@@ -34,11 +34,7 @@ pub struct AudioTestWindow {
 
 impl AudioTestWindow {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let title_bar = if !cfg!(target_os = "macos") {
-            Some(cx.new(|cx| PlatformTitleBar::new("audio-test-title-bar", cx)))
-        } else {
-            None
-        };
+        let title_bar = None;
 
         let audio_settings = AudioSettings::get_global(cx);
         let input_device_id = audio_settings.input_audio_device.clone();

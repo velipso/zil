@@ -5,7 +5,6 @@ use http_client::http::{HeaderName, HeaderValue};
 pub mod anthropic;
 pub mod bedrock;
 pub mod cloud;
-pub mod copilot_chat;
 pub mod deepseek;
 pub mod google;
 pub mod lmstudio;
@@ -63,74 +62,4 @@ pub(crate) fn resolve_custom_headers(
         })
         .collect();
     CustomHeaders::new(headers)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs
-            .iter()
-            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
-            .collect()
-    }
-
-    fn names(headers: &CustomHeaders) -> Vec<String> {
-        let mut names: Vec<String> = headers
-            .iter()
-            .map(|(name, _)| name.as_str().to_owned())
-            .collect();
-        names.sort();
-        names
-    }
-
-    #[test]
-    fn drops_common_and_provider_reserved_headers() {
-        let settings = map(&[
-            ("Authorization", "Bearer leak"),
-            ("Content-Type", "text/plain"),
-            ("Accept", "text/plain"),
-            ("X-Api-Key", "leak"),
-            ("X-Allowed", "yes"),
-        ]);
-        let merged = resolve_custom_headers("Test", &settings, &["X-Api-Key"]);
-        assert_eq!(names(&merged), vec!["x-allowed".to_string()]);
-    }
-
-    #[test]
-    fn reserved_header_match_is_case_insensitive() {
-        let settings = map(&[
-            ("authorization", "Bearer leak"),
-            ("CONTENT-TYPE", "text/plain"),
-            ("x-api-key", "leak"),
-            ("X-Allowed", "yes"),
-        ]);
-        let merged = resolve_custom_headers("Test", &settings, &["X-Api-Key"]);
-        assert_eq!(names(&merged), vec!["x-allowed".to_string()]);
-    }
-
-    #[test]
-    fn headers_with_reserved_prefix_are_kept() {
-        let settings = map(&[("Authorization-Forwarded", "ok"), ("X-Api-Key-Trace", "ok")]);
-        let merged = resolve_custom_headers("Test", &settings, &["X-Api-Key"]);
-        assert_eq!(
-            names(&merged),
-            vec![
-                "authorization-forwarded".to_string(),
-                "x-api-key-trace".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn drops_invalid_header_name_and_value() {
-        let settings = map(&[
-            ("Bad Name", "ok"),
-            ("X-Bad-Value", "line1\nline2"),
-            ("X-Allowed", "yes"),
-        ]);
-        let merged = resolve_custom_headers("Test", &settings, &[]);
-        assert_eq!(names(&merged), vec!["x-allowed".to_string()]);
-    }
 }

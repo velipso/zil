@@ -21,9 +21,6 @@ client.workspace = true
 cloud_llm_client.workspace = true
 codestral.workspace = true
 command_palette_hooks.workspace = true
-copilot.workspace = true
-copilot_chat.workspace = true
-copilot_ui.workspace = true
 edit_prediction_types.workspace = true
 edit_prediction.workspace = true
 editor.workspace = true
@@ -50,7 +47,6 @@ zed_actions.workspace = true
 zeta_prompt.workspace = true
 
 [dev-dependencies]
-copilot = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
 futures.workspace = true
 indoc.workspace = true

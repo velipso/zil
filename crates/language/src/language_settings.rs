@@ -470,8 +470,6 @@ pub struct EditPredictionSettings {
     pub disabled_globs: Vec<DisabledGlob>,
     /// Configures how edit predictions are displayed in the buffer.
     pub mode: settings::EditPredictionsMode,
-    /// Settings specific to GitHub Copilot.
-    pub copilot: CopilotSettings,
     /// Settings specific to Codestral.
     pub codestral: CodestralSettings,
     /// Settings specific to Ollama.
@@ -502,18 +500,6 @@ impl EditPredictionSettings {
 pub struct DisabledGlob {
     matcher: GlobMatcher,
     is_absolute: bool,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct CopilotSettings {
-    /// HTTP/HTTPS proxy to use for Copilot.
-    pub proxy: Option<String>,
-    /// Disable certificate verification for proxy (not recommended).
-    pub proxy_no_verify: Option<bool>,
-    /// Enterprise URI for Copilot.
-    pub enterprise_uri: Option<String>,
-    /// Whether the Copilot Next Edit Suggestions feature is enabled.
-    pub enable_next_edit_suggestions: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -832,14 +818,6 @@ impl settings::Settings for AllLanguageSettings {
             .iter()
             .collect();
 
-        let copilot = edit_predictions.copilot.unwrap();
-        let copilot_settings = CopilotSettings {
-            proxy: copilot.proxy,
-            proxy_no_verify: copilot.proxy_no_verify,
-            enterprise_uri: copilot.enterprise_uri,
-            enable_next_edit_suggestions: copilot.enable_next_edit_suggestions,
-        };
-
         let codestral = edit_predictions.codestral.unwrap();
         let codestral_settings = CodestralSettings {
             model: codestral.model,
@@ -906,7 +884,6 @@ impl settings::Settings for AllLanguageSettings {
                     })
                     .collect(),
                 mode: edit_predictions_mode,
-                copilot: copilot_settings,
                 codestral: codestral_settings,
                 ollama: ollama_settings,
                 open_ai_compatible_api: openai_compatible_settings,

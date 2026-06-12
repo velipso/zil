@@ -25,8 +25,6 @@ cloud_api_client.workspace = true
 cloud_api_types.workspace = true
 cloud_llm_client = { workspace = true, features = ["predict-edits"] }
 collections.workspace = true
-copilot.workspace = true
-copilot_ui.workspace = true
 credentials_provider.workspace = true
 db.workspace = true
 edit_prediction_types.workspace = true
