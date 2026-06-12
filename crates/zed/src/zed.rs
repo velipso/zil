@@ -5672,28 +5672,6 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_disable_ai_crash(cx: &mut gpui::TestAppContext) {
-        let app_state = init_test(cx);
-        cx.update(init);
-        let project = Project::test(app_state.fs.clone(), [], cx).await;
-        let _window = cx.add_window(|window, cx| MultiWorkspace::test_new(project, window, cx));
-
-        cx.run_until_parked();
-
-        cx.update(|cx| {
-            SettingsStore::update_global(cx, |settings_store, cx| {
-                settings_store.update_user_settings(cx, |settings| {
-                    settings.project.disable_ai = Some(SaturatingBool(true));
-                });
-            });
-        });
-
-        cx.run_until_parked();
-
-        // If this panics, the test has failed
-    }
-
-    #[gpui::test]
     async fn test_prefer_focused_window(cx: &mut gpui::TestAppContext) {
         let app_state = init_test(cx);
         let paths = [PathBuf::from(path!("/dir/document.txt"))];

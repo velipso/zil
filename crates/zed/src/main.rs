@@ -703,11 +703,7 @@ fn main() {
         snippet_provider::init(cx);
         edit_prediction_registry::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         let prompt_builder = PromptBuilder::load(app_state.fs.clone(), stdout_is_a_pty(), cx);
-        project::AgentRegistryStore::init_global(
-            cx,
-            app_state.fs.clone(),
-            app_state.client.http_client(),
-        );
+        project::AgentRegistryStore::init_global(cx);
         agent_ui::init(
             app_state.fs.clone(),
             prompt_builder,
