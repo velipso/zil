@@ -52,12 +52,11 @@ use gpui::{
 };
 use language::{
     LanguageRegistry,
-    language_settings::{AllLanguageSettings, EditPredictionProvider},
 };
 use language_model::{
     ConfiguredModel, LanguageModelId, LanguageModelProviderId, LanguageModelRegistry,
 };
-use project::{AgentId, DisableAiSettings};
+use project::{AgentId};
 use prompt_store::{self, PromptBuilder, rules_to_skills_migration};
 use rope::Point;
 use schemars::JsonSchema;
@@ -740,13 +739,6 @@ fn maybe_backfill_editor_layout(fs: Arc<dyn Fs>, is_new_install: bool, cx: &mut 
 }
 
 fn update_command_palette_filter(cx: &mut App) {
-    let disable_ai = DisableAiSettings::get_global(cx).disable_ai;
-    let agent_enabled = AgentSettings::get_global(cx).enabled;
-
-    let edit_prediction_provider = AllLanguageSettings::get_global(cx)
-        .edit_predictions
-        .provider;
-
     CommandPaletteFilter::update_global(cx, |filter, _| {
         use editor::actions::{
             AcceptEditPrediction, AcceptNextLineEditPrediction, AcceptNextWordEditPrediction,
@@ -768,67 +760,23 @@ fn update_command_palette_filter(cx: &mut App) {
             TypeId::of::<zed_actions::assistant::CreateSkillFromUrl>(),
         ];
 
-        if disable_ai {
-            filter.hide_namespace("agent");
-            filter.hide_namespace("agents");
-            filter.hide_namespace("assistant");
-            filter.hide_namespace("copilot");
-            filter.hide_namespace("zed_predict_onboarding");
-            filter.hide_namespace("edit_prediction");
+        filter.hide_namespace("agent");
+        filter.hide_namespace("agents");
+        filter.hide_namespace("assistant");
+        filter.hide_namespace("copilot");
+        filter.hide_namespace("zed_predict_onboarding");
+        filter.hide_namespace("edit_prediction");
 
-            filter.hide_action_types(&edit_prediction_actions);
-            filter.hide_action_types(&[TypeId::of::<zed_actions::OpenZedPredictOnboarding>()]);
-        } else {
-            if agent_enabled {
-                filter.show_namespace("agent");
-                filter.show_namespace("agents");
-                filter.show_namespace("assistant");
-            } else {
-                filter.hide_namespace("agent");
-                filter.hide_namespace("agents");
-                filter.hide_namespace("assistant");
-            }
-
-            match edit_prediction_provider {
-                EditPredictionProvider::None => {
-                    filter.hide_namespace("edit_prediction");
-                    filter.hide_namespace("copilot");
-                    filter.hide_action_types(&edit_prediction_actions);
-                }
-                EditPredictionProvider::Copilot => {
-                    filter.show_namespace("edit_prediction");
-                    filter.show_namespace("copilot");
-                    filter.show_action_types(edit_prediction_actions.iter());
-                }
-                EditPredictionProvider::Zed
-                | EditPredictionProvider::Codestral
-                | EditPredictionProvider::Ollama
-                | EditPredictionProvider::OpenAiCompatibleApi
-                | EditPredictionProvider::Mercury => {
-                    filter.show_namespace("edit_prediction");
-                    filter.hide_namespace("copilot");
-                    filter.show_action_types(edit_prediction_actions.iter());
-                }
-            }
-
-            filter.show_namespace("zed_predict_onboarding");
-            filter.show_action_types(&[TypeId::of::<zed_actions::OpenZedPredictOnboarding>()]);
-
-            filter.show_namespace("multi_workspace");
-        }
+        filter.hide_action_types(&edit_prediction_actions);
+        filter.hide_action_types(&[TypeId::of::<zed_actions::OpenZedPredictOnboarding>()]);
 
         // Hide `assistant: open rules library` — Rules are surfaced
         // through the Skills UI now. Applied after the disable-ai /
         // agent-enabled branches so it overrides the
         // `show_namespace("assistant")` call above without affecting the
         // rest of that namespace's actions.
-        if !disable_ai {
-            filter.hide_action_types(&open_rules_library_action);
-            filter.show_action_types(skill_creator_actions.iter());
-        } else {
-            filter.show_action_types(open_rules_library_action.iter());
-            filter.hide_action_types(&skill_creator_actions);
-        }
+        filter.show_action_types(open_rules_library_action.iter());
+        filter.hide_action_types(&skill_creator_actions);
     });
 }
 
@@ -888,309 +836,4 @@ fn update_active_language_model_from_settings(cx: &mut App) {
         registry.select_thread_summary_model(thread_summary.as_ref(), cx);
         registry.select_inline_alternative_models(inline_alternatives, cx);
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use agent_settings::{AgentProfileId, AgentSettings};
-    use command_palette_hooks::CommandPaletteFilter;
-    use db::kvp::KeyValueStore;
-    use editor::actions::AcceptEditPrediction;
-    use gpui::{BorrowAppContext, TestAppContext, px};
-    use project::DisableAiSettings;
-    use settings::{
-        DockPosition, NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, Settings, SettingsStore,
-    };
-
-    #[gpui::test]
-    fn test_agent_command_palette_visibility(cx: &mut TestAppContext) {
-        // Init settings
-        cx.update(|cx| {
-            let store = SettingsStore::test(cx);
-            cx.set_global(store);
-            command_palette_hooks::init(cx);
-            AgentSettings::register(cx);
-            DisableAiSettings::register(cx);
-            AllLanguageSettings::register(cx);
-        });
-
-        let agent_settings = AgentSettings {
-            enabled: true,
-            button: true,
-            dock: DockPosition::Right,
-            flexible: true,
-            default_width: px(300.),
-            default_height: px(600.),
-            max_content_width: Some(px(850.)),
-            default_model: None,
-            subagent_model: None,
-            inline_assistant_model: None,
-            inline_assistant_use_streaming_tools: false,
-            commit_message_model: None,
-            commit_message_instructions: None,
-            thread_summary_model: None,
-            inline_alternatives: vec![],
-            favorite_models: vec![],
-            default_profile: AgentProfileId::default(),
-            profiles: Default::default(),
-            notify_when_agent_waiting: NotifyWhenAgentWaiting::default(),
-            play_sound_when_agent_done: PlaySoundWhenAgentDone::Never,
-            single_file_review: false,
-            model_parameters: vec![],
-            enable_feedback: false,
-            expand_edit_card: true,
-            expand_terminal_card: true,
-            cancel_generation_on_terminal_stop: true,
-            use_modifier_to_send: true,
-            message_editor_min_lines: 1,
-            tool_permissions: Default::default(),
-            sandbox_permissions: Default::default(),
-            show_turn_stats: false,
-            show_merge_conflict_indicator: true,
-            sidebar_side: Default::default(),
-            thinking_display: Default::default(),
-        };
-
-        cx.update(|cx| {
-            AgentSettings::override_global(agent_settings.clone(), cx);
-            DisableAiSettings::override_global(DisableAiSettings { disable_ai: false }, cx);
-
-            // Initial update
-            update_command_palette_filter(cx);
-        });
-
-        // Assert visible
-        cx.update(|cx| {
-            let filter = CommandPaletteFilter::try_global(cx).unwrap();
-            assert!(
-                !filter.is_hidden(&NewThread),
-                "NewThread should be visible by default"
-            );
-            assert!(
-                !filter.is_hidden(&NewTerminalThread),
-                "NewTerminalThread should be visible by default"
-            );
-            assert!(
-                !filter.is_hidden(&zed_actions::assistant::OpenSkillCreator),
-                "OpenSkillCreator should be visible by default"
-            );
-            assert!(
-                !filter.is_hidden(&zed_actions::assistant::CreateSkillFromUrl),
-                "CreateSkillFromUrl should be visible by default"
-            );
-            assert!(
-                !filter.is_hidden(&zed_actions::assistant::OpenGlobalAgentsMdRules),
-                "OpenGlobalAgentsMdRules should be visible by default"
-            );
-            assert!(
-                !filter.is_hidden(&zed_actions::assistant::OpenProjectAgentsMdRules),
-                "OpenProjectAgentsMdRules should be visible by default"
-            );
-        });
-
-        // Disable agent
-        cx.update(|cx| {
-            let mut new_settings = agent_settings.clone();
-            new_settings.enabled = false;
-            AgentSettings::override_global(new_settings, cx);
-
-            // Trigger update
-            update_command_palette_filter(cx);
-        });
-
-        // Assert hidden
-        cx.update(|cx| {
-            let filter = CommandPaletteFilter::try_global(cx).unwrap();
-            assert!(
-                filter.is_hidden(&NewThread),
-                "NewThread should be hidden when agent is disabled"
-            );
-            assert!(
-                filter.is_hidden(&NewTerminalThread),
-                "NewTerminalThread should be hidden when agent is disabled"
-            );
-            assert!(
-                filter.is_hidden(&zed_actions::assistant::OpenGlobalAgentsMdRules),
-                "OpenGlobalAgentsMdRules should be hidden when agent is disabled"
-            );
-            assert!(
-                filter.is_hidden(&zed_actions::assistant::OpenProjectAgentsMdRules),
-                "OpenProjectAgentsMdRules should be hidden when agent is disabled"
-            );
-        });
-
-        // Test EditPredictionProvider
-        // Enable EditPredictionProvider::Copilot
-        cx.update(|cx| {
-            cx.update_global::<SettingsStore, _>(|store, cx| {
-                store.update_user_settings(cx, |s| {
-                    s.project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert(Default::default())
-                        .provider = Some(EditPredictionProvider::Copilot);
-                });
-            });
-            update_command_palette_filter(cx);
-        });
-
-        cx.update(|cx| {
-            let filter = CommandPaletteFilter::try_global(cx).unwrap();
-            assert!(
-                !filter.is_hidden(&AcceptEditPrediction),
-                "EditPrediction should be visible when provider is Copilot"
-            );
-        });
-
-        // Disable EditPredictionProvider (None)
-        cx.update(|cx| {
-            cx.update_global::<SettingsStore, _>(|store, cx| {
-                store.update_user_settings(cx, |s| {
-                    s.project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert(Default::default())
-                        .provider = Some(EditPredictionProvider::None);
-                });
-            });
-            update_command_palette_filter(cx);
-        });
-
-        cx.update(|cx| {
-            let filter = CommandPaletteFilter::try_global(cx).unwrap();
-            assert!(
-                filter.is_hidden(&AcceptEditPrediction),
-                "EditPrediction should be hidden when provider is None"
-            );
-        });
-    }
-
-    async fn setup_backfill_test(cx: &mut TestAppContext) -> Arc<dyn Fs> {
-        let fs = fs::FakeFs::new(cx.background_executor.clone());
-        fs.save(
-            paths::settings_file().as_path(),
-            &"{}".into(),
-            Default::default(),
-        )
-        .await
-        .unwrap();
-
-        cx.update(|cx| {
-            cx.set_global(db::AppDatabase::test_new());
-            let store = SettingsStore::test(cx);
-            cx.set_global(store);
-            AgentSettings::register(cx);
-            DisableAiSettings::register(cx);
-            cx.set_staff(true);
-        });
-
-        fs
-    }
-
-    #[gpui::test]
-    async fn test_backfill_sets_kvp_flag(cx: &mut TestAppContext) {
-        let fs = setup_backfill_test(cx).await;
-
-        cx.update(|cx| {
-            let kvp = KeyValueStore::global(cx);
-            assert!(
-                kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY)
-                    .unwrap()
-                    .is_none()
-            );
-
-            maybe_backfill_editor_layout(fs.clone(), false, cx);
-        });
-
-        cx.run_until_parked();
-
-        let kvp = cx.update(|cx| KeyValueStore::global(cx));
-        assert!(
-            kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY)
-                .unwrap()
-                .is_some(),
-            "flag should be set after backfill"
-        );
-    }
-
-    #[gpui::test]
-    async fn test_backfill_new_install_sets_flag_without_writing_settings(cx: &mut TestAppContext) {
-        let fs = setup_backfill_test(cx).await;
-
-        cx.update(|cx| {
-            maybe_backfill_editor_layout(fs.clone(), true, cx);
-        });
-
-        cx.run_until_parked();
-
-        let kvp = cx.update(|cx| KeyValueStore::global(cx));
-        assert!(
-            kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY)
-                .unwrap()
-                .is_some(),
-            "flag should be set even for new installs"
-        );
-
-        let written = fs.load(paths::settings_file().as_path()).await.unwrap();
-        assert_eq!(written.trim(), "{}", "settings file should be unchanged");
-    }
-
-    #[gpui::test]
-    async fn test_backfill_is_idempotent(cx: &mut TestAppContext) {
-        let fs = setup_backfill_test(cx).await;
-
-        cx.update(|cx| {
-            maybe_backfill_editor_layout(fs.clone(), false, cx);
-        });
-
-        cx.run_until_parked();
-
-        let after_first = fs.load(paths::settings_file().as_path()).await.unwrap();
-
-        cx.update(|cx| {
-            maybe_backfill_editor_layout(fs.clone(), false, cx);
-        });
-
-        cx.run_until_parked();
-
-        let after_second = fs.load(paths::settings_file().as_path()).await.unwrap();
-        assert_eq!(
-            after_first, after_second,
-            "second call should not change settings"
-        );
-    }
-
-    #[test]
-    fn test_deserialize_external_agent_variants() {
-        assert_eq!(
-            serde_json::from_str::<Agent>(r#""NativeAgent""#).unwrap(),
-            Agent::NativeAgent,
-        );
-        assert_eq!(
-            serde_json::from_str::<Agent>(r#"{"Custom":{"name":"my-agent"}}"#).unwrap(),
-            Agent::Custom {
-                id: "my-agent".into(),
-            },
-        );
-    }
-
-    #[test]
-    fn test_deserialize_new_external_agent_thread() {
-        let action = serde_json::from_str::<NewExternalAgentThread>(r#"{"agent":"gemini"}"#)
-            .expect("should deserialize agent id");
-        assert_eq!(action.agent, AgentId::from("gemini"));
-
-        let action = serde_json::from_str::<NewExternalAgentThread>(
-            r#"{"agent":{"custom":{"name":"gemini"}}}"#,
-        )
-        .expect("should deserialize legacy custom agent payload");
-        assert_eq!(action.agent, AgentId::from("gemini"));
-
-        let action = serde_json::from_str::<NewExternalAgentThread>(r#"{"agent":"NativeAgent"}"#)
-            .expect("should deserialize legacy native agent payload");
-        assert_eq!(action.agent, Agent::NativeAgent.id());
-
-        assert!(serde_json::from_str::<NewExternalAgentThread>(r#"{}"#).is_err());
-    }
 }

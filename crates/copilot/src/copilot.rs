@@ -18,14 +18,14 @@ use gpui::{
 use language::language_settings::{AllLanguageSettings, CopilotSettings};
 use language::{
     Anchor, Bias, Buffer, BufferSnapshot, Language, PointUtf16, ToPointUtf16,
-    language_settings::{EditPredictionProvider, all_language_settings},
+    language_settings::{all_language_settings},
     point_from_lsp, point_to_lsp,
 };
 use lsp::{LanguageServer, LanguageServerBinary, LanguageServerId, LanguageServerName};
 use node_runtime::{NodeRuntime, VersionStrategy};
 use parking_lot::Mutex;
 use project::project_settings::ProjectSettings;
-use project::{DisableAiSettings, Project};
+use project::{Project};
 use request::DidChangeStatus;
 use serde_json::json;
 use settings::{Settings, SettingsStore};
@@ -281,26 +281,9 @@ impl GlobalCopilotAuth {
         cx.try_global()
     }
 
-    pub fn try_get_or_init(app_state: Arc<AppState>, cx: &mut App) -> Option<GlobalCopilotAuth> {
-        let ai_enabled = !DisableAiSettings::get(None, cx).disable_ai;
-
-        if let Some(copilot) = cx.try_global::<Self>().cloned() {
-            if ai_enabled {
-                Some(copilot)
-            } else {
-                cx.remove_global::<Self>();
-                None
-            }
-        } else if ai_enabled {
-            Some(Self::set_global(
-                app_state.languages.next_language_server_id(),
-                app_state.fs.clone(),
-                app_state.node_runtime.clone(),
-                cx,
-            ))
-        } else {
-            None
-        }
+    pub fn try_get_or_init(_app_state: Arc<AppState>, _cx: &mut App) -> Option<GlobalCopilotAuth> {
+        // VELIPSO: track down who uses this
+        None
     }
 }
 impl Global for GlobalCopilotAuth {}
@@ -392,35 +375,23 @@ impl Copilot {
         };
         this.start_copilot(true, false, cx);
         cx.observe_global::<SettingsStore>(move |this, cx| {
-            let ai_disabled = DisableAiSettings::get_global(cx).disable_ai;
-
-            if ai_disabled {
-                // Stop the server if AI is disabled
-                if !matches!(this.server, CopilotServer::Disabled) {
-                    let shutdown = match mem::replace(&mut this.server, CopilotServer::Disabled) {
-                        CopilotServer::Running(server) => {
-                            let shutdown_future = server.lsp.shutdown();
-                            Some(cx.background_spawn(async move {
-                                if let Some(fut) = shutdown_future {
-                                    fut.await;
-                                }
-                            }))
-                        }
-                        _ => None,
-                    };
-                    if let Some(task) = shutdown {
-                        task.detach();
+            // Stop the server if AI is disabled
+            if !matches!(this.server, CopilotServer::Disabled) {
+                let shutdown = match mem::replace(&mut this.server, CopilotServer::Disabled) {
+                    CopilotServer::Running(server) => {
+                        let shutdown_future = server.lsp.shutdown();
+                        Some(cx.background_spawn(async move {
+                            if let Some(fut) = shutdown_future {
+                                fut.await;
+                            }
+                        }))
                     }
-                    cx.notify();
+                    _ => None,
+                };
+                if let Some(task) = shutdown {
+                    task.detach();
                 }
-            } else {
-                // Only start if AI is enabled
-                this.start_copilot(true, false, cx);
-                if let Ok(server) = this.server.as_running() {
-                    notify_did_change_config_to_server(&server.lsp, cx)
-                        .context("copilot setting change: did change configuration")
-                        .log_err();
-                }
+                cx.notify();
             }
             this.update_action_visibilities(cx);
         })
@@ -450,42 +421,11 @@ impl Copilot {
 
     pub fn start_copilot(
         &mut self,
-        check_edit_prediction_provider: bool,
-        awaiting_sign_in_after_start: bool,
-        cx: &mut Context<Self>,
+        _check_edit_prediction_provider: bool,
+        _awaiting_sign_in_after_start: bool,
+        _cx: &mut Context<Self>,
     ) {
-        if DisableAiSettings::get_global(cx).disable_ai {
-            return;
-        }
-        if !matches!(self.server, CopilotServer::Disabled) {
-            return;
-        }
-        let language_settings = all_language_settings(None, cx);
-        if check_edit_prediction_provider
-            && language_settings.edit_predictions.provider != EditPredictionProvider::Copilot
-        {
-            return;
-        }
-        let server_id = self.server_id;
-        let fs = self.fs.clone();
-        let node_runtime = self.node_runtime.clone();
-        let env = self.build_env(&language_settings.edit_predictions.copilot);
-        let start_task = cx
-            .spawn(async move |this, cx| {
-                Self::start_language_server(
-                    server_id,
-                    fs,
-                    node_runtime,
-                    env,
-                    this,
-                    awaiting_sign_in_after_start,
-                    cx,
-                )
-                .await
-            })
-            .shared();
-        self.server = CopilotServer::Starting { task: start_task };
-        cx.notify();
+        // VELIPSO: trace to remove all
     }
 
     fn build_env(&self, copilot_settings: &CopilotSettings) -> Option<HashMap<String, String>> {
@@ -1305,33 +1245,12 @@ impl Copilot {
         ];
         let auth_actions = [TypeId::of::<SignOut>()];
         let no_auth_actions = [TypeId::of::<SignIn>()];
-        let status = self.status();
 
-        let is_ai_disabled = DisableAiSettings::get_global(cx).disable_ai;
         let filter = CommandPaletteFilter::global_mut(cx);
 
-        if is_ai_disabled {
-            filter.hide_action_types(&signed_in_actions);
-            filter.hide_action_types(&auth_actions);
-            filter.hide_action_types(&no_auth_actions);
-        } else {
-            match status {
-                Status::Disabled => {
-                    filter.hide_action_types(&signed_in_actions);
-                    filter.hide_action_types(&auth_actions);
-                    filter.hide_action_types(&no_auth_actions);
-                }
-                Status::Authorized => {
-                    filter.hide_action_types(&no_auth_actions);
-                    filter.show_action_types(signed_in_actions.iter().chain(&auth_actions));
-                }
-                _ => {
-                    filter.hide_action_types(&signed_in_actions);
-                    filter.hide_action_types(&auth_actions);
-                    filter.show_action_types(&no_auth_actions);
-                }
-            }
-        }
+        filter.hide_action_types(&signed_in_actions);
+        filter.hide_action_types(&auth_actions);
+        filter.hide_action_types(&no_auth_actions);
     }
 }
 
@@ -1468,434 +1387,4 @@ fn copilot_lsp_native_binary_path() -> anyhow::Result<PathBuf> {
         .join("@github")
         .join(package_name)
         .join(executable_name))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fs::FakeFs;
-    use gpui::TestAppContext;
-    use language::language_settings::AllLanguageSettings;
-    use node_runtime::NodeRuntime;
-    use settings::{Settings, SettingsStore};
-    use util::{
-        path,
-        paths::PathStyle,
-        rel_path::{RelPath, rel_path},
-    };
-
-    #[gpui::test]
-    async fn test_copilot_does_not_start_when_ai_disabled(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            let store = SettingsStore::test(cx);
-            cx.set_global(store);
-            DisableAiSettings::register(cx);
-            AllLanguageSettings::register(cx);
-
-            // Set disable_ai to true before creating Copilot
-            DisableAiSettings::override_global(DisableAiSettings { disable_ai: true }, cx);
-        });
-
-        let copilot = cx.new(|cx| Copilot {
-            server_id: LanguageServerId(0),
-            fs: FakeFs::new(cx.background_executor().clone()),
-            node_runtime: NodeRuntime::unavailable(),
-            server: CopilotServer::Disabled,
-            buffers: Default::default(),
-            _subscriptions: vec![],
-        });
-
-        // Try to start copilot - it should remain disabled
-        copilot.update(cx, |copilot, cx| {
-            copilot.start_copilot(false, false, cx);
-        });
-
-        // Verify the server is still disabled
-        copilot.read_with(cx, |copilot, _| {
-            assert!(
-                matches!(copilot.server, CopilotServer::Disabled),
-                "Copilot should not start when disable_ai is true"
-            );
-        });
-    }
-
-    #[gpui::test]
-    async fn test_copilot_stops_when_ai_becomes_disabled(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            let store = SettingsStore::test(cx);
-            cx.set_global(store);
-            DisableAiSettings::register(cx);
-            AllLanguageSettings::register(cx);
-
-            // AI is initially enabled
-            DisableAiSettings::override_global(DisableAiSettings { disable_ai: false }, cx);
-        });
-
-        // Create a fake Copilot that's already running, with the settings observer
-        let (copilot, _lsp) = Copilot::fake(cx);
-
-        // Add the settings observer that handles disable_ai changes
-        copilot.update(cx, |_, cx| {
-            cx.observe_global::<SettingsStore>(move |this, cx| {
-                let ai_disabled = DisableAiSettings::get_global(cx).disable_ai;
-
-                if ai_disabled {
-                    if !matches!(this.server, CopilotServer::Disabled) {
-                        let shutdown = match mem::replace(&mut this.server, CopilotServer::Disabled)
-                        {
-                            CopilotServer::Running(server) => {
-                                let shutdown_future = server.lsp.shutdown();
-                                Some(cx.background_spawn(async move {
-                                    if let Some(fut) = shutdown_future {
-                                        fut.await;
-                                    }
-                                }))
-                            }
-                            _ => None,
-                        };
-                        if let Some(task) = shutdown {
-                            task.detach();
-                        }
-                        cx.notify();
-                    }
-                }
-            })
-            .detach();
-        });
-
-        // Verify copilot is running
-        copilot.read_with(cx, |copilot, _| {
-            assert!(
-                matches!(copilot.server, CopilotServer::Running(_)),
-                "Copilot should be running initially"
-            );
-        });
-
-        // Now disable AI
-        cx.update(|cx| {
-            DisableAiSettings::override_global(DisableAiSettings { disable_ai: true }, cx);
-        });
-
-        // The settings observer should have stopped the server
-        cx.run_until_parked();
-
-        copilot.read_with(cx, |copilot, _| {
-            assert!(
-                matches!(copilot.server, CopilotServer::Disabled),
-                "Copilot should be disabled after disable_ai is set to true"
-            );
-        });
-    }
-
-    #[gpui::test(iterations = 10)]
-    async fn test_buffer_management(cx: &mut TestAppContext) {
-        init_test(cx);
-        let (copilot, mut lsp) = Copilot::fake(cx);
-
-        let buffer_1 = cx.new(|cx| Buffer::local("Hello", cx));
-        let buffer_1_uri: lsp::Uri = format!("buffer://{}", buffer_1.entity_id().as_u64())
-            .parse()
-            .unwrap();
-        copilot.update(cx, |copilot, cx| copilot.register_buffer(&buffer_1, cx));
-        assert_eq!(
-            lsp.receive_notification::<lsp::notification::DidOpenTextDocument>()
-                .await,
-            lsp::DidOpenTextDocumentParams {
-                text_document: lsp::TextDocumentItem::new(
-                    buffer_1_uri.clone(),
-                    "plaintext".into(),
-                    0,
-                    "Hello".into()
-                ),
-            }
-        );
-
-        let buffer_2 = cx.new(|cx| Buffer::local("Goodbye", cx));
-        let buffer_2_uri: lsp::Uri = format!("buffer://{}", buffer_2.entity_id().as_u64())
-            .parse()
-            .unwrap();
-        copilot.update(cx, |copilot, cx| copilot.register_buffer(&buffer_2, cx));
-        assert_eq!(
-            lsp.receive_notification::<lsp::notification::DidOpenTextDocument>()
-                .await,
-            lsp::DidOpenTextDocumentParams {
-                text_document: lsp::TextDocumentItem::new(
-                    buffer_2_uri.clone(),
-                    "plaintext".into(),
-                    0,
-                    "Goodbye".into()
-                ),
-            }
-        );
-
-        buffer_1.update(cx, |buffer, cx| buffer.edit([(5..5, " world")], None, cx));
-        assert_eq!(
-            lsp.receive_notification::<lsp::notification::DidChangeTextDocument>()
-                .await,
-            lsp::DidChangeTextDocumentParams {
-                text_document: lsp::VersionedTextDocumentIdentifier::new(buffer_1_uri.clone(), 1),
-                content_changes: vec![lsp::TextDocumentContentChangeEvent {
-                    range: Some(lsp::Range::new(
-                        lsp::Position::new(0, 5),
-                        lsp::Position::new(0, 5)
-                    )),
-                    range_length: None,
-                    text: " world".into(),
-                }],
-            }
-        );
-
-        // Ensure updates to the file are reflected in the LSP.
-        buffer_1.update(cx, |buffer, cx| {
-            buffer.file_updated(
-                Arc::new(File {
-                    abs_path: path!("/root/child/buffer-1").into(),
-                    path: rel_path("child/buffer-1").into(),
-                }),
-                cx,
-            )
-        });
-        assert_eq!(
-            lsp.receive_notification::<lsp::notification::DidCloseTextDocument>()
-                .await,
-            lsp::DidCloseTextDocumentParams {
-                text_document: lsp::TextDocumentIdentifier::new(buffer_1_uri),
-            }
-        );
-        let buffer_1_uri = lsp::Uri::from_file_path(path!("/root/child/buffer-1")).unwrap();
-        assert_eq!(
-            lsp.receive_notification::<lsp::notification::DidOpenTextDocument>()
-                .await,
-            lsp::DidOpenTextDocumentParams {
-                text_document: lsp::TextDocumentItem::new(
-                    buffer_1_uri.clone(),
-                    "plaintext".into(),
-                    1,
-                    "Hello world".into()
-                ),
-            }
-        );
-
-        // Ensure all previously-registered buffers are closed when signing out.
-        lsp.set_request_handler::<request::SignOut, _, _>(|_, _| async {
-            Ok(request::SignOutResult {})
-        });
-        copilot
-            .update(cx, |copilot, cx| copilot.sign_out(cx))
-            .await
-            .unwrap();
-        let mut received_close_notifications = vec![
-            lsp.receive_notification::<lsp::notification::DidCloseTextDocument>()
-                .await,
-            lsp.receive_notification::<lsp::notification::DidCloseTextDocument>()
-                .await,
-        ];
-        received_close_notifications
-            .sort_by_key(|notification| notification.text_document.uri.clone());
-        assert_eq!(
-            received_close_notifications,
-            vec![
-                lsp::DidCloseTextDocumentParams {
-                    text_document: lsp::TextDocumentIdentifier::new(buffer_2_uri.clone()),
-                },
-                lsp::DidCloseTextDocumentParams {
-                    text_document: lsp::TextDocumentIdentifier::new(buffer_1_uri.clone()),
-                },
-            ],
-        );
-
-        // Ensure all previously-registered buffers are re-opened when signing in.
-        lsp.set_request_handler::<request::SignIn, _, _>(|_, _| async {
-            Ok(request::PromptUserDeviceFlow {
-                user_code: "test-code".into(),
-                command: lsp::Command {
-                    title: "Sign in".into(),
-                    command: "github.copilot.finishDeviceFlow".into(),
-                    arguments: None,
-                },
-            })
-        });
-        copilot
-            .update(cx, |copilot, cx| copilot.sign_in(cx))
-            .await
-            .unwrap();
-
-        // Simulate auth completion by directly updating sign-in status
-        copilot.update(cx, |copilot, cx| {
-            copilot.update_sign_in_status(
-                request::SignInStatus::Ok {
-                    user: Some("user-1".into()),
-                },
-                cx,
-            );
-        });
-
-        let mut received_open_notifications = vec![
-            lsp.receive_notification::<lsp::notification::DidOpenTextDocument>()
-                .await,
-            lsp.receive_notification::<lsp::notification::DidOpenTextDocument>()
-                .await,
-        ];
-        received_open_notifications
-            .sort_by_key(|notification| notification.text_document.uri.clone());
-        assert_eq!(
-            received_open_notifications,
-            vec![
-                lsp::DidOpenTextDocumentParams {
-                    text_document: lsp::TextDocumentItem::new(
-                        buffer_2_uri.clone(),
-                        "plaintext".into(),
-                        0,
-                        "Goodbye".into()
-                    ),
-                },
-                lsp::DidOpenTextDocumentParams {
-                    text_document: lsp::TextDocumentItem::new(
-                        buffer_1_uri.clone(),
-                        "plaintext".into(),
-                        0,
-                        "Hello world".into()
-                    ),
-                }
-            ]
-        );
-        // Dropping a buffer causes it to be closed on the LSP side as well.
-        cx.update(|_| drop(buffer_2));
-        assert_eq!(
-            lsp.receive_notification::<lsp::notification::DidCloseTextDocument>()
-                .await,
-            lsp::DidCloseTextDocumentParams {
-                text_document: lsp::TextDocumentIdentifier::new(buffer_2_uri),
-            }
-        );
-    }
-
-    struct File {
-        abs_path: PathBuf,
-        path: Arc<RelPath>,
-    }
-
-    impl language::File for File {
-        fn as_local(&self) -> Option<&dyn language::LocalFile> {
-            Some(self)
-        }
-
-        fn disk_state(&self) -> language::DiskState {
-            language::DiskState::Present {
-                mtime: ::fs::MTime::from_seconds_and_nanos(100, 42),
-                size: 0,
-            }
-        }
-
-        fn path(&self) -> &Arc<RelPath> {
-            &self.path
-        }
-
-        fn path_style(&self, _: &App) -> PathStyle {
-            PathStyle::local()
-        }
-
-        fn full_path(&self, _: &App) -> PathBuf {
-            unimplemented!()
-        }
-
-        fn file_name<'a>(&'a self, _: &'a App) -> &'a str {
-            unimplemented!()
-        }
-
-        fn to_proto(&self, _: &App) -> rpc::proto::File {
-            unimplemented!()
-        }
-
-        fn worktree_id(&self, _: &App) -> settings::WorktreeId {
-            settings::WorktreeId::from_usize(0)
-        }
-
-        fn is_private(&self) -> bool {
-            false
-        }
-    }
-
-    impl language::LocalFile for File {
-        fn abs_path(&self, _: &App) -> PathBuf {
-            self.abs_path.clone()
-        }
-
-        fn load(&self, _: &App) -> Task<Result<String>> {
-            unimplemented!()
-        }
-
-        fn load_bytes(&self, _cx: &App) -> Task<Result<Vec<u8>>> {
-            unimplemented!()
-        }
-    }
-
-    #[gpui::test]
-    async fn test_copilot_starts_when_ai_becomes_enabled(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            let store = SettingsStore::test(cx);
-            cx.set_global(store);
-            DisableAiSettings::register(cx);
-            AllLanguageSettings::register(cx);
-
-            // AI is initially disabled
-            DisableAiSettings::override_global(DisableAiSettings { disable_ai: true }, cx);
-        });
-
-        let copilot = cx.new(|cx| Copilot {
-            server_id: LanguageServerId(0),
-            fs: FakeFs::new(cx.background_executor().clone()),
-            node_runtime: NodeRuntime::unavailable(),
-            server: CopilotServer::Disabled,
-            buffers: Default::default(),
-            _subscriptions: vec![],
-        });
-
-        // Verify copilot is disabled initially
-        copilot.read_with(cx, |copilot, _| {
-            assert!(
-                matches!(copilot.server, CopilotServer::Disabled),
-                "Copilot should be disabled initially"
-            );
-        });
-
-        // Try to start - should fail because AI is disabled
-        // Use check_edit_prediction_provider=false to skip provider check
-        copilot.update(cx, |copilot, cx| {
-            copilot.start_copilot(false, false, cx);
-        });
-
-        copilot.read_with(cx, |copilot, _| {
-            assert!(
-                matches!(copilot.server, CopilotServer::Disabled),
-                "Copilot should remain disabled when disable_ai is true"
-            );
-        });
-
-        // Now enable AI
-        cx.update(|cx| {
-            DisableAiSettings::override_global(DisableAiSettings { disable_ai: false }, cx);
-        });
-
-        // Try to start again - should work now
-        copilot.update(cx, |copilot, cx| {
-            copilot.start_copilot(false, false, cx);
-        });
-
-        copilot.read_with(cx, |copilot, _| {
-            assert!(
-                matches!(copilot.server, CopilotServer::Starting { .. }),
-                "Copilot should be starting after disable_ai is set to false"
-            );
-        });
-    }
-
-    fn init_test(cx: &mut TestAppContext) {
-        zlog::init_test();
-
-        cx.update(|cx| {
-            let settings_store = SettingsStore::test(cx);
-            cx.set_global(settings_store);
-        });
-    }
 }
