@@ -7487,22 +7487,9 @@ fn collaboration_page() -> SettingsPage {
 }
 
 fn ai_page(cx: &App) -> SettingsPage {
-    fn general_section() -> [SettingsPageItem; 3] {
+    fn general_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("General"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Disable AI",
-                description: "Whether to disable all AI features in Zed.",
-                field: Box::new(SettingField {
-                    json_path: Some("disable_ai"),
-                    pick: |settings_content| settings_content.project.disable_ai.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.project.disable_ai = value;
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Threads Sidebar Side",
                 description: "Which side of the window the threads sidebar appears on.",
