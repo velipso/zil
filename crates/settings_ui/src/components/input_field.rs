@@ -21,6 +21,7 @@ pub struct SettingsInputField {
     color: Option<Color>,
 }
 
+#[allow(dead_code, reason = "kept for future UI reuse")]
 impl SettingsInputField {
     pub fn new() -> Self {
         Self {
