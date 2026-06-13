@@ -1,10 +1,7 @@
 use collections::HashMap;
-use gpui::{
-    App, AppContext as _, Context, Entity, Global,
-    SharedString,
-};
+use gpui::{App, AppContext as _, Context, Entity, Global, SharedString};
 
-use crate::{AgentId};
+use crate::AgentId;
 
 #[derive(Clone, Debug)]
 pub struct RegistryAgentMetadata {
@@ -106,9 +103,7 @@ impl AgentRegistryStore {
     /// are registry agents configured in settings, it will trigger a network fetch.
     /// Otherwise, call `refresh()` explicitly when you need fresh data
     /// (e.g., when opening the Agent Registry page).
-    pub fn init_global(
-        cx: &mut App,
-    ) -> Entity<Self> {
+    pub fn init_global(cx: &mut App) -> Entity<Self> {
         if let Some(store) = Self::try_global(cx) {
             return store;
         }
@@ -160,8 +155,6 @@ impl AgentRegistryStore {
     }
 
     fn new() -> Self {
-        Self {
-            agents: Vec::new(),
-        }
+        Self { agents: Vec::new() }
     }
 }

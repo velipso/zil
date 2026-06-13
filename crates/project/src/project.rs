@@ -1105,9 +1105,7 @@ pub struct DisableAiSettings {
 
 impl settings::Settings for DisableAiSettings {
     fn from_settings(_content: &settings::SettingsContent) -> Self {
-        Self {
-            disable_ai: true,
-        }
+        Self { disable_ai: true }
     }
 }
 

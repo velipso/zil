@@ -110,9 +110,7 @@ use remote::{
 use schemars::JsonSchema;
 use serde::Deserialize;
 use session::AppSession;
-use settings::{
-    CenteredPaddingSettings, Settings, SettingsLocation, SettingsStore,
-};
+use settings::{CenteredPaddingSettings, Settings, SettingsLocation, SettingsStore};
 
 use sqlez::{
     bindable::{Bind, Column, StaticColumnCount},

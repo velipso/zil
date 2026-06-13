@@ -1,7 +1,5 @@
 use anyhow::Result;
-use client::{
-    Client, RefreshLlmTokenListener, TelemetrySettings, UserStore, global_llm_token,
-};
+use client::{Client, RefreshLlmTokenListener, TelemetrySettings, UserStore, global_llm_token};
 use cloud_api_client::LlmApiToken;
 use cloud_api_types::OrganizationId;
 use futures::FutureExt;
@@ -22,7 +20,7 @@ pub use settings::ZedDotDevAvailableModel as AvailableModel;
 pub use settings::ZedDotDevAvailableProvider as AvailableProvider;
 use std::sync::Arc;
 use std::time::Duration;
-use ui::{prelude::*};
+use ui::prelude::*;
 
 const PROVIDER_ID: LanguageModelProviderId = ZED_CLOUD_PROVIDER_ID;
 const PROVIDER_NAME: LanguageModelProviderName = ZED_CLOUD_PROVIDER_NAME;
@@ -364,13 +362,11 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 }
 
-struct ConfigurationView {
-}
+struct ConfigurationView {}
 
 impl ConfigurationView {
     fn new(_state: Entity<State>) -> Self {
-        Self {
-        }
+        Self {}
     }
 }
 

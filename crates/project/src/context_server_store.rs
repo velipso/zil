@@ -4,14 +4,12 @@ pub mod registry;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result};
-use collections::{HashMap};
+use anyhow::Result;
+use collections::HashMap;
 use context_server::{ContextServer, ContextServerCommand, ContextServerId};
 use credentials_provider::CredentialsProvider;
 use futures::future::Either;
-use gpui::{
-    App, AsyncApp, Context, Entity, EventEmitter, Subscription, WeakEntity, actions,
-};
+use gpui::{App, AsyncApp, Context, Entity, EventEmitter, Subscription, WeakEntity, actions};
 use registry::ContextServerDescriptorRegistry;
 use remote::RemoteClient;
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
@@ -21,7 +19,7 @@ use util::{ResultExt as _, rel_path::RelPath};
 use crate::{
     Project,
     project_settings::{ContextServerSettings, OAuthClientSettings, ProjectSettings},
-    worktree_store::{WorktreeStore},
+    worktree_store::WorktreeStore,
 };
 
 pub fn init(cx: &mut App) {
@@ -201,8 +199,7 @@ enum ContextServerStoreState {
     Local {
         downstream_client: Option<(u64, AnyProtoClient)>,
     },
-    Remote {
-    },
+    Remote {},
 }
 
 pub struct ContextServerStore {
@@ -244,11 +241,7 @@ impl ContextServerStore {
         _weak_project: Option<WeakEntity<Project>>,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::new_internal(
-            worktree_store,
-            ContextServerStoreState::Remote {},
-            cx,
-        )
+        Self::new_internal(worktree_store, ContextServerStoreState::Remote {}, cx)
     }
 
     pub fn init_headless(session: &AnyProtoClient) {

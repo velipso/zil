@@ -1,12 +1,11 @@
 use std::{collections::HashSet, sync::Arc};
 
 use agent_client_protocol::schema as acp;
-use agent_servers::{AcpDebugMessageDirection};
+use agent_servers::AcpDebugMessageDirection;
 use collections::HashMap;
 use gpui::{
-    App, Empty, Entity, EventEmitter, FocusHandle, Focusable, ListState,
-    SharedString, StyleRefinement, Subscription, Task, TextStyleRefinement, Window,
-    actions, list, prelude::*,
+    App, Empty, Entity, EventEmitter, FocusHandle, Focusable, ListState, SharedString,
+    StyleRefinement, Subscription, Task, TextStyleRefinement, Window, actions, list, prelude::*,
 };
 use language::LanguageRegistry;
 use markdown::{CodeBlockRenderer, CopyButtonVisibility, Markdown, MarkdownElement, MarkdownStyle};
@@ -18,14 +17,11 @@ use ui::{
     prelude::*,
 };
 use util::ResultExt as _;
-use workspace::{
-    Item, ItemHandle, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
-};
+use workspace::{Item, ItemHandle, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView};
 
 actions!(dev, [OpenAcpLogs]);
 
-pub fn init(_cx: &mut App) {
-}
+pub fn init(_cx: &mut App) {}
 
 struct AcpTools {
     project: Entity<Project>,
@@ -57,8 +53,7 @@ impl AcpTools {
         cx.notify();
     }
 
-    fn restart_selected_connection(&mut self, _cx: &mut Context<Self>) {
-    }
+    fn restart_selected_connection(&mut self, _cx: &mut Context<Self>) {}
 
     fn selected_watched_connection(&self) -> Option<&WatchedConnection> {
         let selected_connection = self.selected_connection.as_ref()?;

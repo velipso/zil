@@ -4,9 +4,7 @@ use client::{Client, UserStore};
 use collections::HashSet;
 use credentials_provider::CredentialsProvider;
 use gpui::{App, Context, Entity};
-use language_model::{
-    ConfiguredModel, LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID,
-};
+use language_model::{ConfiguredModel, LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID};
 
 pub mod extension;
 pub mod provider;
