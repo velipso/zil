@@ -33,18 +33,13 @@ visual-tests = [
     "gpui_platform/test-support",
     "dep:image",
     "dep:tempfile",
-    "dep:action_log",
-    "dep:agent_servers",
     "workspace/test-support",
     "project/test-support",
     "editor/test-support",
     "terminal_view/test-support",
     "image_viewer/test-support",
     "clock/test-support",
-    "acp_thread/test-support",
-    "action_log/test-support",
     "db/test-support",
-    "agent/test-support",
     "language_model/test-support",
     "fs/test-support",
     "recent_projects/test-support",
@@ -61,9 +56,7 @@ path = "src/visual_test_runner.rs"
 required-features = ["visual-tests"]
 
 [dependencies]
-acp_tools.workspace = true
 activity_indicator.workspace = true
-agent.workspace = true
 agent-client-protocol.workspace = true
 agent_settings.workspace = true
 anyhow.workspace = true
@@ -117,9 +110,6 @@ itertools.workspace = true
 semver.workspace = true
 tempfile = { workspace = true, optional = true }
 clock = { workspace = true, optional = true }
-acp_thread.workspace = true
-action_log = { workspace = true, optional = true }
-agent_servers = { workspace = true, optional = true }
 gpui_tokio.workspace = true
 rayon.workspace = true
 

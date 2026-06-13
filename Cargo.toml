@@ -1,12 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/acp_thread",
-    "crates/acp_tools",
-    "crates/action_log",
     "crates/activity_indicator",
-    "crates/agent",
-    "crates/agent_servers",
     "crates/agent_settings",
     "crates/agent_skills",
     "crates/anthropic",
@@ -79,7 +74,6 @@ members = [
     "crates/gpui_web",
     "crates/gpui_wgpu",
     "crates/gpui_windows",
-    "crates/html_to_markdown",
     "crates/http_client",
     "crates/http_client_tls",
     "crates/icons",
@@ -146,7 +140,6 @@ members = [
     "crates/reqwest_client",
     "crates/rope",
     "crates/rpc",
-    "crates/sandbox",
     "crates/scheduler",
     "crates/search",
     "crates/session",
@@ -156,13 +149,11 @@ members = [
     "crates/settings_macros",
     "crates/settings_profile_selector",
     "crates/settings_ui",
-    "crates/shell_command_parser",
     "crates/snippet",
     "crates/snippet_provider",
     "crates/snippets_ui",
     "crates/sqlez",
     "crates/sqlez_macros",
-    "crates/streaming_diff",
     "crates/sum_tree",
     "crates/svg_preview",
     "crates/system_specs",
@@ -235,12 +226,7 @@ edition = "2024"
 # Workspace member crates
 #
 
-acp_tools = { path = "crates/acp_tools" }
-acp_thread = { path = "crates/acp_thread" }
-action_log = { path = "crates/action_log" }
 activity_indicator = { path = "crates/activity_indicator" }
-agent = { path = "crates/agent" }
-agent_servers = { path = "crates/agent_servers" }
 agent_settings = { path = "crates/agent_settings" }
 agent_skills = { path = "crates/agent_skills" }
 anthropic = { path = "crates/anthropic" }
@@ -315,7 +301,6 @@ gpui_wgpu = { path = "crates/gpui_wgpu" }
 gpui_windows = { path = "crates/gpui_windows", default-features = false }
 gpui_tokio = { path = "crates/gpui_tokio" }
 gpui_util = { path = "crates/gpui_util" }
-html_to_markdown = { path = "crates/html_to_markdown" }
 http_client = { path = "crates/http_client" }
 http_client_tls = { path = "crates/http_client_tls" }
 icons = { path = "crates/icons" }
@@ -385,7 +370,6 @@ rodio = { git = "https://github.com/RustAudio/rodio", rev = "e50e726ddd0292f6ef9
 rope = { path = "crates/rope" }
 rpc = { path = "crates/rpc" }
 scheduler = { path = "crates/scheduler" }
-sandbox = { path = "crates/sandbox" }
 search = { path = "crates/search" }
 session = { path = "crates/session" }
 settings = { path = "crates/settings" }
@@ -393,13 +377,11 @@ settings_content = { path = "crates/settings_content" }
 settings_json = { path = "crates/settings_json" }
 settings_macros = { path = "crates/settings_macros" }
 settings_ui = { path = "crates/settings_ui" }
-shell_command_parser = { path = "crates/shell_command_parser" }
 snippet = { path = "crates/snippet" }
 snippet_provider = { path = "crates/snippet_provider" }
 snippets_ui = { path = "crates/snippets_ui" }
 sqlez = { path = "crates/sqlez" }
 sqlez_macros = { path = "crates/sqlez_macros" }
-streaming_diff = { path = "crates/streaming_diff" }
 sum_tree = { path = "crates/sum_tree" }
 system_specs = { path = "crates/system_specs" }
 syntax_theme = { path = "crates/syntax_theme" }
