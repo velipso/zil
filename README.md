@@ -1,7 +1,14 @@
-# Zed
+# Zil
 
-[![Zed](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/zed-industries/zed/main/assets/badge/v0.json)](https://zed.dev)
-[![CI](https://github.com/zed-industries/zed/actions/workflows/run_tests.yml/badge.svg)](https://github.com/zed-industries/zed/actions/workflows/run_tests.yml)
+Zil is a fork of [Zed v1.6.3](https://github.com/zed-industries/zed/tree/v1.6.3).
+
+My goal is to remove everything I dislike, which is probably 90% of it.
+
+The initial fork added **1,649,748** lines of code.
+
+I have currently deleted **107,964** lines of code! 🎉
+
+---
 
 Welcome to Zed, a high-performance, multiplayer code editor from the creators of [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
 
