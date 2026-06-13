@@ -177,29 +177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agent_settings"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collections",
- "convert_case 0.11.0",
- "fs",
- "futures 0.3.32",
- "gpui",
- "language_model",
- "log",
- "paths",
- "project",
- "regex",
- "schemars 1.0.4",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "settings",
- "util",
-]
-
-[[package]]
 name = "agent_skills"
 version = "0.1.0"
 dependencies = [
@@ -2471,43 +2448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "collab_ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "call",
- "channel",
- "client",
- "collections",
- "db",
- "editor",
- "feature_flags",
- "futures 0.3.32",
- "fuzzy",
- "gpui",
- "livekit_client",
- "menu",
- "notifications",
- "picker",
- "project",
- "release_channel",
- "rpc",
- "serde",
- "serde_json",
- "settings",
- "smallvec",
- "telemetry",
- "theme",
- "theme_settings",
- "time",
- "title_bar",
- "ui",
- "util",
- "workspace",
- "zed_actions",
-]
-
-[[package]]
 name = "collections"
 version = "0.1.0"
 dependencies = [
@@ -3693,64 +3633,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "debugger_ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitflags 2.10.0",
- "client",
- "collections",
- "command_palette_hooks",
- "dap",
- "dap_adapters",
- "db",
- "debugger_tools",
- "editor",
- "feature_flags",
- "file_icons",
- "futures 0.3.32",
- "fuzzy",
- "gpui",
- "hex",
- "indoc",
- "itertools 0.14.0",
- "language",
- "log",
- "menu",
- "notifications",
- "parking_lot",
- "parse_int",
- "paths",
- "picker",
- "pretty_assertions",
- "project",
- "rpc",
- "schemars 1.0.4",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "settings",
- "sysinfo 0.37.2",
- "task",
- "tasks_ui",
- "terminal",
- "terminal_view",
- "text",
- "theme",
- "theme_settings",
- "tree-sitter",
- "tree-sitter-go",
- "tree-sitter-json",
- "ui",
- "ui_input",
- "unindent",
- "util",
- "workspace",
- "zed_actions",
- "zlog",
-]
-
-[[package]]
 name = "debugid"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3893,41 +3775,6 @@ dependencies = [
  "workspace",
  "worktree",
  "yaml-rust2",
-]
-
-[[package]]
-name = "diagnostics"
-version = "0.1.0"
-dependencies = [
- "agent_settings",
- "anyhow",
- "collections",
- "component",
- "ctor",
- "editor",
- "futures-lite 1.13.0",
- "gpui",
- "indoc",
- "itertools 0.14.0",
- "language",
- "log",
- "lsp",
- "markdown",
- "pretty_assertions",
- "project",
- "rand 0.9.4",
- "serde",
- "serde_json",
- "settings",
- "text",
- "theme",
- "theme_settings",
- "ui",
- "unindent",
- "util",
- "workspace",
- "zed_actions",
- "zlog",
 ]
 
 [[package]]
@@ -5495,78 +5342,6 @@ dependencies = [
  "url",
  "urlencoding",
  "util",
-]
-
-[[package]]
-name = "git_ui"
-version = "0.1.0"
-dependencies = [
- "agent_settings",
- "anyhow",
- "askpass",
- "async-channel 2.5.0",
- "buffer_diff",
- "call",
- "collections",
- "component",
- "ctor",
- "db",
- "editor",
- "file_icons",
- "fs",
- "futures 0.3.32",
- "futures-lite 1.13.0",
- "fuzzy",
- "fuzzy_nucleo",
- "git",
- "gpui",
- "indoc",
- "itertools 0.14.0",
- "language",
- "language_model",
- "linkify",
- "log",
- "markdown",
- "menu",
- "multi_buffer",
- "notifications",
- "panel",
- "picker",
- "pretty_assertions",
- "project",
- "prompt_store",
- "proto",
- "rand 0.9.4",
- "release_channel",
- "remote",
- "remote_connection",
- "schemars 1.0.4",
- "search",
- "serde",
- "serde_json",
- "settings",
- "smallvec",
- "strum 0.27.2",
- "sysinfo 0.37.2",
- "task",
- "telemetry",
- "terminal",
- "theme",
- "theme_settings",
- "time",
- "time_format",
- "tracing",
- "ui",
- "ui_input",
- "unindent",
- "util",
- "watch",
- "windows 0.61.3",
- "workspace",
- "zed_actions",
- "zeroize",
- "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -10182,15 +9957,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "panel"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "ui",
- "workspace",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10217,15 +9983,6 @@ dependencies = [
  "redox_syscall 0.5.18",
  "smallvec",
  "windows-link 0.2.1",
-]
-
-[[package]]
-name = "parse_int"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c464266693329dd5a8715098c7f86e6c5fd5d985018b8318f53d9c6c2b21a31"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -11513,7 +11270,6 @@ dependencies = [
  "fs",
  "futures 0.3.32",
  "git",
- "git_ui",
  "gpui",
  "itertools 0.14.0",
  "language",
@@ -15067,7 +14823,6 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 name = "title_bar"
 version = "0.1.0"
 dependencies = [
- "agent_settings",
  "anyhow",
  "arrayvec",
  "auto_update",
@@ -15078,8 +14833,6 @@ dependencies = [
  "cloud_api_types",
  "command_palette_hooks",
  "db",
- "fs",
- "git_ui",
  "gpui",
  "icons",
  "livekit_client",
@@ -16216,7 +15969,6 @@ dependencies = [
  "env_logger 0.11.8",
  "futures 0.3.32",
  "fuzzy",
- "git_ui",
  "gpui",
  "indoc",
  "itertools 0.14.0",
@@ -18486,7 +18238,6 @@ dependencies = [
 name = "workspace"
 version = "0.1.0"
 dependencies = [
- "agent_settings",
  "any_vec",
  "anyhow",
  "async-recursion",
@@ -18917,7 +18668,6 @@ version = "1.6.3"
 dependencies = [
  "activity_indicator",
  "agent-client-protocol",
- "agent_settings",
  "anyhow",
  "ashpd",
  "askpass",
@@ -18933,7 +18683,6 @@ dependencies = [
  "cli",
  "client",
  "clock",
- "collab_ui",
  "collections",
  "command_palette",
  "component",
@@ -18944,9 +18693,7 @@ dependencies = [
  "db",
  "debug_adapter_extension",
  "debugger_tools",
- "debugger_ui",
  "dev_container",
- "diagnostics",
  "editor",
  "encoding_selector",
  "env_logger 0.11.8",
@@ -18960,7 +18707,6 @@ dependencies = [
  "futures 0.3.32",
  "git",
  "git_hosting_providers",
- "git_ui",
  "go_to_line",
  "gpui",
  "gpui_platform",

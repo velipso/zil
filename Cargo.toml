@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/activity_indicator",
-    "crates/agent_settings",
     "crates/agent_skills",
     "crates/anthropic",
     "crates/askpass",
@@ -22,7 +21,6 @@ members = [
     "crates/cloud_api_client",
     "crates/cloud_api_types",
     "crates/cloud_llm_client",
-    "crates/collab_ui",
     "crates/collections",
     "crates/command_palette",
     "crates/command_palette_hooks",
@@ -37,10 +35,8 @@ members = [
     "crates/db",
     "crates/debug_adapter_extension",
     "crates/debugger_tools",
-    "crates/debugger_ui",
     "crates/deepseek",
     "crates/dev_container",
-    "crates/diagnostics",
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
@@ -59,7 +55,6 @@ members = [
     "crates/fuzzy_nucleo",
     "crates/git",
     "crates/git_hosting_providers",
-    "crates/git_ui",
     "crates/go_to_line",
     "crates/google_ai",
     "crates/grammars",
@@ -121,7 +116,6 @@ members = [
     "crates/open_router",
     "crates/outline",
     "crates/outline_panel",
-    "crates/panel",
     "crates/paths",
     "crates/picker",
     "crates/platform_title_bar",
@@ -227,7 +221,6 @@ edition = "2024"
 #
 
 activity_indicator = { path = "crates/activity_indicator" }
-agent_settings = { path = "crates/agent_settings" }
 agent_skills = { path = "crates/agent_skills" }
 anthropic = { path = "crates/anthropic" }
 askpass = { path = "crates/askpass" }
@@ -247,7 +240,6 @@ clock = { path = "crates/clock" }
 cloud_api_client = { path = "crates/cloud_api_client" }
 cloud_api_types = { path = "crates/cloud_api_types" }
 cloud_llm_client = { path = "crates/cloud_llm_client" }
-collab_ui = { path = "crates/collab_ui" }
 collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
 command_palette_hooks = { path = "crates/command_palette_hooks" }
@@ -264,11 +256,9 @@ dap_adapters = { path = "crates/dap_adapters" }
 db = { path = "crates/db" }
 debug_adapter_extension = { path = "crates/debug_adapter_extension" }
 debugger_tools = { path = "crates/debugger_tools" }
-debugger_ui = { path = "crates/debugger_ui" }
 deepseek = { path = "crates/deepseek" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 dev_container = { path = "crates/dev_container" }
-diagnostics = { path = "crates/diagnostics" }
 dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
@@ -286,7 +276,6 @@ fuzzy = { path = "crates/fuzzy" }
 fuzzy_nucleo = { path = "crates/fuzzy_nucleo" }
 git = { path = "crates/git" }
 git_hosting_providers = { path = "crates/git_hosting_providers" }
-git_ui = { path = "crates/git_ui" }
 go_to_line = { path = "crates/go_to_line" }
 google_ai = { path = "crates/google_ai" }
 grammars = { path = "crates/grammars" }

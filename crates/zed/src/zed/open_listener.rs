@@ -12,7 +12,6 @@ use futures::channel::{mpsc, oneshot};
 use futures::future;
 
 use futures::{FutureExt, StreamExt};
-use git_ui::{file_diff_view::FileDiffView, multi_diff_view::MultiDiffView};
 use gpui::{App, AsyncApp, Global, TaskExt, WindowHandle};
 use onboarding::FIRST_OPEN;
 use onboarding::show_onboarding_view;
@@ -23,7 +22,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use ui::SharedString;
 use util::ResultExt;
 use util::debug_panic;
 use util::paths::PathWithPosition;
@@ -65,12 +63,6 @@ pub enum OpenRequestKind {
         /// `None` opens settings without navigating to a specific path.
         setting_path: Option<String>,
     },
-    GitClone {
-        repo_url: SharedString,
-    },
-    GitCommit {
-        sha: String,
-    },
 }
 
 impl std::fmt::Debug for OpenRequestKind {
@@ -94,11 +86,6 @@ impl std::fmt::Debug for OpenRequestKind {
                 .debug_struct("Setting")
                 .field("setting_path", setting_path)
                 .finish(),
-            Self::GitClone { repo_url } => f
-                .debug_struct("GitClone")
-                .field("repo_url", repo_url)
-                .finish(),
-            Self::GitCommit { sha } => f.debug_struct("GitCommit").field("sha", sha).finish(),
         }
     }
 }
@@ -165,10 +152,6 @@ impl OpenRequest {
                 this.kind = Some(OpenRequestKind::Setting {
                     setting_path: Some(setting_path.to_string()),
                 });
-            } else if let Some(clone_path) = url.strip_prefix("zed://git/clone") {
-                this.parse_git_clone_url(clone_path)?
-            } else if let Some(commit_path) = url.strip_prefix("zed://git/commit/") {
-                this.parse_git_commit_url(commit_path)?
             } else if url.starts_with("ssh://") {
                 this.parse_ssh_file_path(&url, cx)?
             } else if let Some(zed_link) = parse_zed_link(&url, cx) {
@@ -195,48 +178,6 @@ impl OpenRequest {
         if let Some(decoded) = urlencoding::decode(file).log_err() {
             self.open_paths.push(decoded.into_owned())
         }
-    }
-
-    fn parse_git_clone_url(&mut self, clone_path: &str) -> Result<()> {
-        // Format: /?repo=<url> or ?repo=<url>
-        let clone_path = clone_path.strip_prefix('/').unwrap_or(clone_path);
-
-        let query = clone_path
-            .strip_prefix('?')
-            .context("invalid git clone url: missing query string")?;
-
-        let repo_url = url::form_urlencoded::parse(query.as_bytes())
-            .find_map(|(key, value)| (key == "repo").then_some(value))
-            .filter(|s| !s.is_empty())
-            .context("invalid git clone url: missing repo query parameter")?
-            .to_string()
-            .into();
-
-        self.kind = Some(OpenRequestKind::GitClone { repo_url });
-
-        Ok(())
-    }
-
-    fn parse_git_commit_url(&mut self, commit_path: &str) -> Result<()> {
-        // Format: <sha>?repo=<path>
-        let (sha, query) = commit_path
-            .split_once('?')
-            .context("invalid git commit url: missing query string")?;
-        anyhow::ensure!(!sha.is_empty(), "invalid git commit url: missing sha");
-
-        let repo = url::form_urlencoded::parse(query.as_bytes())
-            .find_map(|(key, value)| (key == "repo").then_some(value))
-            .filter(|s| !s.is_empty())
-            .context("invalid git commit url: missing repo query parameter")?
-            .to_string();
-
-        self.open_paths.push(repo);
-
-        self.kind = Some(OpenRequestKind::GitCommit {
-            sha: sha.to_string(),
-        });
-
-        Ok(())
     }
 
     fn parse_ssh_file_path(&mut self, file: &str, cx: &App) -> Result<()> {
@@ -421,8 +362,8 @@ fn connect_to_cli(
 
 pub async fn open_paths_with_positions(
     path_positions: &[PathWithPosition],
-    diff_paths: &[[String; 2]],
-    diff_all: bool,
+    _diff_paths: &[[String; 2]],
+    _diff_all: bool,
     app_state: Arc<AppState>,
     open_options: workspace::OpenOptions,
     cx: &mut AsyncApp,
@@ -442,50 +383,6 @@ pub async fn open_paths_with_positions(
     } = cx
         .update(|cx| workspace::open_paths(&paths, app_state.clone(), open_options, cx))
         .await?;
-
-    if diff_all && !diff_paths.is_empty() {
-        if let Ok(diff_view) = multi_workspace.update(cx, |multi_workspace, window, cx| {
-            multi_workspace.workspace().update(cx, |workspace, cx| {
-                MultiDiffView::open(diff_paths.to_vec(), workspace, window, cx)
-            })
-        }) {
-            if let Some(diff_view) = diff_view.await.log_err() {
-                items.push(Some(Ok(Box::new(diff_view))));
-            }
-        }
-    } else {
-        let workspace_weak = multi_workspace.read_with(cx, |multi_workspace, _cx| {
-            multi_workspace.workspace().downgrade()
-        })?;
-        let canonicalize = async |raw: &str| {
-            app_state
-                .fs
-                .canonicalize(Path::new(raw))
-                .await
-                .with_context(|| format!("opening --diff path {raw:?}"))
-        };
-        for diff_pair in diff_paths {
-            let (old_path, new_path) =
-                match futures::join!(canonicalize(&diff_pair[0]), canonicalize(&diff_pair[1])) {
-                    (Ok(old), Ok(new)) => (old, new),
-                    (old, new) => {
-                        for result in [old, new] {
-                            if let Err(err) = result {
-                                items.push(Some(Err(err)));
-                            }
-                        }
-                        continue;
-                    }
-                };
-            if let Ok(diff_view) = multi_workspace.update(cx, |_multi_workspace, window, cx| {
-                FileDiffView::open(old_path, new_path, workspace_weak.clone(), window, cx)
-            }) {
-                if let Some(diff_view) = diff_view.await.log_err() {
-                    items.push(Some(Ok(Box::new(diff_view))))
-                }
-            }
-        }
-    }
 
     for (item, path) in items.iter_mut().zip(&paths) {
         if let Some(Err(error)) = item {

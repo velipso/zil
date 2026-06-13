@@ -12,7 +12,7 @@ use ui::IntoElement;
 use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
     SettingsPage, SettingsPageItem, SubPageLink, USER, active_language, all_language_names,
-    pages::{open_audio_test_window},
+    pages::open_audio_test_window,
 };
 
 const DEFAULT_STRING: String = String::new();

@@ -5,8 +5,6 @@ pub mod invalid_item_view;
 pub mod item;
 mod modal_layer;
 mod multi_workspace;
-#[cfg(test)]
-mod multi_workspace_tests;
 pub mod notifications;
 pub mod pane;
 pub mod pane_group;
@@ -9828,7 +9826,7 @@ pub fn open_workspace_by_id(
 pub fn open_paths(
     abs_paths: &[PathBuf],
     app_state: Arc<AppState>,
-    mut open_options: OpenOptions,
+    open_options: OpenOptions,
     cx: &mut App,
 ) -> Task<anyhow::Result<OpenResult>> {
     let abs_paths = abs_paths.to_vec();
@@ -9874,48 +9872,6 @@ pub fn open_paths(
                         }
                     }
                 });
-            }
-        }
-
-        // Fallback for directories: when no flag is specified and no existing
-        // workspace matched, check the user's setting to decide whether to add
-        // the directory as a new workspace in the active window's MultiWorkspace
-        // or open a new window.
-        // Skip when requesting_window is already set: the caller (e.g.
-        // open_workspace_for_paths reusing an empty window) already chose the
-        // target window, so we must not open the sidebar as a side-effect.
-        if open_options.should_reuse_existing_window()
-            && existing.is_none()
-            && open_options.requesting_window.is_none()
-        {
-            let use_existing_window = open_options.add_dirs_to_sidebar;
-
-            if use_existing_window {
-                let target_window = cx.update(|cx| {
-                    let windows = workspace_windows_for_location(
-                        &SerializedWorkspaceLocation::Local,
-                        cx,
-                    );
-                    let window = cx
-                        .active_window()
-                        .and_then(|window| window.downcast::<MultiWorkspace>())
-                        .filter(|window| windows.contains(window))
-                        .or_else(|| windows.into_iter().next());
-                    window.filter(|window| {
-                        window
-                            .read(cx)
-                            .is_ok_and(|mw| mw.multi_workspace_enabled(cx))
-                    })
-                });
-
-                if let Some(window) = target_window {
-                    open_options.requesting_window = Some(window);
-                    window
-                        .update(cx, |multi_workspace, _, cx| {
-                            multi_workspace.open_sidebar(cx);
-                        })
-                        .log_err();
-                }
             }
         }
 

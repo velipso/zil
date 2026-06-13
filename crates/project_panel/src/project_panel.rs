@@ -17,8 +17,6 @@ use feature_flags::{FeatureFlagAppExt, ProjectPanelUndoRedoFeatureFlag};
 use file_icons::FileIcons;
 use git;
 use git::status::GitSummary;
-use git_ui;
-use git_ui::file_diff_view::FileDiffView;
 use gpui::{
     Action, AnyElement, App, AsyncWindowContext, Bounds, ClipboardEntry as GpuiClipboardEntry,
     ClipboardItem, Context, CursorStyle, DismissEvent, Div, DragMoveEvent, Entity, EventEmitter,
@@ -527,50 +525,6 @@ pub fn init(cx: &mut App) {
                 panel.update(cx, |panel, cx| panel.delete(action, window, cx));
             }
         });
-
-        // Forwards `git::FileHistory` to `git_ui::git_graph` when the project
-        // panel is the focused source of selection. Lives here (and not in
-        // `git_ui`) so that `git_ui` does not need to depend on
-        // `project_panel`, which would create a dependency cycle.
-        workspace.register_action_renderer(|div, workspace, window, cx| {
-            let Some(panel) = workspace.panel::<ProjectPanel>(cx) else {
-                return div;
-            };
-            if !panel.read(cx).focus_handle(cx).contains_focused(window, cx) {
-                return div;
-            }
-            if panel.read(cx).selected_entry_project_path(cx).is_none() {
-                return div;
-            }
-            let workspace = workspace.weak_handle();
-            div.capture_action(move |_: &git::FileHistory, window, cx| {
-                workspace
-                    .update(cx, |workspace, cx| {
-                        let Some(panel) = workspace.panel::<ProjectPanel>(cx) else {
-                            return;
-                        };
-                        let Some(project_path) = panel.read(cx).selected_entry_project_path(cx)
-                        else {
-                            return;
-                        };
-                        let Some((repo_id, log_source)) =
-                            git_ui::git_graph::resolve_file_history_target_from_project_path(
-                                workspace,
-                                &project_path,
-                                cx,
-                            )
-                        else {
-                            return;
-                        };
-                        let git_store = workspace.project().read(cx).git_store().clone();
-                        git_ui::git_graph::open_or_reuse_graph(
-                            workspace, repo_id, git_store, log_source, None, window, cx,
-                        );
-                    })
-                    .log_err();
-                cx.stop_propagation();
-            })
-        });
     })
     .detach();
 }
@@ -665,17 +619,7 @@ impl ProjectPanel {
                         }
                     }
                     project::Event::ActiveEntryChanged(None) => {
-                        let is_active_item_file_diff_view = this
-                            .workspace
-                            .upgrade()
-                            .and_then(|ws| ws.read(cx).active_item(cx))
-                            .map(|item| {
-                                item.act_as_type(TypeId::of::<FileDiffView>(), cx).is_some()
-                            })
-                            .unwrap_or(false);
-                        if !is_active_item_file_diff_view {
-                            this.marked_entries.clear();
-                        }
+                        this.marked_entries.clear();
                     }
                     project::Event::RevealInProjectPanel(entry_id) => {
                         if let Some(()) = this
@@ -3539,23 +3483,6 @@ impl ProjectPanel {
         Some((previous_to_last, last_path))
     }
 
-    fn compare_marked_files(
-        &mut self,
-        _: &CompareMarkedFiles,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let selected_files = self.file_abs_paths_to_diff(cx);
-        if let Some((file_path1, file_path2)) = selected_files {
-            self.workspace
-                .update(cx, |workspace, cx| {
-                    FileDiffView::open(file_path1, file_path2, workspace.weak_handle(), window, cx)
-                        .detach_and_log_err(cx);
-                })
-                .ok();
-        }
-    }
-
     fn open_system(&mut self, _: &OpenWithSystem, _: &mut Window, cx: &mut Context<Self>) {
         if let Some((worktree, entry)) = self.selected_entry(cx) {
             let abs_path = worktree.absolutize(&entry.path);
@@ -6351,15 +6278,6 @@ impl ProjectPanel {
             cx.notify();
             return Ok(());
         }
-        let is_active_item_file_diff_view = self
-            .workspace
-            .upgrade()
-            .and_then(|ws| ws.read(cx).active_item(cx))
-            .map(|item| item.act_as_type(TypeId::of::<FileDiffView>(), cx).is_some())
-            .unwrap_or(false);
-        if is_active_item_file_diff_view {
-            return Ok(());
-        }
 
         self.expand_entry(worktree_id, entry_id, cx);
         self.update_visible_entries(Some((worktree_id, entry_id)), false, true, window, cx);
@@ -6719,7 +6637,6 @@ impl Render for ProjectPanel {
                 .on_action(cx.listener(Self::unfold_directory))
                 .on_action(cx.listener(Self::fold_directory))
                 .on_action(cx.listener(Self::remove_from_project))
-                .on_action(cx.listener(Self::compare_marked_files))
                 .when(cx.has_flag::<ProjectPanelUndoRedoFeatureFlag>(), |el| {
                     el.on_action(cx.listener(Self::undo))
                         .on_action(cx.listener(Self::redo))
