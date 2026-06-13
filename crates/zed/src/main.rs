@@ -33,7 +33,6 @@ use gpui_platform;
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
-use onboarding::{FIRST_OPEN, show_onboarding_view};
 use remote::RemoteConnectionOptions;
 use reqwest_client::ReqwestClient;
 
@@ -679,7 +678,6 @@ fn main() {
             },
             wrap_div_with_search_actions: search::buffer_search::register_pane_search_actions,
         });
-        vim::init(cx);
         terminal_view::init(cx);
         journal::init(app_state.clone(), cx);
         encoding_selector::init(cx);
@@ -695,7 +693,6 @@ fn main() {
         markdown_preview::init(cx);
         csv_preview::init(cx);
         svg_preview::init(cx);
-        onboarding::init(cx);
         settings_ui::init(cx);
         keymap_editor::init(cx);
         extensions_ui::init(cx);
@@ -1124,7 +1121,6 @@ pub(crate) async fn restore_or_create_workspace(
     app_state: Arc<AppState>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
-    let kvp = cx.update(|cx| KeyValueStore::global(cx));
     if let Some(multi_workspaces) = restorable_workspaces(cx, &app_state).await {
         let mut error_count = 0;
         for multi_workspace in multi_workspaces {
@@ -1254,8 +1250,6 @@ pub(crate) async fn restore_or_create_workspace(
             })
             .await?;
         }
-    } else if matches!(kvp.read_kvp(FIRST_OPEN), Ok(None)) {
-        cx.update(|cx| show_onboarding_view(app_state, cx)).await?;
     } else {
         cx.update(|cx| {
             workspace::open_new(

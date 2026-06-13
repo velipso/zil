@@ -95,7 +95,6 @@ members = [
     "crates/node_runtime",
     "crates/notifications",
     "crates/oauth_callback_server",
-    "crates/onboarding",
     "crates/open_path_prompt",
     "crates/outline",
     "crates/outline_panel",
@@ -156,8 +155,6 @@ members = [
     "crates/ui_prompt",
     "crates/util",
     "crates/util_macros",
-    "crates/vim",
-    "crates/vim_mode_setting",
     "crates/watch",
     "crates/web_search",
     "crates/web_search_providers",
@@ -299,7 +296,6 @@ net = { path = "crates/net" }
 node_runtime = { path = "crates/node_runtime" }
 notifications = { path = "crates/notifications" }
 oauth_callback_server = { path = "crates/oauth_callback_server" }
-onboarding = { path = "crates/onboarding" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
 outline_panel = { path = "crates/outline_panel" }
@@ -360,8 +356,6 @@ ui_macros = { path = "crates/ui_macros" }
 ui_prompt = { path = "crates/ui_prompt" }
 util = { path = "crates/util" }
 util_macros = { path = "crates/util_macros" }
-vim = { path = "crates/vim" }
-vim_mode_setting = { path = "crates/vim_mode_setting" }
 which_key = { path = "crates/which_key" }
 
 watch = { path = "crates/watch" }
