@@ -30,7 +30,6 @@ members = [
     "crates/db",
     "crates/debug_adapter_extension",
     "crates/debugger_tools",
-    "crates/dev_container",
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
@@ -231,7 +230,6 @@ db = { path = "crates/db" }
 debug_adapter_extension = { path = "crates/debug_adapter_extension" }
 debugger_tools = { path = "crates/debugger_tools" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
-dev_container = { path = "crates/dev_container" }
 dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }

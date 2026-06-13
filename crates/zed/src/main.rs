@@ -648,7 +648,6 @@ fn main() {
         project::AgentRegistryStore::init_global(cx);
 
         recent_projects::init(cx);
-        dev_container::init(cx);
 
         load_embedded_fonts(cx);
 

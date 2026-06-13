@@ -24,8 +24,7 @@ use workspace::{
 };
 
 pub use remote_connection::{
-    RemoteClientDelegate, RemoteConnectionModal, RemoteConnectionPrompt, SshConnectionHeader,
-    connect,
+    RemoteClientDelegate, RemoteConnectionModal,
 };
 
 #[derive(RegisterSetting)]

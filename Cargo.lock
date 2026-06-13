@@ -2986,40 +2986,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dev_container"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-tar",
- "async-trait",
- "env_logger 0.11.8",
- "fs",
- "futures",
- "gpui",
- "http",
- "http_client",
- "indoc",
- "log",
- "menu",
- "paths",
- "picker",
- "project",
- "regex",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "serde_yaml",
- "settings",
- "shlex",
- "ui",
- "util",
- "walkdir",
- "workspace",
- "worktree",
- "yaml-rust2",
-]
-
-[[package]]
 name = "dialoguer"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10301,8 +10267,6 @@ dependencies = [
  "anyhow",
  "askpass",
  "chrono",
- "db",
- "dev_container",
  "editor",
  "extension",
  "extension_host",
@@ -10316,7 +10280,6 @@ dependencies = [
  "log",
  "menu",
  "node_runtime",
- "open_path_prompt",
  "ordered-float 2.10.1",
  "paths",
  "picker",
@@ -10329,13 +10292,11 @@ dependencies = [
  "serde_json",
  "settings",
  "task",
- "telemetry",
  "ui",
  "ui_input",
  "util",
  "windows-registry 0.6.1",
  "workspace",
- "worktree",
  "zed_actions",
 ]
 
@@ -12851,7 +12812,6 @@ dependencies = [
  "notifications",
  "platform_title_bar",
  "project",
- "recent_projects",
  "release_channel",
  "remote",
  "schemars 1.0.4",
@@ -12860,12 +12820,10 @@ dependencies = [
  "settings",
  "smallvec",
  "telemetry",
- "theme",
  "ui",
  "util",
  "windows 0.61.3",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -16490,7 +16448,6 @@ dependencies = [
  "db",
  "debug_adapter_extension",
  "debugger_tools",
- "dev_container",
  "editor",
  "encoding_selector",
  "env_logger 0.11.8",

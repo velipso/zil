@@ -24,7 +24,6 @@ test-support = [
     "remote/test-support",
     "util/test-support",
     "workspace/test-support",
-    "recent_projects/test-support",
 ]
 
 [dependencies]
@@ -37,19 +36,15 @@ db.workspace = true
 
 gpui = { workspace = true, features = ["screen-capture"] }
 project.workspace = true
-recent_projects.workspace = true
-remote.workspace = true
 semver.workspace = true
 schemars.workspace = true
 serde.workspace = true
 settings.workspace = true
 smallvec.workspace = true
 telemetry.workspace = true
-theme.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true
-zed_actions.workspace = true
 arrayvec = "0.7.6"
 
 [target.'cfg(windows)'.dependencies]
