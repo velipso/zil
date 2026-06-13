@@ -4,9 +4,9 @@ Zil is a fork of [Zed v1.6.3](https://github.com/zed-industries/zed/tree/v1.6.3)
 
 My goal is to remove everything I dislike, which is probably 90% of it.
 
-The initial fork added **1,649,748** lines of code.
+The initial fork + vendoring added **1,665,382** lines of code.
 
-I have currently deleted **498,415** lines of code! 🎉
+I have currently deleted **579,231** lines of code! 🎉
 
 ---
 
