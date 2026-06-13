@@ -440,7 +440,7 @@ core-video = { version = "0.5.2", features = ["metal"] }
 crash-handler = "0.7"
 criterion = { version = "0.5", features = ["html_reports"] }
 ctor = "1.0.6"
-dap-types = { git = "https://github.com/zed-industries/dap-types", rev = "1b461b310481d01e02b2603c16d7144b926339f8" }
+dap-types = { path = "crates/dap-types" }
 dashmap = "6.0"
 derive_more = { version = "2.1.1", features = [
     "add",
@@ -497,7 +497,7 @@ libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 linkify = "0.10.0"
 log = { version = "0.4.16", features = ["kv_unstable_serde", "serde"] }
 lru = "0.16"
-lsp-types = { git = "https://github.com/zed-industries/lsp-types", rev = "f4dfa89a21ca35cd929b70354b1583fabae325f8" }
+lsp-types = { path = "crates/lsp-types" }
 mach2 = "0.5"
 markup5ever_rcdom = "0.3.0"
 metal = "0.33"
