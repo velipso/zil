@@ -3,13 +3,10 @@ resolver = "2"
 members = [
     "crates/activity_indicator",
     "crates/agent_skills",
-    "crates/anthropic",
     "crates/askpass",
     "crates/assets",
     "crates/auto_update",
     "crates/auto_update_ui",
-    "crates/aws_http_client",
-    "crates/bedrock",
     "crates/breadcrumbs",
     "crates/buffer_diff",
     "crates/channel",
@@ -33,7 +30,6 @@ members = [
     "crates/db",
     "crates/debug_adapter_extension",
     "crates/debugger_tools",
-    "crates/deepseek",
     "crates/dev_container",
     "crates/editor",
     "crates/encoding_selector",
@@ -54,7 +50,6 @@ members = [
     "crates/git",
     "crates/git_hosting_providers",
     "crates/go_to_line",
-    "crates/google_ai",
     "crates/grammars",
     "crates/gpui",
     "crates/gpui_shared_string",
@@ -82,14 +77,11 @@ members = [
     "crates/language_extension",
     "crates/language_model",
     "crates/language_model_core",
-    "crates/language_models",
-    "crates/language_models_cloud",
     "crates/language_onboarding",
     "crates/language_selector",
     "crates/language_tools",
     "crates/languages",
     "crates/line_ending_selector",
-    "crates/lmstudio",
     "crates/lsp",
     "crates/markdown",
     "crates/markdown_preview",
@@ -98,18 +90,13 @@ members = [
     "crates/menu",
     "crates/migrator",
     "crates/miniprofiler_ui",
-    "crates/mistral",
     "crates/multi_buffer",
     "crates/net",
     "crates/node_runtime",
     "crates/notifications",
     "crates/oauth_callback_server",
-    "crates/ollama",
     "crates/onboarding",
-    "crates/opencode",
-    "crates/open_ai",
     "crates/open_path_prompt",
-    "crates/open_router",
     "crates/outline",
     "crates/outline_panel",
     "crates/paths",
@@ -177,7 +164,6 @@ members = [
     "crates/which_key",
     "crates/workspace",
     "crates/worktree",
-    "crates/x_ai",
     "crates/zed",
     "crates/zed_actions",
     "crates/windows_resources",
@@ -218,13 +204,10 @@ edition = "2024"
 
 activity_indicator = { path = "crates/activity_indicator" }
 agent_skills = { path = "crates/agent_skills" }
-anthropic = { path = "crates/anthropic" }
 askpass = { path = "crates/askpass" }
 assets = { path = "crates/assets" }
 auto_update = { path = "crates/auto_update" }
 auto_update_ui = { path = "crates/auto_update_ui" }
-aws_http_client = { path = "crates/aws_http_client" }
-bedrock = { path = "crates/bedrock" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
 channel = { path = "crates/channel" }
@@ -250,7 +233,6 @@ dap_adapters = { path = "crates/dap_adapters" }
 db = { path = "crates/db" }
 debug_adapter_extension = { path = "crates/debug_adapter_extension" }
 debugger_tools = { path = "crates/debugger_tools" }
-deepseek = { path = "crates/deepseek" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 dev_container = { path = "crates/dev_container" }
 dialoguer = { version = "0.12", default-features = false }
@@ -271,7 +253,6 @@ fuzzy_nucleo = { path = "crates/fuzzy_nucleo" }
 git = { path = "crates/git" }
 git_hosting_providers = { path = "crates/git_hosting_providers" }
 go_to_line = { path = "crates/go_to_line" }
-google_ai = { path = "crates/google_ai" }
 grammars = { path = "crates/grammars" }
 gpui = { path = "crates/gpui", default-features = false }
 gpui_shared_string = { path = "crates/gpui_shared_string" }
@@ -299,14 +280,11 @@ language_core = { path = "crates/language_core" }
 language_extension = { path = "crates/language_extension" }
 language_model = { path = "crates/language_model" }
 language_model_core = { path = "crates/language_model_core" }
-language_models = { path = "crates/language_models" }
-language_models_cloud = { path = "crates/language_models_cloud" }
 language_onboarding = { path = "crates/language_onboarding" }
 language_selector = { path = "crates/language_selector" }
 language_tools = { path = "crates/language_tools" }
 languages = { path = "crates/languages" }
 line_ending_selector = { path = "crates/line_ending_selector" }
-lmstudio = { path = "crates/lmstudio" }
 lsp = { path = "crates/lsp" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
@@ -315,19 +293,14 @@ svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
 migrator = { path = "crates/migrator" }
-mistral = { path = "crates/mistral" }
 multi_buffer = { path = "crates/multi_buffer" }
 miniprofiler_ui = { path = "crates/miniprofiler_ui" }
 net = { path = "crates/net" }
 node_runtime = { path = "crates/node_runtime" }
 notifications = { path = "crates/notifications" }
 oauth_callback_server = { path = "crates/oauth_callback_server" }
-ollama = { path = "crates/ollama" }
 onboarding = { path = "crates/onboarding" }
-opencode = { path = "crates/opencode" }
-open_ai = { path = "crates/open_ai" }
 open_path_prompt = { path = "crates/open_path_prompt" }
-open_router = { path = "crates/open_router", features = ["schemars"] }
 outline = { path = "crates/outline" }
 outline_panel = { path = "crates/outline_panel" }
 panel = { path = "crates/panel" }
@@ -396,7 +369,6 @@ web_search = { path = "crates/web_search" }
 web_search_providers = { path = "crates/web_search_providers" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
-x_ai = { path = "crates/x_ai" }
 zed = { path = "crates/zed" }
 zed_actions = { path = "crates/zed_actions" }
 zed_credentials_provider = { path = "crates/zed_credentials_provider" }
@@ -855,10 +827,8 @@ image_viewer = { codegen-units = 1 }
 install_cli = { codegen-units = 1 }
 journal = { codegen-units = 1 }
 json_schema_store = { codegen-units = 1 }
-lmstudio = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }
-ollama = { codegen-units = 1 }
 outline = { codegen-units = 1 }
 paths = { codegen-units = 1 }
 prettier = { codegen-units = 1 }
