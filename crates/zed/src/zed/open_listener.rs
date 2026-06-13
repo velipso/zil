@@ -1,6 +1,5 @@
 use crate::handle_open_request;
 use crate::restore_or_create_workspace;
-use agent_ui::ExternalSourcePrompt;
 use anyhow::{Context as _, Result, anyhow};
 use cli::{CliRequest, CliResponse, CliResponseSink};
 use cli::{IpcHandshake, ipc};
@@ -56,16 +55,6 @@ pub enum OpenRequestKind {
     Extension {
         extension_id: String,
     },
-    AgentPanel {
-        external_source_prompt: Option<ExternalSourcePrompt>,
-    },
-    SharedAgentThread {
-        session_id: String,
-    },
-    InstallSkill {
-        /// Full `SKILL.md` contents embedded in a `zed://skill` share link.
-        content: String,
-    },
     DockMenuAction {
         index: usize,
     },
@@ -92,20 +81,6 @@ impl std::fmt::Debug for OpenRequestKind {
             Self::Extension { extension_id } => f
                 .debug_struct("Extension")
                 .field("extension_id", extension_id)
-                .finish(),
-            Self::AgentPanel {
-                external_source_prompt,
-            } => f
-                .debug_struct("AgentPanel")
-                .field("external_source_prompt", external_source_prompt)
-                .finish(),
-            Self::SharedAgentThread { session_id } => f
-                .debug_struct("SharedAgentThread")
-                .field("session_id", session_id)
-                .finish(),
-            Self::InstallSkill { content } => f
-                .debug_struct("InstallSkill")
-                .field("content_len", &content.len())
                 .finish(),
             Self::DockMenuAction { index } => f
                 .debug_struct("DockMenuAction")
@@ -178,18 +153,6 @@ impl OpenRequest {
                 this.kind = Some(OpenRequestKind::Extension {
                     extension_id: extension_id.to_string(),
                 });
-            } else if let Some(session_id_str) = url.strip_prefix("zed://agent/shared/") {
-                if uuid::Uuid::parse_str(session_id_str).is_ok() {
-                    this.kind = Some(OpenRequestKind::SharedAgentThread {
-                        session_id: session_id_str.to_string(),
-                    });
-                } else {
-                    log::error!("Invalid session ID in URL: {}", session_id_str);
-                }
-            } else if url.starts_with(agent_skills::SKILL_SHARE_LINK_PREFIX) {
-                this.parse_skill_install_url(&url)?
-            } else if let Some(agent_path) = url.strip_prefix("zed://agent") {
-                this.parse_agent_url(agent_path)
             } else if url == "zed://" || url == "zed://open" || url == "zed://open/" {
                 this.kind = Some(OpenRequestKind::FocusApp);
             } else if let Some(schema_path) = url.strip_prefix("zed://schemas/") {
@@ -232,26 +195,6 @@ impl OpenRequest {
         if let Some(decoded) = urlencoding::decode(file).log_err() {
             self.open_paths.push(decoded.into_owned())
         }
-    }
-
-    fn parse_agent_url(&mut self, agent_path: &str) {
-        // Format: "" or "?prompt=<text>".
-        let agent_path = agent_path.strip_prefix('/').unwrap_or(agent_path);
-        let external_source_prompt = agent_path.strip_prefix('?').and_then(|query| {
-            url::form_urlencoded::parse(query.as_bytes())
-                .find_map(|(key, value)| (key == "prompt").then_some(value))
-                .and_then(|prompt| ExternalSourcePrompt::new(prompt.as_ref()))
-        });
-        self.kind = Some(OpenRequestKind::AgentPanel {
-            external_source_prompt,
-        });
-    }
-
-    fn parse_skill_install_url(&mut self, url: &str) -> Result<()> {
-        // Format: zed://skill?data=<base64url of SKILL.md contents>
-        let content = agent_skills::decode_skill_share_link(url)?;
-        self.kind = Some(OpenRequestKind::InstallSkill { content });
-        Ok(())
     }
 
     fn parse_git_clone_url(&mut self, clone_path: &str) -> Result<()> {

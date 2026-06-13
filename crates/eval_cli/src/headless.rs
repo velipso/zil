@@ -12,7 +12,6 @@ use language::LanguageRegistry;
 use language_extension::LspAccess;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use project::project_settings::ProjectSettings;
-use prompt_store::PromptBuilder;
 use release_channel::{AppCommitSha, AppVersion};
 use reqwest_client::ReqwestClient;
 use settings::{Settings, SettingsStore};
@@ -116,17 +115,6 @@ pub fn init(cx: &mut App) -> Arc<AgentCliAppState> {
     languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
     prompt_store::init(cx);
     terminal_view::init(cx);
-
-    let stdout_is_a_pty = false;
-    let prompt_builder = PromptBuilder::load(fs.clone(), stdout_is_a_pty, cx);
-    agent_ui::init(
-        fs.clone(),
-        prompt_builder,
-        languages.clone(),
-        true,
-        true,
-        cx,
-    );
 
     Arc::new(AgentCliAppState {
         languages,

@@ -15,7 +15,6 @@ pub mod visual_tests;
 pub(crate) mod windows_only_instance;
 
 use agent_settings::{UserAgentsMdState, init_user_agents_md};
-use agent_ui::AgentDiffToolbar;
 use anyhow::Context as _;
 pub use app_menus::*;
 use assets::Assets;
@@ -28,14 +27,13 @@ use editor::{Editor, MultiBuffer};
 use extension_host::ExtensionStore;
 use feature_flags::{FeatureFlagAppExt as _, PanicFeatureFlag};
 use fs::Fs;
-use futures::FutureExt as _;
 use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::commit_view::CommitViewToolbar;
 use git_ui::git_panel::GitPanel;
 use git_ui::project_diff::{BranchDiffToolbar, ProjectDiffToolbar};
 use git_ui::solo_diff_view::{SoloDiffGitToolbar, SoloDiffStyleToolbar};
 use gpui::{
-    Action, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, DismissEvent,
+    Action, App, AppContext as _, ClipboardItem, Context, DismissEvent,
     Element, Entity, FocusHandle, Focusable, Image, ImageFormat, KeyBinding, ParentElement,
     PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt, TitlebarOptions,
     UpdateGlobal, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
@@ -69,7 +67,6 @@ use settings::{
     initial_local_debug_tasks_content, initial_project_settings_content, initial_tasks_content,
     update_settings_file,
 };
-use sidebar::Sidebar;
 
 use std::{
     borrow::Cow,
@@ -448,7 +445,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                 .unwrap_or(true)
         });
 
-        let window_handle = window.window_handle();
         let multi_workspace_handle = cx.entity();
         cx.subscribe_in(
             &multi_workspace_handle,
@@ -463,36 +459,12 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                 let active_workspace = this.workspace().clone();
                 let source_workspace = source_workspace.clone();
                 active_workspace.update(cx, |workspace, cx| {
-                    if let Some(ref source) = source_workspace {
-                        if let Some(panel) = workspace.panel::<agent_ui::AgentPanel>(cx) {
-                            panel.update(cx, |panel, cx| {
-                                panel.initialize_from_source_workspace_if_needed(
-                                    source.clone(),
-                                    window,
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-
                     ensure_agent_panel_for_workspace(workspace, source_workspace, window, cx)
                         .detach_and_log_err(cx);
                 });
             },
         )
         .detach();
-
-        cx.defer(move |cx| {
-            window_handle
-                .update(cx, |_, window, cx| {
-                    let sidebar =
-                        cx.new(|cx| Sidebar::new(multi_workspace_handle.clone(), window, cx));
-                    multi_workspace_handle.update(cx, |multi_workspace, cx| {
-                        multi_workspace.register_sidebar(sidebar, cx);
-                    });
-                })
-                .ok();
-        });
     })
     .detach();
 
@@ -736,7 +708,6 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
             add_panel_when_ready(git_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(channels_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(debug_panel, workspace_handle.clone(), cx.clone()),
-            initialize_agent_panel(workspace_handle, cx.clone()).map(|r| r.log_err()),
         );
 
         anyhow::Ok(())
@@ -751,40 +722,6 @@ fn ensure_agent_panel_for_workspace(
 ) -> Task<anyhow::Result<()>> {
     // VELIPSO: delete function
     Task::ready(Ok(()))
-}
-
-async fn initialize_agent_panel(
-    workspace_handle: WeakEntity<Workspace>,
-    mut cx: AsyncWindowContext,
-) -> anyhow::Result<()> {
-    workspace_handle
-        .update_in(&mut cx, |workspace, window, cx| {
-            ensure_agent_panel_for_workspace(workspace, None, window, cx)
-        })?
-        .await?;
-
-    workspace_handle.update_in(&mut cx, |workspace, window, cx| {
-        cx.observe_global_in::<SettingsStore>(window, move |workspace, window, cx| {
-            ensure_agent_panel_for_workspace(workspace, None, window, cx).detach_and_log_err(cx);
-        })
-        .detach();
-
-        // Register the actions that are shared between `assistant` and `assistant2`.
-        //
-        // We need to do this here instead of within the individual `init`
-        // functions so that we only register the actions once.
-        //
-        // Once we ship `assistant2` we can push this back down into `agent::agent_panel::init`.
-        if !cfg!(test) {
-            workspace
-                .register_action(agent_ui::AgentPanel::toggle_focus)
-                .register_action(agent_ui::AgentPanel::focus)
-                .register_action(agent_ui::AgentPanel::toggle)
-                .register_action(agent_ui::InlineAssistant::inline_assist);
-        }
-    })?;
-
-    anyhow::Ok(())
 }
 
 fn register_actions(
@@ -1223,8 +1160,6 @@ fn register_actions(
             }
         });
     }
-
-    workspace.register_action(sidebar::dump_workspace_info);
 }
 
 fn initialize_pane(
@@ -1282,8 +1217,6 @@ fn initialize_pane(
             toolbar.add_item(solo_diff_git_toolbar, window, cx);
             let commit_view_toolbar = cx.new(|_| CommitViewToolbar::new());
             toolbar.add_item(commit_view_toolbar, window, cx);
-            let agent_diff_toolbar = cx.new(AgentDiffToolbar::new);
-            toolbar.add_item(agent_diff_toolbar, window, cx);
             let basedpyright_banner = cx.new(|cx| BasedPyrightBanner::new(workspace, cx));
             toolbar.add_item(basedpyright_banner, window, cx);
             let image_view_toolbar = cx.new(|_| image_viewer::ImageViewToolbarControls::new());

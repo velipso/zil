@@ -44,7 +44,6 @@ visual-tests = [
     "clock/test-support",
     "acp_thread/test-support",
     "action_log/test-support",
-    "agent_ui/test-support",
     "db/test-support",
     "agent/test-support",
     "language_model/test-support",
@@ -69,7 +68,6 @@ agent.workspace = true
 agent-client-protocol.workspace = true
 agent_settings.workspace = true
 agent_skills.workspace = true
-agent_ui = { workspace = true, features = ["audio"] }
 anyhow.workspace = true
 askpass.workspace = true
 assets.workspace = true
@@ -180,7 +178,6 @@ settings.workspace = true
 settings_profile_selector.workspace = true
 settings_ui.workspace = true
 shellexpand.workspace = true
-sidebar.workspace = true
 smol.workspace = true
 snippet_provider.workspace = true
 snippets_ui.workspace = true
@@ -261,7 +258,6 @@ terminal_view = { workspace = true, features = ["test-support"] }
 title_bar = { workspace = true, features = ["test-support"] }
 workspace = { workspace = true, features = ["test-support"] }
 image.workspace = true
-agent_ui = { workspace = true, features = ["test-support"] }
 search = { workspace = true, features = ["test-support"] }
 repl = { workspace = true, features = ["test-support"] }
 

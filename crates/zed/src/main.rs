@@ -14,9 +14,6 @@ const _: () = assert!(
      Forks: update APP_NAME in crates/paths/src/paths.rs when renaming the binary.",
 );
 
-use agent::{SharedThread, ThreadStore};
-use agent_client_protocol::schema as acp;
-use agent_ui::AgentPanel;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
@@ -32,7 +29,7 @@ use futures::{StreamExt, channel::oneshot, future};
 use git::GitHostingProviderRegistry;
 use git_ui::clone::clone_and_open;
 use gpui::{
-    App, AppContext, Application, AsyncApp, Focusable as _, QuitMode, Task, TaskExt,
+    App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt,
     UpdateGlobal as _, block_on,
 };
 use gpui_platform;
@@ -41,7 +38,6 @@ use gpui_tokio::Tokio;
 use language::LanguageRegistry;
 use onboarding::{FIRST_OPEN, show_onboarding_view};
 use project_panel::ProjectPanel;
-use prompt_store::PromptBuilder;
 use remote::RemoteConnectionOptions;
 use reqwest_client::ReqwestClient;
 
@@ -49,7 +45,6 @@ use assets::Assets;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use parking_lot::Mutex;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
-use proto;
 use recent_projects::{RemoteSettings, open_remote_project};
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use session::{AppSession, Session};
@@ -621,8 +616,6 @@ fn main() {
         })
         .detach();
 
-        let is_new_install = matches!(&installation_id, Some(IdType::New(_)));
-
         // We should rename these in the future to `first app open`, `first app open for release channel`, and `app open`
         if let (Some(system_id), Some(installation_id)) = (&system_id, &installation_id) {
             match (&system_id, &installation_id) {
@@ -686,16 +679,7 @@ fn main() {
         web_search::init(cx);
         web_search_providers::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         snippet_provider::init(cx);
-        let prompt_builder = PromptBuilder::load(app_state.fs.clone(), stdout_is_a_pty(), cx);
         project::AgentRegistryStore::init_global(cx);
-        agent_ui::init(
-            app_state.fs.clone(),
-            prompt_builder,
-            app_state.languages.clone(),
-            is_new_install,
-            false,
-            cx,
-        );
         zed::watch_user_agents_md(app_state.fs.clone(), cx);
 
         repl::init(app_state.fs.clone(), cx);
@@ -983,165 +967,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                             }),
                             cx,
                         );
-                    })
-                })
-                .detach_and_log_err(cx);
-            }
-            OpenRequestKind::AgentPanel {
-                external_source_prompt,
-            } => {
-                cx.spawn(async move |cx| {
-                    let multi_workspace =
-                        workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
-
-                    let panels_task = multi_workspace.update(cx, |multi_workspace, _, cx| {
-                        multi_workspace
-                            .workspace()
-                            .update(cx, |workspace, _| workspace.take_panels_task())
-                    })?;
-                    if let Some(task) = panels_task {
-                        task.await.log_err();
-                    }
-
-                    multi_workspace.update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.workspace().update(cx, |workspace, cx| {
-                            if let Some(panel) = workspace.focus_panel::<AgentPanel>(window, cx) {
-                                panel.update(cx, |panel, cx| {
-                                    panel.new_agent_thread_with_external_source_prompt(
-                                        external_source_prompt,
-                                        window,
-                                        cx,
-                                    );
-                                });
-                            } else {
-                                log::warn!(
-                                    "zed://agent received but the AgentPanel is not registered \
-                                     (is `disable_ai` enabled?)"
-                                );
-                            }
-                        });
-                    })
-                })
-                .detach_and_log_err(cx);
-            }
-            OpenRequestKind::SharedAgentThread { session_id } => {
-                cx.spawn(async move |cx| {
-                    let multi_workspace =
-                        workspace::get_any_active_multi_workspace(app_state.clone(), cx.clone())
-                            .await?;
-
-                    let workspace =
-                        multi_workspace.read_with(cx, |mw, _| mw.workspace().clone())?;
-
-                    let import_state = multi_workspace.update(cx, |_, window, cx| {
-                        workspace.update(cx, |workspace, cx| {
-                            if workspace.root_paths(cx).is_empty() {
-                                workspace.focus_panel::<AgentPanel>(window, cx);
-
-                                struct OpenProjectForSharedThreadToast;
-                                workspace.show_toast(
-                                    Toast::new(
-                                        NotificationId::unique::<OpenProjectForSharedThreadToast>(),
-                                        "Open a project to import shared threads",
-                                    )
-                                    .autohide(),
-                                    cx,
-                                );
-
-                                return anyhow::Ok(None);
-                            }
-
-                            let client = workspace.project().read(cx).client();
-                            let thread_store: Option<gpui::Entity<ThreadStore>> = workspace
-                                .panel::<AgentPanel>(cx)
-                                .map(|panel| panel.read(cx).thread_store().clone());
-                            anyhow::Ok(Some((client, thread_store)))
-                        })
-                    })??;
-
-                    let Some((client, thread_store)) = import_state else {
-                        return Ok(());
-                    };
-
-                    let Some(thread_store): Option<gpui::Entity<ThreadStore>> = thread_store else {
-                        anyhow::bail!("Agent panel not available");
-                    };
-
-                    let response = client
-                        .request(proto::GetSharedAgentThread {
-                            session_id: session_id.clone(),
-                        })
-                        .await
-                        .context("Failed to fetch shared thread")?;
-
-                    let shared_thread = SharedThread::from_bytes(&response.thread_data)?;
-                    let db_thread = shared_thread.to_db_thread();
-                    let session_id = acp::SessionId::new(session_id);
-
-                    let save_session_id = session_id.clone();
-
-                    thread_store
-                        .update(&mut cx.clone(), |store, cx| {
-                            store.save_thread(
-                                save_session_id.clone(),
-                                db_thread,
-                                Default::default(),
-                                cx,
-                            )
-                        })
-                        .await?;
-
-                    let sharer_username = response.sharer_username.clone();
-
-                    multi_workspace.update(cx, |_, window, cx| {
-                        workspace.update(cx, |workspace, cx| {
-                            if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
-                                panel.update(cx, |panel, cx| {
-                                    panel.open_thread(
-                                        session_id,
-                                        None,
-                                        Some(format!("🔗 {}", response.title).into()),
-                                        window,
-                                        cx,
-                                    );
-                                });
-                                panel.focus_handle(cx).focus(window, cx);
-                            }
-
-                            struct ImportedThreadToast;
-                            workspace.show_toast(
-                                Toast::new(
-                                    NotificationId::unique::<ImportedThreadToast>(),
-                                    format!("Imported shared thread from {}", sharer_username),
-                                )
-                                .autohide(),
-                                cx,
-                            );
-                        });
-                    })?;
-
-                    anyhow::Ok(())
-                })
-                .detach_and_log_err(cx);
-            }
-            OpenRequestKind::InstallSkill { content } => {
-                cx.spawn(async move |cx| {
-                    let multi_workspace =
-                        workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
-
-                    multi_workspace.update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.workspace().update(cx, |workspace, cx| {
-                            if let Some(panel) = workspace.focus_panel::<AgentPanel>(window, cx) {
-                                panel.update(cx, |panel, cx| {
-                                    panel.install_shared_skill(content, cx);
-                                });
-                            } else {
-                                log::warn!(
-                                    "zed://skill received but the AgentPanel is not registered \
-                                     (is `disable_ai` enabled?)"
-                                );
-                            }
-                        });
                     })
                 })
                 .detach_and_log_err(cx);
