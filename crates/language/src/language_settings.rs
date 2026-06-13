@@ -1,7 +1,7 @@
 //! Provides `language`-related settings.
 
 use crate::{
-    Buffer, BufferSnapshot, File, Language, LanguageName, LanguageServerName, ModelineSettings,
+    Buffer, BufferSnapshot, File, LanguageName, LanguageServerName, ModelineSettings,
 };
 use collections::{FxHashMap, HashMap, HashSet};
 use ec4rs::{
@@ -10,20 +10,19 @@ use ec4rs::{
         EndOfLine, FinalNewline, IndentSize, IndentStyle, MaxLineLen, TabWidth, TrimTrailingWs,
     },
 };
-use globset::{Glob, GlobMatcher, GlobSet, GlobSetBuilder};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use gpui::{App, Modifiers, SharedString};
 use itertools::{Either, Itertools};
 use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
 
 pub use settings::{
-    AutoIndentMode, CompletionSettingsContent, EditPredictionDataCollectionChoice,
-    EditPredictionPromptFormatContent, EditPredictionProvider, EditPredictionsMode, FormatOnSave,
+    AutoIndentMode, CompletionSettingsContent,
+    FormatOnSave,
     Formatter, FormatterList, InlayHintKind, LanguageSettingsContent, LineEndingSetting,
     LspInsertMode, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};
-use shellexpand;
-use std::{borrow::Cow, num::NonZeroU32, path::Path, sync::Arc};
+use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 use text::ToOffset;
 
 /// Returns the settings for all languages from the provided file.
@@ -42,7 +41,6 @@ pub fn all_language_settings<'a>(
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct AllLanguageSettings {
     /// The edit prediction settings.
-    pub edit_predictions: EditPredictionSettings,
     pub defaults: LanguageSettings,
     languages: HashMap<LanguageName, LanguageSettings>,
     pub file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)>,
@@ -114,12 +112,6 @@ pub struct LanguageSettings {
     /// Note: This setting has no effect in Vim mode, as rewrap is already
     /// allowed everywhere.
     pub allow_rewrap: RewrapBehavior,
-    /// Controls whether edit predictions are shown immediately (true)
-    /// or manually by triggering `editor::ShowEditPrediction` (false).
-    pub show_edit_predictions: bool,
-    /// Controls whether edit predictions are shown in the given language
-    /// scopes.
-    pub edit_predictions_disabled_in: Vec<String>,
     /// Whether to show tabs and spaces in the editor.
     pub show_whitespaces: settings::ShowWhitespaceSetting,
     /// Visible characters used to render whitespace when show_whitespaces is enabled.
@@ -459,112 +451,6 @@ impl InlayHintSettings {
     }
 }
 
-/// The settings for edit predictions, such as [GitHub Copilot](https://github.com/features/copilot).
-#[derive(Clone, Debug, Default)]
-pub struct EditPredictionSettings {
-    /// The provider that supplies edit predictions.
-    pub provider: settings::EditPredictionProvider,
-    /// A list of globs representing files that edit predictions should be disabled for.
-    /// This list adds to a pre-existing, sensible default set of globs.
-    /// Any additional ones you add are combined with them.
-    pub disabled_globs: Vec<DisabledGlob>,
-    /// Configures how edit predictions are displayed in the buffer.
-    pub mode: settings::EditPredictionsMode,
-    /// Settings specific to Codestral.
-    pub codestral: CodestralSettings,
-    /// Settings specific to Ollama.
-    pub ollama: Option<OpenAiCompatibleEditPredictionSettings>,
-    pub open_ai_compatible_api: Option<OpenAiCompatibleEditPredictionSettings>,
-    /// Controls whether training data collection is enabled.
-    ///
-    /// `Default` means the value stored in the legacy KV store is used as a fallback,
-    /// preserving existing users' choices without a migration.
-    pub allow_data_collection: EditPredictionDataCollectionChoice,
-}
-
-impl EditPredictionSettings {
-    /// Returns whether edit predictions are enabled for the given path.
-    pub fn enabled_for_file(&self, file: &Arc<dyn File>, cx: &App) -> bool {
-        !self.disabled_globs.iter().any(|glob| {
-            if glob.is_absolute {
-                file.as_local()
-                    .is_some_and(|local| glob.matcher.is_match(local.abs_path(cx)))
-            } else {
-                glob.matcher.is_match(file.path().as_std_path())
-            }
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DisabledGlob {
-    matcher: GlobMatcher,
-    is_absolute: bool,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct CodestralSettings {
-    /// Model to use for completions.
-    pub model: Option<String>,
-    /// Maximum tokens to generate.
-    pub max_tokens: Option<u32>,
-    /// Custom API URL to use for Codestral.
-    pub api_url: Option<String>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct OpenAiCompatibleEditPredictionSettings {
-    /// Model to use for completions.
-    pub model: String,
-    /// Maximum tokens to generate.
-    pub max_output_tokens: u32,
-    /// Custom API URL to use for Ollama.
-    pub api_url: Arc<str>,
-    /// The prompt format to use for completions. When `None`, the format
-    /// will be derived from the model name at request time.
-    pub prompt_format: EditPredictionPromptFormat,
-}
-
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub enum EditPredictionPromptFormat {
-    #[default]
-    Infer,
-    Zeta(ZetaVersion),
-    CodeLlama,
-    StarCoder,
-    DeepseekCoder,
-    Qwen,
-    CodeGemma,
-    Codestral,
-    Glm,
-}
-
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub enum ZetaVersion {
-    Zeta1,
-    Zeta2,
-    #[default] // NOTE: make latest version default when adding
-    Zeta2_1,
-}
-
-impl From<EditPredictionPromptFormatContent> for EditPredictionPromptFormat {
-    fn from(value: EditPredictionPromptFormatContent) -> Self {
-        match value {
-            EditPredictionPromptFormatContent::Infer => Self::Infer,
-            EditPredictionPromptFormatContent::Zeta => Self::Zeta(ZetaVersion::Zeta1),
-            EditPredictionPromptFormatContent::Zeta2 => Self::Zeta(ZetaVersion::Zeta2),
-            EditPredictionPromptFormatContent::Zeta2_1 => Self::Zeta(ZetaVersion::Zeta2_1),
-            EditPredictionPromptFormatContent::CodeLlama => Self::CodeLlama,
-            EditPredictionPromptFormatContent::StarCoder => Self::StarCoder,
-            EditPredictionPromptFormatContent::DeepseekCoder => Self::DeepseekCoder,
-            EditPredictionPromptFormatContent::Qwen => Self::Qwen,
-            EditPredictionPromptFormatContent::CodeGemma => Self::CodeGemma,
-            EditPredictionPromptFormatContent::Codestral => Self::Codestral,
-            EditPredictionPromptFormatContent::Glm => Self::Glm,
-        }
-    }
-}
-
 impl AllLanguageSettings {
     /// Returns the [`LanguageSettings`] for the language with the specified name.
     pub fn language<'a>(
@@ -590,22 +476,6 @@ impl AllLanguageSettings {
         } else {
             Cow::Borrowed(settings)
         }
-    }
-
-    /// Returns whether edit predictions are enabled for the given path.
-    pub fn edit_predictions_enabled_for_file(&self, file: &Arc<dyn File>, cx: &App) -> bool {
-        self.edit_predictions.enabled_for_file(file, cx)
-    }
-
-    /// Returns whether edit predictions are enabled for the given language and path.
-    pub fn show_edit_predictions(&self, language: Option<&Arc<Language>>, cx: &App) -> bool {
-        self.language(None, language.map(|l| l.name()).as_ref(), cx)
-            .show_edit_predictions
-    }
-
-    /// Returns the edit predictions preview mode for the given language and path.
-    pub fn edit_predictions_mode(&self) -> EditPredictionsMode {
-        self.edit_predictions.mode
     }
 }
 
@@ -738,8 +608,6 @@ impl settings::Settings for AllLanguageSettings {
                 document_folding_ranges: settings.document_folding_ranges.unwrap(),
                 document_symbols: settings.document_symbols.unwrap(),
                 allow_rewrap: settings.allow_rewrap.unwrap(),
-                show_edit_predictions: settings.show_edit_predictions.unwrap(),
-                edit_predictions_disabled_in: settings.edit_predictions_disabled_in.unwrap(),
                 show_whitespaces: settings.show_whitespaces.unwrap(),
                 whitespace_map: WhitespaceMap {
                     space: SharedString::new(whitespace_map.space.unwrap().to_string()),
@@ -803,54 +671,6 @@ impl settings::Settings for AllLanguageSettings {
             );
         }
 
-        let edit_prediction_provider = all_languages
-            .edit_predictions
-            .as_ref()
-            .and_then(|ep| ep.provider);
-
-        let edit_predictions = all_languages.edit_predictions.clone().unwrap();
-        let edit_predictions_mode = edit_predictions.mode.unwrap();
-
-        let disabled_globs: HashSet<&String> = edit_predictions
-            .disabled_globs
-            .as_ref()
-            .unwrap()
-            .iter()
-            .collect();
-
-        let codestral = edit_predictions.codestral.unwrap();
-        let codestral_settings = CodestralSettings {
-            model: codestral.model,
-            max_tokens: codestral.max_tokens,
-            api_url: codestral.api_url,
-        };
-
-        let ollama = edit_predictions.ollama.unwrap();
-        let ollama_settings = ollama
-            .model
-            .filter(|model| !model.0.is_empty())
-            .map(|model| OpenAiCompatibleEditPredictionSettings {
-                model: model.0,
-                max_output_tokens: ollama.max_output_tokens.unwrap(),
-                api_url: ollama.api_url.unwrap().into(),
-                prompt_format: ollama.prompt_format.unwrap().into(),
-            });
-        let openai_compatible_settings = edit_predictions.open_ai_compatible_api.unwrap();
-        let openai_compatible_settings = openai_compatible_settings
-            .model
-            .filter(|model| !model.is_empty())
-            .zip(
-                openai_compatible_settings
-                    .api_url
-                    .filter(|api_url| !api_url.is_empty()),
-            )
-            .map(|(model, api_url)| OpenAiCompatibleEditPredictionSettings {
-                model,
-                max_output_tokens: openai_compatible_settings.max_output_tokens.unwrap(),
-                api_url: api_url.into(),
-                prompt_format: openai_compatible_settings.prompt_format.unwrap().into(),
-            });
-
         let mut file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)> = FxHashMap::default();
 
         for (language, patterns) in all_languages.file_types.iter().flatten() {
@@ -867,28 +687,6 @@ impl settings::Settings for AllLanguageSettings {
         }
 
         Self {
-            edit_predictions: EditPredictionSettings {
-                provider: if let Some(provider) = edit_prediction_provider {
-                    provider
-                } else {
-                    EditPredictionProvider::None
-                },
-                disabled_globs: disabled_globs
-                    .iter()
-                    .filter_map(|g| {
-                        let expanded_g = shellexpand::tilde(g).into_owned();
-                        Some(DisabledGlob {
-                            matcher: globset::Glob::new(&expanded_g).ok()?.compile_matcher(),
-                            is_absolute: Path::new(&expanded_g).is_absolute(),
-                        })
-                    })
-                    .collect(),
-                mode: edit_predictions_mode,
-                codestral: codestral_settings,
-                ollama: ollama_settings,
-                open_ai_compatible_api: openai_compatible_settings,
-                allow_data_collection: edit_predictions.allow_data_collection.unwrap_or_default(),
-            },
             defaults: default_language_settings,
             languages,
             file_types,
@@ -907,144 +705,6 @@ mod tests {
     use super::*;
     use gpui::TestAppContext;
     use util::rel_path::rel_path;
-
-    #[gpui::test]
-    fn test_edit_predictions_enabled_for_file(cx: &mut TestAppContext) {
-        use crate::TestFile;
-        use std::path::PathBuf;
-
-        let cx = cx.app.borrow_mut();
-
-        let build_settings = |globs: &[&str]| -> EditPredictionSettings {
-            EditPredictionSettings {
-                disabled_globs: globs
-                    .iter()
-                    .map(|glob_str| {
-                        #[cfg(windows)]
-                        let glob_str = {
-                            let mut g = String::new();
-
-                            if glob_str.starts_with('/') {
-                                g.push_str("C:");
-                            }
-
-                            g.push_str(&glob_str.replace('/', "\\"));
-                            g
-                        };
-                        #[cfg(windows)]
-                        let glob_str = glob_str.as_str();
-                        let expanded_glob_str = shellexpand::tilde(glob_str).into_owned();
-                        DisabledGlob {
-                            matcher: globset::Glob::new(&expanded_glob_str)
-                                .unwrap()
-                                .compile_matcher(),
-                            is_absolute: Path::new(&expanded_glob_str).is_absolute(),
-                        }
-                    })
-                    .collect(),
-                ..Default::default()
-            }
-        };
-
-        const WORKTREE_NAME: &str = "project";
-        let make_test_file = |segments: &[&str]| -> Arc<dyn File> {
-            let path = segments.join("/");
-            let path = rel_path(&path);
-
-            Arc::new(TestFile {
-                path: path.into(),
-                root_name: WORKTREE_NAME.to_string(),
-                local_root: Some(PathBuf::from(if cfg!(windows) {
-                    "C:\\absolute\\"
-                } else {
-                    "/absolute/"
-                })),
-            })
-        };
-
-        let test_file = make_test_file(&["src", "test", "file.rs"]);
-
-        // Test relative globs
-        let settings = build_settings(&["*.rs"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["*.txt"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test absolute globs
-        let settings = build_settings(&["/absolute/**/*.rs"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["/other/**/*.rs"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test exact path match relative
-        let settings = build_settings(&["src/test/file.rs"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["src/test/otherfile.rs"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test exact path match absolute
-        let settings = build_settings(&[&format!("/absolute/{}/src/test/file.rs", WORKTREE_NAME)]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["/other/test/otherfile.rs"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test * glob
-        let settings = build_settings(&["*"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["*.txt"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test **/* glob
-        let settings = build_settings(&["**/*"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["other/**/*"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test directory/** glob
-        let settings = build_settings(&["src/**"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-
-        let test_file_root: Arc<dyn File> = Arc::new(TestFile {
-            path: rel_path("file.rs").into(),
-            root_name: WORKTREE_NAME.to_string(),
-            local_root: Some(PathBuf::from("/absolute/")),
-        });
-        assert!(settings.enabled_for_file(&test_file_root, &cx));
-
-        let settings = build_settings(&["other/**"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test **/directory/* glob
-        let settings = build_settings(&["**/test/*"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["**/other/*"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test multiple globs
-        let settings = build_settings(&["*.rs", "*.txt", "src/**"]);
-        assert!(!settings.enabled_for_file(&test_file, &cx));
-        let settings = build_settings(&["*.txt", "*.md", "other/**"]);
-        assert!(settings.enabled_for_file(&test_file, &cx));
-
-        // Test dot files
-        let dot_file = make_test_file(&[".config", "settings.json"]);
-        let settings = build_settings(&[".*/**"]);
-        assert!(!settings.enabled_for_file(&dot_file, &cx));
-
-        let dot_env_file = make_test_file(&[".env"]);
-        let settings = build_settings(&[".env"]);
-        assert!(!settings.enabled_for_file(&dot_env_file, &cx));
-
-        // Test tilde expansion
-        let home = shellexpand::tilde("~").into_owned();
-        let home_file = Arc::new(TestFile {
-            path: rel_path("test.rs").into(),
-            root_name: "the-dir".to_string(),
-            local_root: Some(PathBuf::from(home)),
-        }) as Arc<dyn File>;
-        let settings = build_settings(&["~/the-dir/test.rs"]);
-        assert!(!settings.enabled_for_file(&home_file, &cx));
-    }
 
     #[test]
     fn test_resolve_language_servers() {

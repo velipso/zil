@@ -507,7 +507,6 @@ impl VsCodeSettings {
     fn project_settings_content(&self) -> ProjectSettingsContent {
         ProjectSettingsContent {
             all_languages: AllLanguageSettingsContent {
-                edit_predictions: self.edit_predictions_settings_content(),
                 defaults: self.default_language_settings_content(),
                 languages: Default::default(),
                 file_types: self.file_types(),
@@ -541,7 +540,6 @@ impl VsCodeSettings {
                 ..Default::default()
             }),
             debuggers: None,
-            edit_predictions_disabled_in: None,
             enable_language_server: None,
             ensure_final_newline_on_save: self.read_bool("files.insertFinalNewline"),
             line_ending: self.read_enum("files.eol", |s| match s {
@@ -587,7 +585,6 @@ impl VsCodeSettings {
             show_completion_documentation: None,
             colorize_brackets: self.read_bool("editor.bracketPairColorization.enabled"),
             show_completions_on_input: self.read_bool("editor.suggestOnTriggerCharacters"),
-            show_edit_predictions: self.read_bool("editor.inlineSuggest.enabled"),
             show_whitespaces: self.read_enum("editor.renderWhitespace", |s| {
                 Some(match s {
                     "boundary" => ShowWhitespaceSetting::Boundary,
@@ -638,23 +635,6 @@ impl VsCodeSettings {
             associations.entry(v.into()).or_default().0.push(k.clone());
         }
         skip_default(associations)
-    }
-
-    fn edit_predictions_settings_content(&self) -> Option<EditPredictionSettingsContent> {
-        let disabled_globs = self
-            .read_value("cursor.general.globalCursorIgnoreList")?
-            .as_array()?;
-
-        skip_default(EditPredictionSettingsContent {
-            disabled_globs: skip_default(
-                disabled_globs
-                    .iter()
-                    .filter_map(|glob| glob.as_str())
-                    .map(|s| s.to_string())
-                    .collect(),
-            ),
-            ..Default::default()
-        })
     }
 
     fn outline_panel_settings_content(&self) -> Option<OutlinePanelSettingsContent> {

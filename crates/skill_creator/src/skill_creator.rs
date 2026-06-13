@@ -1057,7 +1057,6 @@ impl SkillCreator {
                     },
                     syntax: theme.syntax().clone(),
                     inlay_hints_style: editor::make_inlay_hints_style(cx),
-                    edit_prediction_styles: editor::make_suggestion_styles(cx),
                     ..EditorStyle::default()
                 },
             ))

@@ -328,13 +328,6 @@ impl<'a> Iterator for InlayChunks<'a> {
 
                 let mut renderer = None;
                 let mut highlight_style = match inlay.id {
-                    InlayId::EditPrediction(_) => self.highlight_styles.edit_prediction.map(|s| {
-                        if inlay.text().chars().all(|c| c.is_whitespace()) {
-                            s.whitespace
-                        } else {
-                            s.insertion
-                        }
-                    }),
                     InlayId::Hint(_) => self.highlight_styles.inlay_hint,
                     InlayId::DebuggerValue(_) => self.highlight_styles.inlay_hint,
                     InlayId::ReplResult(_) => {
@@ -750,74 +743,6 @@ impl InlayMap {
     #[ztracing::instrument(skip_all)]
     pub fn current_inlays(&self) -> impl Iterator<Item = &Inlay> + Default {
         self.inlays.iter()
-    }
-
-    #[cfg(test)]
-    #[ztracing::instrument(skip_all)]
-    pub(crate) fn randomly_mutate(
-        &mut self,
-        next_inlay_id: &mut usize,
-        rng: &mut rand::rngs::StdRng,
-    ) -> (InlaySnapshot, Vec<InlayEdit>) {
-        use rand::prelude::*;
-        use util::post_inc;
-
-        let mut to_remove = Vec::new();
-        let mut to_insert = Vec::new();
-        let snapshot = &mut self.snapshot;
-        for i in 0..rng.random_range(1..=5) {
-            if self.inlays.is_empty() || rng.random() {
-                let position = snapshot
-                    .buffer
-                    .random_byte_range(MultiBufferOffset(0), rng)
-                    .start;
-                let bias = if rng.random() {
-                    Bias::Left
-                } else {
-                    Bias::Right
-                };
-                let len = if rng.random_bool(0.01) {
-                    0
-                } else {
-                    rng.random_range(1..=5)
-                };
-                let text = util::RandomCharIter::new(&mut *rng)
-                    .filter(|ch| *ch != '\r')
-                    .take(len)
-                    .collect::<String>();
-
-                let next_inlay = if i % 2 == 0 {
-                    Inlay::mock_hint(
-                        post_inc(next_inlay_id),
-                        snapshot.buffer.anchor_at(position, bias),
-                        &text,
-                    )
-                } else {
-                    Inlay::edit_prediction(
-                        post_inc(next_inlay_id),
-                        snapshot.buffer.anchor_at(position, bias),
-                        &text,
-                    )
-                };
-                let inlay_id = next_inlay.id;
-                log::info!(
-                    "creating inlay {inlay_id:?} at buffer offset {position} with bias {bias:?} and text {text:?}"
-                );
-                to_insert.push(next_inlay);
-            } else {
-                to_remove.push(
-                    self.inlays
-                        .iter()
-                        .choose(rng)
-                        .map(|inlay| inlay.id)
-                        .unwrap(),
-                );
-            }
-        }
-        log::info!("removing inlays: {:?}", to_remove);
-
-        let (snapshot, edits) = self.splice(&to_remove, to_insert);
-        (snapshot, edits)
     }
 }
 
@@ -1568,29 +1493,6 @@ mod tests {
             buffer_edits.consume().into_inner(),
         );
         assert_eq!(inlay_snapshot.text(), "abxyDzefghi");
-
-        let (inlay_snapshot, _) = inlay_map.splice(
-            &[],
-            vec![
-                Inlay::mock_hint(
-                    post_inc(&mut next_inlay_id),
-                    buffer
-                        .read(cx)
-                        .snapshot(cx)
-                        .anchor_before(MultiBufferOffset(3)),
-                    "|123|",
-                ),
-                Inlay::edit_prediction(
-                    post_inc(&mut next_inlay_id),
-                    buffer
-                        .read(cx)
-                        .snapshot(cx)
-                        .anchor_after(MultiBufferOffset(3)),
-                    "|456|",
-                ),
-            ],
-        );
-        assert_eq!(inlay_snapshot.text(), "abx|123||456|yDzefghi");
 
         // Edits ending where the inlay starts should not move it if it has a left bias.
         buffer.update(cx, |buffer, cx| {

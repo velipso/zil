@@ -13,7 +13,7 @@ use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
     SettingsPage, SettingsPageItem, SubPageLink, USER, active_language, all_language_names,
     pages::{
-        open_audio_test_window, render_edit_prediction_setup_page, render_skills_setup_page,
+        open_audio_test_window, render_skills_setup_page,
         render_tool_permissions_setup_page,
     },
 };
@@ -2596,7 +2596,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn vim_settings_section() -> [SettingsPageItem; 14] {
+    fn vim_settings_section() -> [SettingsPageItem; 13] {
         [
             SettingsPageItem::SectionHeader("Vim"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2718,28 +2718,6 @@ fn editor_page() -> SettingsPage {
                             .vim
                             .get_or_insert_default()
                             .use_regex_search = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Edit Predictions in Normal Mode",
-                description: "Whether edit predictions are shown in normal mode. By default, edit predictions are only shown in insert and replace modes.",
-                field: Box::new(SettingField {
-                    json_path: Some("vim.show_edit_predictions_in_normal_mode"),
-                    pick: |settings_content| {
-                        settings_content
-                            .vim
-                            .as_ref()?
-                            .show_edit_predictions_in_normal_mode
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .vim
-                            .get_or_insert_default()
-                            .show_edit_predictions_in_normal_mode = value;
                     },
                 }),
                 metadata: None,
@@ -3166,8 +3144,7 @@ fn languages_and_tools_page(cx: &App) -> SettingsPage {
                     render: |this, scroll_handle, window, cx| {
                         let items: Box<[SettingsPageItem]> = concat_sections!(
                             language_settings_data(),
-                            non_editor_language_settings_data(),
-                            edit_prediction_language_settings_section()
+                            non_editor_language_settings_data()
                         );
                         this.render_sub_page_items(
                             items.iter().enumerate(),
@@ -7800,43 +7777,12 @@ fn ai_page(cx: &App) -> SettingsPage {
         ]
     }
 
-    fn edit_prediction_display_sub_section() -> [SettingsPageItem; 1] {
-        [SettingsPageItem::SettingItem(SettingItem {
-            title: "Display Mode",
-            description: "When to show edit predictions previews in buffer. The eager mode displays them inline, while the subtle mode displays them only when holding a modifier key.",
-            field: Box::new(SettingField {
-                json_path: Some("edit_prediction.display_mode"),
-                pick: |settings_content| {
-                    settings_content
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .as_ref()?
-                        .mode
-                        .as_ref()
-                },
-                write: |settings_content, value, _| {
-                    settings_content
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert_default()
-                        .mode = value;
-                },
-            }),
-            metadata: None,
-            files: USER,
-        })]
-    }
-
     SettingsPage {
         title: "AI",
         items: concat_sections![
             general_section(),
             agent_configuration_section(cx),
-            context_servers_section(),
-            edit_prediction_language_settings_section(),
-            edit_prediction_display_sub_section()
+            context_servers_section()
         ],
     }
 }
@@ -9580,88 +9526,6 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
         debugger_section(),
         prettier_section(),
     )
-}
-
-fn edit_prediction_language_settings_section() -> [SettingsPageItem; 5] {
-    [
-        SettingsPageItem::SectionHeader("Edit Predictions"),
-        SettingsPageItem::SubPageLink(SubPageLink {
-            title: "Configure Providers".into(),
-            r#type: Default::default(),
-            json_path: Some("edit_predictions.providers"),
-            description: Some("Set up different edit prediction providers in complement to Zed's built-in Zeta model.".into()),
-            in_json: false,
-            files: USER,
-            render: render_edit_prediction_setup_page
-        }),
-        SettingsPageItem::SettingItem(SettingItem {
-            title: "Data Collection",
-            description: "Controls whether Zed may collect training data when using Zed's Edit Predictions. Data is only collected for files in projects detected as open source. The default value uses the preference previously set via the status-bar toggle, or false if no preference has been stored.",
-            field: Box::new(SettingField {
-                json_path: Some("edit_predictions.allow_data_collection"),
-                pick: |settings_content| {
-                    settings_content
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .as_ref()?
-                        .allow_data_collection
-                        .as_ref()
-                },
-                write: |settings_content, value, _app| {
-                    settings_content
-                        .project
-                        .all_languages
-                        .edit_predictions
-                        .get_or_insert_default()
-                        .allow_data_collection = value;
-                },
-            }),
-            metadata: None,
-            files: USER,
-        }),
-        SettingsPageItem::SettingItem(SettingItem {
-            title: "Show Edit Predictions",
-            description: "Controls whether edit predictions are shown immediately or manually.",
-            field: Box::new(SettingField {
-                json_path: Some("languages.$(language).show_edit_predictions"),
-                pick: |settings_content| {
-                    language_settings_field(settings_content, |language| {
-                        language.show_edit_predictions.as_ref()
-                    })
-                },
-                write: |settings_content, value, _| {
-                    language_settings_field_mut(settings_content, value, |language, value| {
-                        language.show_edit_predictions = value;
-                    })
-                },
-            }),
-            metadata: None,
-            files: USER | PROJECT,
-        }),
-        SettingsPageItem::SettingItem(SettingItem {
-            title: "Disable in Language Scopes",
-            description: "Controls whether edit predictions are shown in the given language scopes.",
-            field: Box::new(
-                SettingField {
-                    json_path: Some("languages.$(language).edit_predictions_disabled_in"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.edit_predictions_disabled_in.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.edit_predictions_disabled_in = value;
-                        })
-                    },
-                }
-                .unimplemented(),
-            ),
-            metadata: None,
-            files: USER | PROJECT,
-        }),
-    ]
 }
 
 fn show_scrollbar_or_editor(
