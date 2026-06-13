@@ -16,8 +16,6 @@ default = []
 test-support = []
 
 [dependencies]
-agent.workspace = true
-agent_settings.workspace = true
 agent_skills.workspace = true
 anyhow.workspace = true
 audio.workspace = true
@@ -36,7 +34,6 @@ log.workspace = true
 menu.workspace = true
 paths.workspace = true
 picker.workspace = true
-regex.workspace = true
 platform_title_bar.workspace = true
 project.workspace = true
 release_channel.workspace = true
@@ -46,7 +43,6 @@ search.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
-shell_command_parser.workspace = true
 strum.workspace = true
 telemetry.workspace = true
 theme.workspace = true

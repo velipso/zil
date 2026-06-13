@@ -13912,8 +13912,6 @@ dependencies = [
 name = "settings_ui"
 version = "0.1.0"
 dependencies = [
- "agent",
- "agent_settings",
  "agent_skills",
  "anyhow",
  "audio",
@@ -13935,7 +13933,6 @@ dependencies = [
  "platform_title_bar",
  "pretty_assertions",
  "project",
- "regex",
  "release_channel",
  "rodio",
  "schemars 1.0.4",
@@ -13943,7 +13940,6 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
- "shell_command_parser",
  "strum 0.27.2",
  "telemetry",
  "theme",
@@ -19486,7 +19482,6 @@ dependencies = [
  "outline_panel",
  "parking_lot",
  "paths",
- "picker",
  "pkg-config",
  "pretty_assertions",
  "profiling",
