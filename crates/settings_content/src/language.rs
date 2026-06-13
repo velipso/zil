@@ -723,8 +723,6 @@ pub enum Formatter {
     Auto,
     /// Do not format code.
     None,
-    /// Format code using Zed's Prettier integration.
-    Prettier,
     /// Format code using an external command.
     External {
         /// The external program to run.

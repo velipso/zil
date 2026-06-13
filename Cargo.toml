@@ -100,7 +100,6 @@ members = [
     "crates/paths",
     "crates/picker",
     "crates/platform_title_bar",
-    "crates/prettier",
     "crates/project",
     "crates/project_panel",
     "crates/project_symbols",
@@ -301,7 +300,6 @@ panel = { path = "crates/panel" }
 paths = { path = "crates/paths" }
 perf = { path = "tooling/perf" }
 picker = { path = "crates/picker" }
-prettier = { path = "crates/prettier" }
 settings_profile_selector = { path = "crates/settings_profile_selector" }
 project = { path = "crates/project" }
 project_panel = { path = "crates/project_panel" }
@@ -823,7 +821,6 @@ menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }
 outline = { codegen-units = 1 }
 paths = { codegen-units = 1 }
-prettier = { codegen-units = 1 }
 project_symbols = { codegen-units = 1 }
 refineable = { codegen-units = 1 }
 release_channel = { codegen-units = 1 }
