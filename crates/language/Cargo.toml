@@ -54,7 +54,6 @@ semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
-shellexpand.workspace = true
 smallvec.workspace = true
 streaming-iterator.workspace = true
 strsim.workspace = true
