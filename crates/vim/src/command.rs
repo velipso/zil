@@ -1709,7 +1709,6 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
         .bang(workspace::CloseInactiveTabsAndPanes {
             save_intent: Some(SaveIntent::Skip),
         }),
-        VimCommand::str(("cl", "ist"), "diagnostics::Deploy"),
         VimCommand::new(("cc", ""), editor::actions::Hover),
         VimCommand::new(("ll", ""), editor::actions::Hover),
         VimCommand::new(("cn", "ext"), editor::actions::GoToDiagnostic::default())
@@ -1753,7 +1752,6 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
             .range(act_on_range),
         VimCommand::new(("dif", "fupdate"), editor::actions::ToggleSelectedDiffHunks)
             .range(act_on_range),
-        VimCommand::str(("rev", "ert"), "git::Restore").range(act_on_range),
         VimCommand::new(("d", "elete"), VisualDeleteLine).range(select_range),
         VimCommand::new(("y", "ank"), gpui::NoAction).range(|_, range| {
             Some(
@@ -1775,17 +1773,6 @@ fn generate_commands(_: &App) -> Vec<VimCommand> {
         VimCommand::new(("sort i", ""), SortLinesCaseInsensitive)
             .range(select_range)
             .default_range(CommandRange::buffer()),
-        VimCommand::str(("E", "xplore"), "project_panel::ToggleFocus"),
-        VimCommand::str(("H", "explore"), "project_panel::ToggleFocus"),
-        VimCommand::str(("L", "explore"), "project_panel::ToggleFocus"),
-        VimCommand::str(("S", "explore"), "project_panel::ToggleFocus"),
-        VimCommand::str(("Ve", "xplore"), "project_panel::ToggleFocus"),
-        VimCommand::str(("te", "rm"), "terminal_panel::Toggle"),
-        VimCommand::str(("T", "erm"), "terminal_panel::Toggle"),
-        VimCommand::str(("C", "ollab"), "collab_panel::ToggleFocus"),
-        VimCommand::str(("A", "I"), "agent::ToggleFocus"),
-        VimCommand::str(("G", "it"), "git_panel::ToggleFocus"),
-        VimCommand::str(("D", "ebug"), "debug_panel::ToggleFocus"),
         VimCommand::new(("noh", "lsearch"), search::buffer_search::Dismiss),
         VimCommand::new(("$", ""), EndOfDocument),
         VimCommand::new(("%", ""), EndOfDocument),

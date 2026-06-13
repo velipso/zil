@@ -15,30 +15,26 @@ use crate::application_menu::{
     ActivateDirection, ActivateMenuLeft, ActivateMenuRight, OpenApplicationMenu,
 };
 
-use call::ActiveCall;
-use client::{UserStore};
+use client::UserStore;
 
 use gpui::{
-    AnyElement, App, Context, Entity,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, Render,
-    Styled, Subscription, TaskExt, WeakEntity, Window, actions,
+    AnyElement, App, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    Render, Styled, Subscription, WeakEntity, Window, actions,
 };
 use onboarding_banner::OnboardingBanner;
 use project::{Project, git_store::GitStoreEvent, trusted_worktrees::TrustedWorktrees};
 use remote::RemoteConnectionOptions;
-use settings::{Settings as _};
+use settings::Settings as _;
 
 use theme::ActiveTheme;
 use title_bar_settings::TitleBarSettings;
 use ui::{
-    ButtonLike, IconWithIndicator, Indicator, PopoverMenu,
-    TintColor, Tooltip, prelude::*, utils::platform_title_bar_height,
+    ButtonLike, IconWithIndicator, Indicator, PopoverMenu, TintColor, Tooltip, prelude::*,
+    utils::platform_title_bar_height,
 };
 use update_version::UpdateVersion;
 use util::ResultExt;
-use workspace::{
-    MultiWorkspace, Workspace,
-};
+use workspace::{MultiWorkspace, Workspace};
 
 use zed_actions::OpenRemote;
 
@@ -245,7 +241,6 @@ impl TitleBar {
         let project = workspace.project().clone();
         let git_store = project.read(cx).git_store().clone();
         let user_store = workspace.app_state().user_store.clone();
-        let active_call = ActiveCall::global(cx);
 
         let platform_style = PlatformStyle::platform();
         let application_menu = match platform_style {
@@ -268,7 +263,6 @@ impl TitleBar {
             }),
         );
 
-        subscriptions.push(cx.observe(&active_call, |this, _, cx| this.active_call_changed(cx)));
         subscriptions.push(cx.observe_window_activation(window, Self::window_activation_changed));
         subscriptions.push(
             cx.subscribe(&git_store, move |_, _, event, cx| match event {
@@ -308,7 +302,7 @@ impl TitleBar {
 
         let banner = None;
 
-        let mut this = Self {
+        Self {
             platform_titlebar,
             application_menu,
             workspace: workspace.weak_handle(),
@@ -319,11 +313,7 @@ impl TitleBar {
             banner,
             update_version,
             _diagnostics_subscription: None,
-        };
-
-        this.observe_diagnostics(cx);
-
-        this
+        }
     }
 
     fn toggle_update_simulation(&mut self, cx: &mut Context<Self>) {
@@ -500,37 +490,10 @@ impl TitleBar {
     }
 
     fn window_activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if window.is_window_active() {
-            ActiveCall::global(cx)
-                .update(cx, |call, cx| call.set_location(Some(&self.project), cx))
-                .detach_and_log_err(cx);
-        } else if cx.active_window().is_none() {
-            ActiveCall::global(cx)
-                .update(cx, |call, cx| call.set_location(None, cx))
-                .detach_and_log_err(cx);
-        }
         self.workspace
             .update(cx, |workspace, cx| {
                 workspace.update_active_view_for_followers(window, cx);
             })
             .ok();
-    }
-
-    fn active_call_changed(&mut self, cx: &mut Context<Self>) {
-        self.observe_diagnostics(cx);
-        cx.notify();
-    }
-
-    fn observe_diagnostics(&mut self, cx: &mut Context<Self>) {
-        let diagnostics = ActiveCall::global(cx)
-            .read(cx)
-            .room()
-            .and_then(|room| room.read(cx).diagnostics().cloned());
-
-        if let Some(diagnostics) = diagnostics {
-            self._diagnostics_subscription = Some(cx.observe(&diagnostics, |_, _, cx| cx.notify()));
-        } else {
-            self._diagnostics_subscription = None;
-        }
     }
 }

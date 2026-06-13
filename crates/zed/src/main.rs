@@ -657,7 +657,6 @@ fn main() {
         editor::init(cx);
         image_viewer::init(cx);
 
-        audio::init(cx);
         workspace::init(app_state.clone(), cx);
         ui_prompt::init(cx);
 
@@ -691,7 +690,6 @@ fn main() {
         theme_selector::init(cx);
         settings_profile_selector::init(cx);
         language_tools::init(cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         feedback::init(cx);
