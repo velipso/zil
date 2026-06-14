@@ -96,7 +96,6 @@ members = [
     "crates/platform_title_bar",
     "crates/project",
     "crates/project_symbols",
-    "crates/prompt_store",
     "crates/proto",
     "crates/recent_projects",
     "crates/refineable",
@@ -361,7 +360,6 @@ accesskit = "0.24.0"
 accesskit_macos = "0.26.0"
 accesskit_unix = "0.21.0"
 accesskit_windows = "0.32.1"
-agent-client-protocol = { version = "=0.13.1", features = ["unstable"] }
 aho-corasick = "1.1"
 alacritty_terminal = { git = "https://github.com/zed-industries/alacritty", rev = "fcf32feacb367b75ec84dd40f041e4fd411d3cc1" }
 any_vec = "0.14"
