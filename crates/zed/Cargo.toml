@@ -67,7 +67,6 @@ client.workspace = true
 collections.workspace = true
 command_palette.workspace = true
 component.workspace = true
-component_preview.workspace = true
 crashes.workspace = true
 csv_preview.workspace = true
 dap_adapters.workspace = true

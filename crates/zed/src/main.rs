@@ -868,8 +868,6 @@ fn main() {
 
         let app_state = app_state.clone();
 
-        component_preview::init(app_state.clone(), cx);
-
         cx.spawn(async move |cx| {
             while let Some(urls) = open_rx.next().await {
                 cx.update(|cx| {
