@@ -1340,29 +1340,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "channel"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "client",
- "clock",
- "collections",
- "futures",
- "gpui",
- "http_client",
- "language",
- "log",
- "postage",
- "release_channel",
- "rpc",
- "semver",
- "settings",
- "text",
- "time",
- "util",
-]
-
-[[package]]
 name = "chardetng"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7375,7 +7352,6 @@ name = "notifications"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "channel",
  "client",
  "component",
  "futures-lite 1.13.0",
@@ -15866,7 +15842,6 @@ dependencies = [
  "askpass",
  "assets",
  "breadcrumbs",
- "channel",
  "chrono",
  "clap",
  "cli",

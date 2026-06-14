@@ -6,7 +6,6 @@ members = [
     "crates/assets",
     "crates/breadcrumbs",
     "crates/buffer_diff",
-    "crates/channel",
     "crates/cli",
     "crates/client",
     "crates/clock",
@@ -193,7 +192,6 @@ askpass = { path = "crates/askpass" }
 assets = { path = "crates/assets" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
-channel = { path = "crates/channel" }
 cli = { path = "crates/cli" }
 client = { path = "crates/client" }
 clock = { path = "crates/clock" }
