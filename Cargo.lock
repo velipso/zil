@@ -5496,19 +5496,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "install_cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "client",
- "gpui",
- "release_channel",
- "smol",
- "util",
- "workspace",
-]
-
-[[package]]
 name = "instant"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15822,7 +15809,6 @@ dependencies = [
  "image",
  "image_viewer",
  "inspector_ui",
- "install_cli",
  "itertools 0.14.0",
  "json_schema_store",
  "keymap_editor",

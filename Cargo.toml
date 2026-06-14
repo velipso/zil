@@ -59,7 +59,6 @@ members = [
     "crates/icons",
     "crates/image_viewer",
     "crates/inspector_ui",
-    "crates/install_cli",
     "crates/json_schema_store",
     "crates/keymap_editor",
     "crates/language",
@@ -244,7 +243,6 @@ http_client_tls = { path = "crates/http_client_tls" }
 icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
 inspector_ui = { path = "crates/inspector_ui" }
-install_cli = { path = "crates/install_cli" }
 json_schema_store = { path = "crates/json_schema_store" }
 keymap_editor = { path = "crates/keymap_editor" }
 language = { path = "crates/language" }
@@ -787,7 +785,6 @@ command_palette_hooks = { codegen-units = 1 }
 feature_flags = { codegen-units = 1 }
 file_icons = { codegen-units = 1 }
 image_viewer = { codegen-units = 1 }
-install_cli = { codegen-units = 1 }
 json_schema_store = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }
