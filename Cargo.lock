@@ -3860,41 +3860,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "file_finder"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "channel",
- "client",
- "collections",
- "ctor",
- "editor",
- "file_icons",
- "futures",
- "fuzzy",
- "fuzzy_nucleo",
- "gpui",
- "language",
- "menu",
- "open_path_prompt",
- "picker",
- "pretty_assertions",
- "project",
- "remote_connection",
- "serde",
- "serde_json",
- "settings",
- "theme",
- "theme_settings",
- "ui",
- "ui_input",
- "util",
- "workspace",
- "zed_actions",
- "zlog",
-]
-
-[[package]]
 name = "file_icons"
 version = "0.1.0"
 dependencies = [
@@ -16356,7 +16321,6 @@ dependencies = [
  "extensions_ui",
  "feature_flags",
  "feedback",
- "file_finder",
  "fs",
  "futures",
  "git",
