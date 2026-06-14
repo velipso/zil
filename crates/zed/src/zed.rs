@@ -50,7 +50,6 @@ use project::{ProjectItem};
 use quick_action_bar::QuickActionBar;
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rope::Rope;
-use search::project_search::ProjectSearchBar;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, InvalidSettingsError, KeybindSource, KeymapFile,
     KeymapFileLoadResult, MigrationStatus, Settings, SettingsFile, SettingsStore,
@@ -1087,8 +1086,6 @@ fn initialize_pane(
             let quick_action_bar =
                 cx.new(|cx| QuickActionBar::new(buffer_search_bar, workspace, cx));
             toolbar.add_item(quick_action_bar, window, cx);
-            let project_search_bar = cx.new(|_| ProjectSearchBar::new());
-            toolbar.add_item(project_search_bar, window, cx);
             let lsp_log_item = cx.new(|_| LspLogToolbarItemView::new());
             toolbar.add_item(lsp_log_item, window, cx);
             let dap_log_item = cx.new(|_| debugger_tools::DapLogToolbarItemView::new());

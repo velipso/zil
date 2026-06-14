@@ -64,7 +64,6 @@ members = [
     "crates/input_latency_ui",
     "crates/inspector_ui",
     "crates/install_cli",
-    "crates/journal",
     "crates/json_schema_store",
     "crates/keymap_editor",
     "crates/language",
@@ -255,7 +254,6 @@ image_viewer = { path = "crates/image_viewer" }
 input_latency_ui = { path = "crates/input_latency_ui" }
 inspector_ui = { path = "crates/inspector_ui" }
 install_cli = { path = "crates/install_cli" }
-journal = { path = "crates/journal" }
 json_schema_store = { path = "crates/json_schema_store" }
 keymap_editor = { path = "crates/keymap_editor" }
 language = { path = "crates/language" }
@@ -800,7 +798,6 @@ feature_flags = { codegen-units = 1 }
 file_icons = { codegen-units = 1 }
 image_viewer = { codegen-units = 1 }
 install_cli = { codegen-units = 1 }
-journal = { codegen-units = 1 }
 json_schema_store = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }

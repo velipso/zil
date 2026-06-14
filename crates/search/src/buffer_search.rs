@@ -2,7 +2,7 @@ mod registrar;
 
 use crate::{
     FocusSearch, NextHistoryQuery, PreviousHistoryQuery, ReplaceAll, ReplaceNext, SearchOption,
-    SearchOptions, SearchSource, SelectAllMatches, SelectNextMatch, SelectPreviousMatch,
+    SearchOptions, SelectAllMatches, SelectNextMatch, SelectPreviousMatch,
     ToggleCaseSensitive, ToggleRegex, ToggleReplace, ToggleSelection, ToggleWholeWord,
     buffer_search::registrar::WithResultsOrExternalQuery,
     search_bar::{
@@ -364,21 +364,18 @@ impl Render for BufferSearchBar {
                     .when(case, |div| {
                         div.child(SearchOption::CaseSensitive.as_button(
                             self.search_options,
-                            SearchSource::Buffer,
                             focus_handle.clone(),
                         ))
                     })
                     .when(word, |div| {
                         div.child(SearchOption::WholeWord.as_button(
                             self.search_options,
-                            SearchSource::Buffer,
                             focus_handle.clone(),
                         ))
                     })
                     .when(regex, |div| {
                         div.child(SearchOption::Regex.as_button(
                             self.search_options,
-                            SearchSource::Buffer,
                             focus_handle.clone(),
                         ))
                     }),

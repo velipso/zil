@@ -4,7 +4,6 @@ pub use editor::HighlightKey;
 use editor::SearchSettings;
 use gpui::{Action, App, ClickEvent, FocusHandle, IntoElement, actions};
 use project::search::SearchQuery;
-pub use project_search::ProjectSearchView;
 use ui::{ButtonStyle, IconButton, IconButtonShape};
 use ui::{Tooltip, prelude::*};
 use workspace::notifications::NotificationId;
@@ -13,17 +12,13 @@ pub use zed_actions::search::ToggleIncludeIgnored;
 
 pub use search_status_button::SEARCH_ICON;
 
-use crate::project_search::ProjectSearchBar;
-
 pub mod buffer_search;
-pub mod project_search;
 pub(crate) mod search_bar;
 pub mod search_status_button;
 
 pub fn init(cx: &mut App) {
     menu::init();
     buffer_search::init(cx);
-    project_search::init(cx);
 }
 
 actions!(
@@ -85,11 +80,6 @@ pub enum SearchOption {
     Backwards,
 }
 
-pub enum SearchSource<'a, 'b> {
-    Buffer,
-    Project(&'a Context<'b, ProjectSearchBar>),
-}
-
 impl SearchOption {
     pub fn as_options(&self) -> SearchOptions {
         SearchOptions::from_bits(1 << *self as u8).unwrap()
@@ -129,30 +119,18 @@ impl SearchOption {
     pub fn as_button(
         &self,
         active: SearchOptions,
-        search_source: SearchSource,
         focus_handle: FocusHandle,
     ) -> impl IntoElement {
         let action = self.to_toggle_action();
         let label = self.label();
-        IconButton::new(
-            (label, matches!(search_source, SearchSource::Buffer) as u32),
-            self.icon(),
-        )
-        .map(|button| match search_source {
-            SearchSource::Buffer => {
-                let focus_handle = focus_handle.clone();
-                button.on_click(move |_: &ClickEvent, window, cx| {
-                    if !focus_handle.is_focused(window) {
-                        window.focus(&focus_handle, cx);
-                    }
-                    window.dispatch_action(action.boxed_clone(), cx);
-                })
-            }
-            SearchSource::Project(cx) => {
-                let options = self.as_options();
-                button.on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                    this.toggle_search_option(options, window, cx);
-                }))
+        IconButton::new(label, self.icon())
+        .on_click({
+            let focus_handle = focus_handle.clone();
+            move |_: &ClickEvent, window, cx| {
+                if !focus_handle.is_focused(window) {
+                    window.focus(&focus_handle, cx);
+                }
+                window.dispatch_action(action.boxed_clone(), cx);
             }
         })
         .style(ButtonStyle::Subtle)

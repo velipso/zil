@@ -5971,21 +5971,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "journal"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "editor",
- "gpui",
- "log",
- "serde",
- "settings",
- "shellexpand",
- "workspace",
-]
-
-[[package]]
 name = "js-sys"
 version = "0.3.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10775,17 +10760,13 @@ dependencies = [
  "editor",
  "fs",
  "futures",
- "futures-lite 1.13.0",
  "gpui",
- "itertools 0.14.0",
  "language",
  "lsp",
  "menu",
- "multi_buffer",
  "pretty_assertions",
  "project",
  "serde",
- "serde_json",
  "settings",
  "theme",
  "theme_settings",
@@ -10796,7 +10777,6 @@ dependencies = [
  "util_macros",
  "workspace",
  "zed_actions",
- "ztracing",
 ]
 
 [[package]]
@@ -16229,7 +16209,6 @@ dependencies = [
  "inspector_ui",
  "install_cli",
  "itertools 0.14.0",
- "journal",
  "json_schema_store",
  "keymap_editor",
  "language",
