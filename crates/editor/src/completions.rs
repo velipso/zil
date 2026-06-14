@@ -187,59 +187,6 @@ impl Editor {
             .collect()
     }
 
-    pub(super) fn trigger_on_type_formatting(
-        &self,
-        input: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Task<Result<()>>> {
-        if input.chars().count() != 1 {
-            return None;
-        }
-
-        let project = self.project()?;
-        let position = self.selections.newest_anchor().head();
-        let (buffer, buffer_position) = self
-            .buffer
-            .read(cx)
-            .text_anchor_for_position(position, cx)?;
-
-        let settings = LanguageSettings::for_buffer_at(&buffer.read(cx), buffer_position, cx);
-        if !settings.use_on_type_format {
-            return None;
-        }
-
-        // OnTypeFormatting returns a list of edits, no need to pass them between Zed instances,
-        // hence we do LSP request & edit on host side only — add formats to host's history.
-        let push_to_lsp_host_history = true;
-        // If this is not the host, append its history with new edits.
-        let push_to_client_history = project.read(cx).is_via_collab();
-
-        let on_type_formatting = project.update(cx, |project, cx| {
-            project.on_type_format(
-                buffer.clone(),
-                buffer_position,
-                input,
-                push_to_lsp_host_history,
-                cx,
-            )
-        });
-        Some(cx.spawn_in(window, async move |editor, cx| {
-            if let Some(transaction) = on_type_formatting.await? {
-                if push_to_client_history {
-                    buffer.update(cx, |buffer, _| {
-                        buffer.push_transaction(transaction, Instant::now());
-                        buffer.finalize_last_transaction();
-                    });
-                }
-                editor.update(cx, |editor, cx| {
-                    editor.refresh_document_highlights(cx);
-                })?;
-            }
-            Ok(())
-        }))
-    }
-
     pub(super) fn open_or_update_completions_menu(
         &mut self,
         requested_source: Option<CompletionsMenuSource>,

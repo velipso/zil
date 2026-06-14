@@ -1,5 +1,3 @@
-#![feature(cfg_select)]
-
 mod capabilities;
 pub mod extension_builder;
 mod extension_events;

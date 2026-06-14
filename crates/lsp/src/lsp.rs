@@ -962,9 +962,6 @@ impl LanguageServer {
                     range_formatting: Some(DynamicRegistrationClientCapabilities {
                         dynamic_registration: Some(true),
                     }),
-                    on_type_formatting: Some(DynamicRegistrationClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
                     signature_help: Some(SignatureHelpClientCapabilities {
                         signature_information: Some(SignatureInformationSettings {
                             documentation_format: Some(vec![

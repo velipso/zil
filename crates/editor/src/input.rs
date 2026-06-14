@@ -483,13 +483,6 @@ impl Editor {
                 |s| s.select(new_selections),
             );
 
-            if !bracket_inserted
-                && let Some(on_type_format_task) =
-                    this.trigger_on_type_formatting(text.to_string(), window, cx)
-            {
-                on_type_format_task.detach_and_log_err(cx);
-            }
-
             let editor_settings = EditorSettings::get_global(cx);
             if bracket_inserted
                 && (editor_settings.auto_signature_help
@@ -756,9 +749,6 @@ impl Editor {
                 .collect();
 
             this.change_selections(Default::default(), window, cx, |s| s.select(new_selections));
-            if let Some(task) = this.trigger_on_type_formatting("\n".to_owned(), window, cx) {
-                task.detach_and_log_err(cx);
-            }
         });
     }
 
@@ -825,9 +815,6 @@ impl Editor {
                 }
             }
             editor.edit(indent_edits, cx);
-            if let Some(format) = editor.trigger_on_type_formatting("\n".to_owned(), window, cx) {
-                format.detach_and_log_err(cx);
-            }
         });
     }
 
@@ -908,9 +895,6 @@ impl Editor {
                 }
             }
             editor.edit(indent_edits, cx);
-            if let Some(format) = editor.trigger_on_type_formatting("\n".to_owned(), window, cx) {
-                format.detach_and_log_err(cx);
-            }
         });
     }
 
