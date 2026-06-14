@@ -41,7 +41,7 @@ use parking_lot::Mutex;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use session::{AppSession, Session};
-use settings::{BaseKeymap, Settings, SettingsStore, watch_config_file};
+use settings::{Settings, SettingsStore, watch_config_file};
 use smol::future::poll_once;
 use std::{
     env,
@@ -582,21 +582,6 @@ fn main() {
         })
         .detach();
 
-        // We should rename these in the future to `first app open`, `first app open for release channel`, and `app open`
-        if let (Some(system_id), Some(installation_id)) = (&system_id, &installation_id) {
-            match (&system_id, &installation_id) {
-                (IdType::New(_), IdType::New(_)) => {
-                    telemetry::event!("App First Opened");
-                    telemetry::event!("App First Opened For Release Channel");
-                }
-                (IdType::Existing(_), IdType::New(_)) => {
-                    telemetry::event!("App First Opened For Release Channel");
-                }
-                (_, IdType::Existing(_)) => {
-                    telemetry::event!("App Opened");
-                }
-            }
-        }
         let app_session = cx.new(|cx| AppSession::new(session, cx));
 
         let app_state = Arc::new(AppState {
@@ -636,7 +621,6 @@ fn main() {
             app_state.user_store.clone(),
             cx,
         );
-        zed::telemetry_log::init(cx);
         zed::remote_debug::init(cx);
         snippet_provider::init(cx);
         project::AgentRegistryStore::init_global(cx);
@@ -731,17 +715,6 @@ fn main() {
             }
         })
         .detach();
-        telemetry::event!(
-            "Settings Changed",
-            setting = "theme",
-            value = cx.theme().name.to_string()
-        );
-        telemetry::event!(
-            "Settings Changed",
-            setting = "keymap",
-            value = BaseKeymap::get_global(cx).to_string()
-        );
-        telemetry.flush_events().detach();
 
         let fs = app_state.fs.clone();
         load_user_themes_in_background(fs.clone(), cx);

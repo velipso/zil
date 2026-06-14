@@ -1186,9 +1186,8 @@ impl AppState {
         let fs = fs::FakeFs::new(cx.background_executor().clone());
         <dyn Fs>::set_global(fs.clone(), cx);
         let languages = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
-        let clock = Arc::new(clock::FakeSystemClock::new());
         let http_client = http_client::FakeHttpClient::with_404_response();
-        let client = Client::new(clock, http_client, cx);
+        let client = Client::new(http_client, cx);
         let session = cx.new(|cx| AppSession::new(Session::test(), cx));
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let workspace_store = cx.new(|cx| WorkspaceStore::new(client.clone(), cx));
@@ -4130,13 +4129,6 @@ impl Workspace {
         let other_is_zoomed = self.zoomed.is_some() && self.zoomed_position != Some(dock_side);
         let was_visible = self.is_dock_at_position_open(dock_side, cx) && !other_is_zoomed;
 
-        if let Some(panel) = self.dock_at_position(dock_side).read(cx).active_panel() {
-            telemetry::event!(
-                "Panel Button Clicked",
-                name = panel.persistent_name(),
-                toggle_state = !was_visible
-            );
-        }
         if was_visible {
             self.save_open_dock_positions(cx);
         }
@@ -4303,12 +4295,6 @@ impl Workspace {
         if !did_focus_panel && WorkspaceSettings::get_global(cx).close_panel_on_toggle {
             self.close_panel::<T>(window, cx);
         }
-
-        telemetry::event!(
-            "Panel Button Clicked",
-            name = T::persistent_name(),
-            toggle_state = did_focus_panel
-        );
 
         did_focus_panel
     }
@@ -10170,8 +10156,6 @@ async fn open_remote_project_inner(
     }
 
     let workspace = window.update(cx, |multi_workspace, window, cx| {
-        telemetry::event!("SSH Project Opened");
-
         let new_workspace = cx.new(|cx| {
             let mut workspace =
                 Workspace::new(Some(workspace_id), project, app_state.clone(), window, cx);

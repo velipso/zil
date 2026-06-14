@@ -1986,13 +1986,10 @@ impl Project {
         root_paths: impl IntoIterator<Item = &Path>,
         cx: &mut AsyncApp,
     ) -> Entity<Project> {
-        use clock::FakeSystemClock;
-
         let fs = Arc::new(RealFs::new(None, cx.background_executor().clone()));
         let languages = LanguageRegistry::test(cx.background_executor().clone());
-        let clock = Arc::new(FakeSystemClock::new());
         let http_client = http_client::FakeHttpClient::with_404_response();
-        let client = cx.update(|cx| client::Client::new(clock, http_client.clone(), cx));
+        let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let project = cx.update(|cx| {
             Project::local(
@@ -2047,12 +2044,9 @@ impl Project {
         init_worktree_trust: bool,
         cx: &mut gpui::TestAppContext,
     ) -> Entity<Project> {
-        use clock::FakeSystemClock;
-
         let languages = LanguageRegistry::test(cx.executor());
-        let clock = Arc::new(FakeSystemClock::new());
         let http_client = http_client::FakeHttpClient::with_404_response();
-        let client = cx.update(|cx| client::Client::new(clock, http_client.clone(), cx));
+        let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let project = cx.update(|cx| {
             Project::local(

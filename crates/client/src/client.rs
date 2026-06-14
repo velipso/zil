@@ -13,7 +13,6 @@ use async_tungstenite::tungstenite::{
     error::Error as WebsocketError,
     http::{HeaderValue, Request, StatusCode},
 };
-use clock::SystemClock;
 use cloud_api_client::LlmApiToken;
 use cloud_api_client::websocket_protocol::MessageToClient;
 use cloud_api_client::{ClientApiError, CloudApiClient};
@@ -57,7 +56,6 @@ use util::{ConnectionResult, ResultExt};
 
 pub use llm_token::*;
 pub use rpc::*;
-pub use telemetry_events::Event;
 pub use user::*;
 
 static ZED_SERVER_URL: LazyLock<Option<String>> =
@@ -556,14 +554,13 @@ impl settings::Settings for TelemetrySettings {
 
 impl Client {
     pub fn new(
-        clock: Arc<dyn SystemClock>,
         http: Arc<HttpClientWithUrl>,
         cx: &mut App,
     ) -> Arc<Self> {
         Arc::new(Self {
             id: AtomicU64::new(0),
             peer: Peer::new(0),
-            telemetry: Telemetry::new(clock, http.clone(), cx),
+            telemetry: Telemetry::new(cx),
             cloud_client: Arc::new(CloudApiClient::new(http.clone())),
             http,
             credentials_provider: ClientCredentialsProvider::new(cx),
@@ -582,13 +579,12 @@ impl Client {
     }
 
     pub fn production(cx: &mut App) -> Arc<Self> {
-        let clock = Arc::new(clock::RealSystemClock);
         let http = Arc::new(HttpClientWithUrl::new_url(
             cx.http_client(),
             &ClientSettings::get_global(cx).server_url,
             cx.http_client().proxy().cloned(),
         ));
-        Self::new(clock, http, cx)
+        Self::new(http, cx)
     }
 
     pub fn id(&self) -> u64 {

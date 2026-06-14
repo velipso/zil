@@ -121,8 +121,6 @@ members = [
     "crates/tab_switcher",
     "crates/task",
     "crates/tasks_ui",
-    "crates/telemetry",
-    "crates/telemetry_events",
     "crates/terminal",
     "crates/terminal_view",
     "crates/text",
@@ -130,7 +128,6 @@ members = [
     "crates/theme_extension",
     "crates/theme_settings",
     "crates/theme_selector",
-    "crates/time_format",
     "crates/title_bar",
     "crates/toolchain_selector",
     "crates/ui",
@@ -304,8 +301,6 @@ syntax_theme = { path = "crates/syntax_theme" }
 tab_switcher = { path = "crates/tab_switcher" }
 task = { path = "crates/task" }
 tasks_ui = { path = "crates/tasks_ui" }
-telemetry = { path = "crates/telemetry" }
-telemetry_events = { path = "crates/telemetry_events" }
 terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }
@@ -313,7 +308,6 @@ theme = { path = "crates/theme" }
 theme_extension = { path = "crates/theme_extension" }
 theme_settings = { path = "crates/theme_settings" }
 theme_selector = { path = "crates/theme_selector" }
-time_format = { path = "crates/time_format" }
 platform_title_bar = { path = "crates/platform_title_bar" }
 title_bar = { path = "crates/title_bar" }
 toolchain_selector = { path = "crates/toolchain_selector" }
@@ -793,9 +787,7 @@ reqwest_client = { codegen-units = 1 }
 session = { codegen-units = 1 }
 snippet = { codegen-units = 1 }
 snippets_ui = { codegen-units = 1 }
-telemetry_events = { codegen-units = 1 }
 theme_selector = { codegen-units = 1 }
-time_format = { codegen-units = 1 }
 ui_input = { codegen-units = 1 }
 zed_actions = { codegen-units = 1 }
 

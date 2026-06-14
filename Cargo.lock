@@ -1525,7 +1525,6 @@ dependencies = [
  "paths",
  "postage",
  "rand 0.9.4",
- "regex",
  "release_channel",
  "rpc",
  "rustls-pki-types",
@@ -1536,8 +1535,6 @@ dependencies = [
  "settings",
  "sha2",
  "smol",
- "telemetry",
- "telemetry_events",
  "text",
  "thiserror 2.0.17",
  "time",
@@ -1758,7 +1755,6 @@ dependencies = [
  "project",
  "serde",
  "settings",
- "telemetry",
  "theme",
  "theme_settings",
  "time",
@@ -2529,7 +2525,6 @@ dependencies = [
  "smallvec",
  "smol",
  "task",
- "telemetry",
  "util",
  "zlog",
 ]
@@ -3011,7 +3006,6 @@ dependencies = [
  "convert_case 0.11.0",
  "criterion",
  "ctor",
- "dap",
  "db",
  "emojis",
  "feature_flags",
@@ -3462,7 +3456,6 @@ dependencies = [
  "serde_json_lenient",
  "settings",
  "task",
- "telemetry",
  "tempfile",
  "theme",
  "theme_extension",
@@ -3503,7 +3496,6 @@ dependencies = [
  "settings",
  "smallvec",
  "strum",
- "telemetry",
  "theme_settings",
  "ui",
  "util",
@@ -3866,7 +3858,6 @@ dependencies = [
  "serde",
  "serde_json",
  "smol",
- "telemetry",
  "tempfile",
  "text",
  "thiserror 2.0.17",
@@ -5795,7 +5786,6 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
- "telemetry",
  "tempfile",
  "theme",
  "theme_settings",
@@ -10816,7 +10806,6 @@ dependencies = [
  "serde_json",
  "settings",
  "strum",
- "telemetry",
  "theme",
  "theme_settings",
  "title_bar",
@@ -11716,25 +11705,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "telemetry"
-version = "0.1.0"
-dependencies = [
- "futures",
- "serde",
- "serde_json",
- "telemetry_events",
-]
-
-[[package]]
-name = "telemetry_events"
-version = "0.1.0"
-dependencies = [
- "semver",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11929,7 +11899,6 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
- "telemetry",
  "theme",
  "theme_settings",
  "ui",
@@ -12055,17 +12024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "time_format"
-version = "0.1.0"
-dependencies = [
- "core-foundation 0.10.0",
- "core-foundation-sys",
- "sys-locale",
- "time",
- "windows 0.61.3",
-]
-
-[[package]]
 name = "tiny-keccak"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12166,7 +12124,6 @@ dependencies = [
  "serde",
  "settings",
  "smallvec",
- "telemetry",
  "ui",
  "util",
  "windows 0.61.3",
@@ -15367,7 +15324,6 @@ dependencies = [
  "sqlez",
  "strum",
  "task",
- "telemetry",
  "tempfile",
  "theme",
  "theme_settings",
@@ -15833,8 +15789,6 @@ dependencies = [
  "tab_switcher",
  "task",
  "tasks_ui",
- "telemetry",
- "telemetry_events",
  "tempfile",
  "terminal_view",
  "theme",
@@ -15842,7 +15796,6 @@ dependencies = [
  "theme_selector",
  "theme_settings",
  "time",
- "time_format",
  "title_bar",
  "toolchain_selector",
  "tracing",
@@ -15857,7 +15810,6 @@ dependencies = [
  "windows 0.61.3",
  "windows_resources",
  "workspace",
- "zed-reqwest",
  "zed_actions",
  "zed_env_vars",
  "zlog",

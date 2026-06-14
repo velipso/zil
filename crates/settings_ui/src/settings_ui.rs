@@ -571,8 +571,6 @@ pub fn open_settings_editor(
     workspace_handle: Option<WindowHandle<MultiWorkspace>>,
     cx: &mut App,
 ) {
-    telemetry::event!("Settings Viewed");
-
     /// Assumes a settings GUI window is already open
     fn open_path(
         path: &str,
@@ -763,7 +761,6 @@ pub struct SettingsWindow {
     files_focus_handle: FocusHandle,
     search_index: Option<Arc<SearchIndex>>,
     list_state: ListState,
-    shown_errors: HashSet<String>,
     pub(crate) hidden_deleted_skill_directory_paths: HashSet<PathBuf>,
     pub(crate) regex_validation_error: Option<String>,
     last_copied_link_path: Option<&'static str>,
@@ -1576,8 +1573,6 @@ impl SettingsWindow {
                     window.remove_window();
                 })
                 .ok();
-
-                telemetry::event!("Settings Closed")
             }
         })
         .detach();
@@ -1711,7 +1706,6 @@ impl SettingsWindow {
                 .tab_index(HEADER_CONTAINER_TAB_INDEX)
                 .tab_stop(false),
             search_index: None,
-            shown_errors: HashSet::default(),
             hidden_deleted_skill_directory_paths: HashSet::default(),
             regex_validation_error: None,
             list_state,
@@ -2056,7 +2050,6 @@ impl SettingsWindow {
             .ok();
 
             cx.background_executor().timer(Duration::from_secs(1)).await;
-            telemetry::event!("Settings Searched", query = query)
         }));
     }
 
@@ -2414,10 +2407,6 @@ impl SettingsWindow {
             return;
         }
         self.current_file = self.files[ix].0.clone();
-
-        if let SettingsUiFile::Project((_, _)) = &self.current_file {
-            telemetry::event!("Setting Project Clicked");
-        }
 
         self.build_ui(window, cx);
 
@@ -2817,10 +2806,6 @@ impl SettingsWindow {
                                                 ))
                                         })
                                         .on_click({
-                                            let category = this.pages[entry.page_index].title;
-                                            let subcategory =
-                                                (!entry.is_root).then_some(entry.title);
-
                                             cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
                                                 if this.toggle_navbar_entry_on_double_click(
                                                         entry_index,
@@ -2831,12 +2816,6 @@ impl SettingsWindow {
                                                 {
                                                     return;
                                                 }
-
-                                                telemetry::event!(
-                                                    "Settings Navigation Clicked",
-                                                    category = category,
-                                                    subcategory = subcategory
-                                                );
 
                                                 this.open_and_scroll_to_navbar_entry(
                                                     entry_index,
@@ -3314,12 +3293,8 @@ impl SettingsWindow {
             fn banner(
                 label: &'static str,
                 error: String,
-                shown_errors: &mut HashSet<String>,
                 cx: &mut Context<SettingsWindow>,
             ) -> impl IntoElement {
-                if shown_errors.insert(error.clone()) {
-                    telemetry::event!("Settings Error Shown", label = label, error = &error);
-                }
                 Banner::new()
                     .severity(Severity::Warning)
                     .child(
@@ -3350,7 +3325,6 @@ impl SettingsWindow {
                     this.child(banner(
                         "Failed to load your settings. Some values may be incorrect and changes may be lost.",
                         err,
-                        &mut self.shown_errors,
                         cx,
                     ))
                 })
@@ -3361,14 +3335,12 @@ impl SettingsWindow {
                             SettingsUiFile::User => "They can be automatically migrated to the latest version.",
                             SettingsUiFile::Server(_) | SettingsUiFile::Project(_)  => "They must be manually migrated to the latest version."
                         }.to_string(),
-                        &mut self.shown_errors,
                         cx,
                     )),
                     settings::MigrationStatus::Failed { error: err } if !parse_failed => this
                         .child(banner(
                             "Your settings file is out of date, automatic migration failed",
                             err.clone(),
-                            &mut self.shown_errors,
                             cx,
                         )),
                     _ => this,
@@ -4018,13 +3990,11 @@ fn open_user_settings_in_workspace(
 
 fn update_settings_file(
     file: SettingsUiFile,
-    file_name: Option<&'static str>,
+    _file_name: Option<&'static str>,
     window: &mut Window,
     cx: &mut App,
     update: impl 'static + Send + FnOnce(&mut SettingsContent, &App),
 ) -> Result<()> {
-    telemetry::event!("Settings Change", setting = file_name, type = file.setting_type());
-
     match file {
         SettingsUiFile::Project((worktree_id, rel_path)) => {
             let rel_path = rel_path.join(paths::local_settings_file_relative_path());
@@ -4249,8 +4219,6 @@ fn render_toggle_button<B: Into<bool> + From<bool> + Copy>(
         .tab_index(0_isize)
         .on_click({
             move |state, window, cx| {
-                telemetry::event!("Settings Change", setting = field.json_path, type = file.setting_type());
-
                 let state = *state == ui::ToggleState::Selected;
                 update_settings_file(file.clone(), field.json_path, window, cx, move |settings, app| {
                     (field.write)(settings, Some(state.into()), app);
@@ -4562,7 +4530,6 @@ pub mod test {
                 files_focus_handle: cx.focus_handle(),
                 search_index: None,
                 list_state: ListState::new(0, gpui::ListAlignment::Top, px(0.0)),
-                shown_errors: HashSet::default(),
                 hidden_deleted_skill_directory_paths: HashSet::default(),
                 regex_validation_error: None,
                 last_copied_link_path: None,
@@ -4690,7 +4657,6 @@ pub mod test {
             files_focus_handle: cx.focus_handle(),
             search_index: None,
             list_state: ListState::new(0, gpui::ListAlignment::Top, px(0.0)),
-            shown_errors: HashSet::default(),
             hidden_deleted_skill_directory_paths: HashSet::default(),
             regex_validation_error: None,
             last_copied_link_path: None,

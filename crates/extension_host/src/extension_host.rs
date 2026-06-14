@@ -1202,18 +1202,6 @@ impl ExtensionStore {
             extensions_to_unload.len() - reload_count
         );
 
-        let extension_ids = extensions_to_load
-            .iter()
-            .filter_map(|id| {
-                Some((
-                    id.clone(),
-                    new_index.extensions.get(id)?.manifest.version.clone(),
-                ))
-            })
-            .collect::<Vec<_>>();
-
-        telemetry::event!("Extensions Loaded", id_and_versions = extension_ids);
-
         let themes_to_remove = old_index
             .themes
             .iter()

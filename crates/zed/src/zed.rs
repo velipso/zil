@@ -8,7 +8,6 @@ mod open_listener;
 mod open_url_modal;
 mod quick_action_bar;
 pub mod remote_debug;
-pub mod telemetry_log;
 #[cfg(all(target_os = "macos", feature = "visual-tests"))]
 pub mod visual_tests;
 #[cfg(target_os = "windows")]
@@ -718,7 +717,6 @@ fn register_actions(
             }
         })
         .register_action(|workspace, action: &workspace::Open, window, cx| {
-            telemetry::event!("Project Opened");
             workspace::prompt_for_open_path_and_open(
                 workspace,
                 workspace.app_state().clone(),
@@ -1029,9 +1027,6 @@ fn initialize_pane(
             toolbar.add_item(lsp_log_item, window, cx);
             let dap_log_item = cx.new(|_| debugger_tools::DapLogToolbarItemView::new());
             toolbar.add_item(dap_log_item, window, cx);
-            let telemetry_log_item =
-                cx.new(|cx| telemetry_log::TelemetryLogToolbarItemView::new(window, cx));
-            toolbar.add_item(telemetry_log_item, window, cx);
             let syntax_tree_item = cx.new(|_| language_tools::SyntaxTreeToolbarItemView::new());
             toolbar.add_item(syntax_tree_item, window, cx);
             let migration_banner =
