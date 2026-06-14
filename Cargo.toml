@@ -96,7 +96,6 @@ members = [
     "crates/oauth_callback_server",
     "crates/open_path_prompt",
     "crates/outline",
-    "crates/outline_panel",
     "crates/paths",
     "crates/picker",
     "crates/platform_title_bar",
@@ -295,7 +294,6 @@ notifications = { path = "crates/notifications" }
 oauth_callback_server = { path = "crates/oauth_callback_server" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
-outline_panel = { path = "crates/outline_panel" }
 panel = { path = "crates/panel" }
 paths = { path = "crates/paths" }
 perf = { path = "tooling/perf" }

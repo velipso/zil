@@ -8360,41 +8360,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "outline_panel"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel 2.5.0",
- "collections",
- "db",
- "editor",
- "file_icons",
- "futures",
- "fuzzy",
- "gpui",
- "itertools 0.14.0",
- "language",
- "log",
- "lsp",
- "menu",
- "outline",
- "pretty_assertions",
- "project",
- "search",
- "serde",
- "serde_json",
- "settings",
- "smallvec",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
- "worktree",
- "zed_actions",
-]
-
-[[package]]
 name = "page_size"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16472,7 +16437,6 @@ dependencies = [
  "node_runtime",
  "notifications",
  "outline",
- "outline_panel",
  "parking_lot",
  "paths",
  "pkg-config",
