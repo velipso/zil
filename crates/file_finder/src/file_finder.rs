@@ -25,7 +25,6 @@ use picker::{Picker, PickerDelegate};
 use project::{
     PathMatchCandidateSet, Project, ProjectPath, WorktreeId, worktree_store::WorktreeStore,
 };
-use project_panel::project_panel_settings::ProjectPanelSettings;
 use settings::Settings;
 use std::{
     borrow::Cow,
@@ -782,14 +781,8 @@ fn matching_history_items<'a>(
     matching_history_paths
 }
 
-fn should_hide_root_in_entry_path(worktree_store: &Entity<WorktreeStore>, cx: &App) -> bool {
-    let multiple_worktrees = worktree_store
-        .read(cx)
-        .visible_worktrees(cx)
-        .filter(|worktree| !worktree.read(cx).is_single_file())
-        .nth(1)
-        .is_some();
-    ProjectPanelSettings::get_global(cx).hide_root && !multiple_worktrees
+fn should_hide_root_in_entry_path(_worktree_store: &Entity<WorktreeStore>, _cx: &App) -> bool {
+    false
 }
 
 fn worktree_names_for_history_matching(

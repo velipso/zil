@@ -135,7 +135,6 @@ parking_lot.workspace = true
 paths.workspace = true
 profiling.workspace = true
 project.workspace = true
-project_panel.workspace = true
 project_symbols.workspace = true
 prompt_store.workspace = true
 proto.workspace = true
