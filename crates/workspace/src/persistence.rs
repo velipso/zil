@@ -1159,20 +1159,9 @@ impl WorkspaceDb {
             })
         });
 
-        let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
-            self.remote_connection(remote_connection_id)
-                .context("Get remote connection")
-                .log_err()
-        } else {
-            None
-        };
-
         Some(SerializedWorkspace {
             id: workspace_id,
-            location: match remote_connection_options {
-                Some(options) => SerializedWorkspaceLocation::Remote(options),
-                None => SerializedWorkspaceLocation::Local,
-            },
+            location: SerializedWorkspaceLocation::Local,
             paths,
             identity_paths,
             center_group: self
@@ -1263,20 +1252,10 @@ impl WorkspaceDb {
         });
 
         let remote_connection_id = remote_connection_id.map(|id| RemoteConnectionId(id as u64));
-        let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
-            self.remote_connection(remote_connection_id)
-                .context("Get remote connection")
-                .log_err()
-        } else {
-            None
-        };
 
         Some(SerializedWorkspace {
             id: workspace_id,
-            location: match remote_connection_options {
-                Some(options) => SerializedWorkspaceLocation::Remote(options),
-                None => SerializedWorkspaceLocation::Local,
-            },
+            location: SerializedWorkspaceLocation::Local,
             paths,
             identity_paths,
             center_group: self
@@ -1453,15 +1432,7 @@ impl WorkspaceDb {
         log::debug!("Saving workspace at location: {:?}", workspace.location);
         self.write(move |conn| {
             conn.with_savepoint("update_worktrees", || {
-                let remote_connection_id = match workspace.location.clone() {
-                    SerializedWorkspaceLocation::Local => None,
-                    SerializedWorkspaceLocation::Remote(connection_options) => {
-                        Some(Self::get_or_create_remote_connection_internal(
-                            conn,
-                            connection_options
-                        )?.0)
-                    }
-                };
+                let remote_connection_id: Option<u64> = None;
 
                 // Clear out panes and pane_groups
                 conn.exec_bound(sql!(
@@ -1912,31 +1883,6 @@ impl WorkspaceDb {
         .collect())
     }
 
-    pub(crate) fn remote_connection(
-        &self,
-        id: RemoteConnectionId,
-    ) -> Result<RemoteConnectionOptions> {
-        let (kind, host, port, user, distro, container_id, name, use_podman, remote_env) =
-            self.select_row_bound(sql!(
-                SELECT kind, host, port, user, distro, container_id, name, use_podman, remote_env
-                FROM remote_connections
-                WHERE id = ?
-            ))?(id.0)?
-            .context("no such remote connection")?;
-        Self::remote_connection_from_row(
-            kind,
-            host,
-            port,
-            user,
-            distro,
-            container_id,
-            name,
-            use_podman,
-            remote_env,
-        )
-        .context("invalid remote_connection row")
-    }
-
     fn remote_connection_from_row(
         kind: String,
         host: Option<String>,
@@ -2002,24 +1948,10 @@ impl WorkspaceDb {
         &self,
         fs: &dyn Fs,
     ) -> Result<Vec<RecentWorkspace>> {
-        let remote_connections = self.remote_connections()?;
         let mut result = Vec::new();
-        for (id, paths, identity_paths_hint, remote_connection_id, _session_id, timestamp) in
+        for (id, paths, identity_paths_hint, _, _session_id, timestamp) in
             self.recent_workspaces()?
         {
-            if let Some(remote_connection_id) = remote_connection_id {
-                if let Some(connection_options) = remote_connections.get(&remote_connection_id) {
-                    result.push(RecentWorkspace {
-                        workspace_id: id,
-                        location: SerializedWorkspaceLocation::Remote(connection_options.clone()),
-                        paths: paths.clone(),
-                        identity_paths: identity_paths_hint.unwrap_or(paths),
-                        timestamp,
-                    });
-                }
-                continue;
-            }
-
             if paths.paths().is_empty() || contains_wsl_path(&paths) {
                 continue;
             }
@@ -2056,30 +1988,12 @@ impl WorkspaceDb {
         target: &RecentWorkspace,
     ) -> Result<Vec<WorkspaceId>> {
         let target_paths = &target.identity_paths;
-        let target_remote_connection = match &target.location {
-            SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(connection) => {
-                Some(remote_connection_identity(connection))
-            }
-        };
-
-        let remote_connections = self.remote_connections()?;
 
         let mut workspace_ids = Vec::new();
-        for (workspace_id, paths, identity_paths, remote_connection_id, _, _) in
+        for (workspace_id, paths, identity_paths, _, _, _) in
             self.recent_workspaces()?
         {
-            let remote_connection = if let Some(id) = remote_connection_id {
-                let Some(connection_options) = remote_connections.get(&id) else {
-                    continue;
-                };
-                Some(remote_connection_identity(connection_options))
-            } else {
-                None
-            };
-            if remote_connection == target_remote_connection
-                && &identity_paths.unwrap_or(paths) == target_paths
-            {
+            if &identity_paths.unwrap_or(paths) == target_paths {
                 workspace_ids.push(workspace_id);
             }
         }
@@ -2167,23 +2081,10 @@ impl WorkspaceDb {
     ) -> Result<Vec<SessionWorkspace>> {
         let mut workspaces = Vec::new();
 
-        for (workspace_id, paths, window_id, remote_connection_id) in
+        for (workspace_id, paths, window_id, _) in
             self.session_workspaces(last_session_id.to_owned())?
         {
             let window_id = window_id.map(WindowId::from);
-
-            if let Some(remote_connection_id) = remote_connection_id {
-                workspaces.push(SessionWorkspace {
-                    workspace_id,
-                    location: SerializedWorkspaceLocation::Remote(
-                        self.remote_connection(remote_connection_id)?,
-                    ),
-                    paths,
-                    window_id,
-                });
-                continue;
-            }
-
             if paths.is_empty() || Self::all_paths_exist_with_a_directory(paths.paths(), fs).await {
                 workspaces.push(SessionWorkspace {
                     workspace_id,
@@ -2650,11 +2551,7 @@ pub struct RecentWorkspace {
 
 impl RecentWorkspace {
     pub fn project_group_key(&self) -> ProjectGroupKey {
-        let host = match &self.location {
-            SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(options) => Some(options.clone()),
-        };
-        ProjectGroupKey::new(host, self.identity_paths.clone())
+        ProjectGroupKey::new(None, self.identity_paths.clone())
     }
 }
 
@@ -2688,17 +2585,10 @@ async fn resolve_local_workspace_identity(fs: &dyn Fs, paths: &PathList) -> Opti
 fn dedupe_recent_workspaces(
     workspaces: impl IntoIterator<Item = RecentWorkspace>,
 ) -> Vec<RecentWorkspace> {
-    let mut indices_by_key: HashMap<(Option<RemoteConnectionIdentity>, Vec<PathBuf>), usize> =
-        HashMap::default();
+    let mut indices_by_key: HashMap<Vec<PathBuf>, usize> = HashMap::default();
     let mut result: Vec<RecentWorkspace> = Vec::new();
     for workspace in workspaces {
-        let location_identity = match &workspace.location {
-            SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(connection) => {
-                Some(remote_connection_identity(connection))
-            }
-        };
-        let key = (location_identity, workspace.identity_paths.paths().to_vec());
+        let key = workspace.identity_paths.paths().to_vec();
         if let Some(&existing_index) = indices_by_key.get(&key) {
             if workspace.timestamp > result[existing_index].timestamp {
                 result[existing_index] = workspace;

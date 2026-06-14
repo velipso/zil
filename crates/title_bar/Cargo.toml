@@ -27,8 +27,6 @@ test-support = [
 ]
 
 [dependencies]
-anyhow.workspace = true
-auto_update.workspace = true
 platform_title_bar.workspace = true
 chrono.workspace = true
 client.workspace = true
@@ -36,7 +34,6 @@ db.workspace = true
 
 gpui = { workspace = true, features = ["screen-capture"] }
 project.workspace = true
-semver.workspace = true
 schemars.workspace = true
 serde.workspace = true
 settings.workspace = true

@@ -1,7 +1,6 @@
-pub mod disconnected_overlay;
-mod remote_connections;
 pub mod sidebar_recent_projects;
-
+pub mod navigate_to_positions;
+pub use navigate_to_positions::{navigate_to_positions};  
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -15,10 +14,7 @@ use fs::Fs;
 mod wsl_picker;
 
 use remote::RemoteConnectionOptions;
-pub use remote_connection::{RemoteConnectionModal, connect};
-pub use remote_connections::{navigate_to_positions, open_remote_project};
 
-use disconnected_overlay::DisconnectedOverlay;
 use fuzzy_nucleo::{StringMatch, StringMatchCandidate, match_strings};
 use gpui::{
     Action, AnyElement, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
@@ -30,8 +26,7 @@ use picker::{
     highlighted_match_with_paths::{HighlightedMatch, HighlightedMatchWithPaths},
 };
 use project::{Worktree, git_store::Repository};
-pub use remote_connections::RemoteSettings;
-use settings::{Settings, WorktreeId};
+use settings::{WorktreeId};
 use ui_input::ErasedEditor;
 use workspace::ProjectGroupKey;
 
@@ -458,8 +453,6 @@ pub fn init(cx: &mut App) {
             }
         }
     });
-
-    cx.observe_new(DisconnectedOverlay::register).detach();
 }
 
 #[cfg(target_os = "windows")]
@@ -1358,17 +1351,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                     .ordered_paths()
                     .map(|p| p.compact().to_string_lossy().to_string())
                     .collect();
-                let tooltip_path: SharedString = match &location {
-                    SerializedWorkspaceLocation::Remote(options) => {
-                        let host = options.display_name();
-                        if ordered_paths.len() == 1 {
-                            format!("{} ({})", ordered_paths[0], host).into()
-                        } else {
-                            format!("{}\n({})", ordered_paths.join("\n"), host).into()
-                        }
-                    }
-                    _ => ordered_paths.join("\n").into(),
-                };
+                let tooltip_path: SharedString = ordered_paths.join("\n").into();
 
                 let mut path_start_offset = 0;
                 let (match_labels, paths): (Vec<_>, Vec<_>) = identity_paths
@@ -1388,15 +1371,8 @@ impl PickerDelegate for RecentProjectsDelegate {
                     "Add Folder to this Project"
                 };
 
-                let prefix = match &location {
-                    SerializedWorkspaceLocation::Remote(options) => {
-                        Some(SharedString::from(options.display_name()))
-                    }
-                    _ => None,
-                };
-
                 let highlighted_match = HighlightedMatchWithPaths {
-                    prefix,
+                    prefix: None,
                     match_label: HighlightedMatch::join(match_labels.into_iter().flatten(), ", "),
                     paths,
                     active: false,
@@ -1464,11 +1440,6 @@ impl PickerDelegate for RecentProjectsDelegate {
                     )
                     .into_any_element();
 
-                let icon = icon_for_remote_connection(match location {
-                    SerializedWorkspaceLocation::Local => None,
-                    SerializedWorkspaceLocation::Remote(options) => Some(options),
-                });
-
                 Some(
                     ListItem::new(ix)
                         .toggle_state(selected)
@@ -1481,9 +1452,6 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 .min_w_0()
                                 .gap_2p5()
                                 .flex_grow_1()
-                                .when(self.has_any_non_local_projects, |this| {
-                                    this.child(Icon::new(icon).color(Color::Muted))
-                                })
                                 .child({
                                     let mut highlighted = highlighted_match;
                                     if !self.render_paths {
@@ -1804,17 +1772,8 @@ impl PickerDelegate for RecentProjectsDelegate {
     }
 }
 
-pub(crate) fn icon_for_remote_connection(options: Option<&RemoteConnectionOptions>) -> IconName {
-    match options {
-        None => IconName::Screen,
-        Some(options) => match options {
-            RemoteConnectionOptions::Ssh(_) => IconName::Server,
-            RemoteConnectionOptions::Wsl(_) => IconName::Linux,
-            RemoteConnectionOptions::Docker(_) => IconName::Box,
-            #[cfg(any(test, feature = "test-support"))]
-            RemoteConnectionOptions::Mock(_) => IconName::Server,
-        },
-    }
+pub(crate) fn icon_for_remote_connection(_options: Option<&RemoteConnectionOptions>) -> IconName {
+    IconName::Screen
 }
 
 // Compute the highlighted text for the name and path
@@ -1997,33 +1956,6 @@ impl RecentProjectsDelegate {
                                 |_, _, _| None,
                             );
                     }
-                }
-                SerializedWorkspaceLocation::Remote(mut connection) => {
-                    let app_state = workspace.app_state().clone();
-                    let replace_window = if replace_current_window {
-                        window.window_handle().downcast::<MultiWorkspace>()
-                    } else {
-                        None
-                    };
-                    let open_options = OpenOptions {
-                        requesting_window: replace_window,
-                        ..Default::default()
-                    };
-                    if let RemoteConnectionOptions::Ssh(connection) = &mut connection {
-                        RemoteSettings::get_global(cx)
-                            .fill_connection_options_from_settings(connection);
-                    };
-                    let paths = candidate_workspace_paths.paths().to_vec();
-                    cx.spawn_in(window, async move |_, cx| {
-                        open_remote_project(connection.clone(), paths, app_state, open_options, cx)
-                            .await
-                    })
-                    .detach_and_prompt_err(
-                        "Failed to open project",
-                        window,
-                        cx,
-                        |_, _, _| None,
-                    );
                 }
             }
         });

@@ -6997,9 +6997,7 @@ impl Workspace {
 
     fn workspace_location(&self, cx: &App) -> WorkspaceLocation {
         let paths = PathList::new(&self.root_paths(cx));
-        if let Some(connection) = self.project.read(cx).remote_connection_options(cx) {
-            WorkspaceLocation::Location(SerializedWorkspaceLocation::Remote(connection), paths)
-        } else if self.project.read(cx).is_local() {
+        if self.project.read(cx).is_local() {
             if !paths.is_empty() || self.has_any_items_open(cx) {
                 WorkspaceLocation::Location(SerializedWorkspaceLocation::Local, paths)
             } else {
@@ -9514,46 +9512,18 @@ pub fn activate_any_workspace_window(cx: &mut AsyncApp) -> Option<WindowHandle<M
 }
 
 pub fn workspace_windows_for_location(
-    serialized_location: &SerializedWorkspaceLocation,
+    _serialized_location: &SerializedWorkspaceLocation,
     cx: &App,
 ) -> Vec<WindowHandle<MultiWorkspace>> {
     cx.windows()
         .into_iter()
         .filter_map(|window| window.downcast::<MultiWorkspace>())
         .filter(|multi_workspace| {
-            let same_host = |left: &RemoteConnectionOptions, right: &RemoteConnectionOptions| match (left, right) {
-                (RemoteConnectionOptions::Ssh(a), RemoteConnectionOptions::Ssh(b)) => {
-                    (&a.host, &a.username, &a.port) == (&b.host, &b.username, &b.port)
-                }
-                (RemoteConnectionOptions::Wsl(a), RemoteConnectionOptions::Wsl(b)) => {
-                    // The WSL username is not consistently populated in the workspace location, so ignore it for now.
-                    a.distro_name == b.distro_name
-                }
-                (RemoteConnectionOptions::Docker(a), RemoteConnectionOptions::Docker(b)) => {
-                    a.container_id == b.container_id
-                }
-                #[cfg(any(test, feature = "test-support"))]
-                (RemoteConnectionOptions::Mock(a), RemoteConnectionOptions::Mock(b)) => {
-                    a.id == b.id
-                }
-                _ => false,
-            };
-
             multi_workspace.read(cx).is_ok_and(|multi_workspace| {
                 multi_workspace.workspaces().any(|workspace| {
                     match workspace.read(cx).workspace_location(cx) {
-                        WorkspaceLocation::Location(location, _) => {
-                            match (&location, serialized_location) {
-                                (
-                                    SerializedWorkspaceLocation::Local,
-                                    SerializedWorkspaceLocation::Local,
-                                ) => true,
-                                (
-                                    SerializedWorkspaceLocation::Remote(a),
-                                    SerializedWorkspaceLocation::Remote(b),
-                                ) => same_host(a, b),
-                                _ => false,
-                            }
+                        WorkspaceLocation::Location(_, _) => {
+                            true
                         }
                         _ => false,
                     }

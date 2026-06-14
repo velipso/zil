@@ -46,9 +46,8 @@ use paths::{
     local_debug_file_relative_path, local_settings_file_relative_path,
     local_tasks_file_relative_path,
 };
-use project::{DirectoryLister, ProjectItem};
+use project::{ProjectItem};
 use quick_action_bar::QuickActionBar;
-use recent_projects::open_remote_project;
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rope::Rope;
 use search::project_search::ProjectSearchBar;
@@ -495,12 +494,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         let search_button = cx.new(|_| search::search_status_button::SearchButton::new());
         let active_file_name = cx.new(|_| workspace::active_file_name::ActiveFileName::new());
-        let activity_indicator = activity_indicator::ActivityIndicator::new(
-            workspace,
-            workspace.project().read(cx).languages().clone(),
-            window,
-            cx,
-        );
         let active_buffer_encoding =
             cx.new(|_| encoding_selector::ActiveBufferEncoding::new(workspace));
         let active_buffer_language =
@@ -526,7 +519,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_left_item(search_button, window, cx);
             status_bar.add_left_item(lsp_button, window, cx);
             status_bar.add_left_item(active_file_name, window, cx);
-            status_bar.add_left_item(activity_indicator, window, cx);
             status_bar.add_right_item(active_buffer_encoding, window, cx);
             status_bar.add_right_item(active_buffer_language, window, cx);
             status_bar.add_right_item(active_toolchain_language, window, cx);
@@ -789,42 +781,6 @@ fn register_actions(
                 window,
                 cx,
             );
-        })
-        .register_action(|workspace, action: &zed_actions::OpenRemote, window, cx| {
-            if !action.from_existing_connection {
-                cx.propagate();
-                return;
-            }
-            // You need existing remote connection to open it this way
-            if workspace.project().read(cx).is_local() {
-                return;
-            }
-            telemetry::event!("Project Opened");
-            let paths = workspace.prompt_for_open_path(
-                PathPromptOptions {
-                    files: true,
-                    directories: true,
-                    multiple: true,
-                    prompt: None,
-                },
-                DirectoryLister::Project(workspace.project().clone()),
-                window,
-                cx,
-            );
-            cx.spawn_in(window, async move |this, cx| {
-                let Some(paths) = paths.await.log_err().flatten() else {
-                    return;
-                };
-                if let Some(task) = this
-                    .update_in(cx, |this, window, cx| {
-                        open_new_ssh_project_from_project(this, paths, window, cx)
-                    })
-                    .log_err()
-                {
-                    task.await.log_err();
-                }
-            })
-            .detach()
         })
         .register_action({
             let fs = app_state.fs.clone();
@@ -1909,33 +1865,6 @@ pub fn load_default_keymap(cx: &mut App) {
     if let Some(asset_path) = base_keymap.asset_path() {
         cx.bind_keys(KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx).unwrap());
     }
-}
-
-pub fn open_new_ssh_project_from_project(
-    workspace: &mut Workspace,
-    paths: Vec<PathBuf>,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) -> Task<anyhow::Result<()>> {
-    let app_state = workspace.app_state().clone();
-    let Some(ssh_client) = workspace.project().read(cx).remote_client() else {
-        return Task::ready(Err(anyhow::anyhow!("Not an ssh project")));
-    };
-    let connection_options = ssh_client.read(cx).connection_options();
-    cx.spawn_in(window, async move |_, cx| {
-        open_remote_project(
-            connection_options,
-            paths,
-            app_state,
-            workspace::OpenOptions {
-                workspace_matching: workspace::WorkspaceMatching::None,
-                ..Default::default()
-            },
-            cx,
-        )
-        .await
-        .map(|_| ())
-    })
 }
 
 fn open_project_settings_file(

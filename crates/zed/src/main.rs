@@ -33,14 +33,12 @@ use gpui_platform;
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
-use remote::RemoteConnectionOptions;
 use reqwest_client::ReqwestClient;
 
 use assets::Assets;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use parking_lot::Mutex;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
-use recent_projects::{RemoteSettings, open_remote_project};
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use session::{AppSession, Session};
 use settings::{BaseKeymap, Settings, SettingsStore, watch_config_file};
@@ -613,9 +611,7 @@ fn main() {
         });
         AppState::set_global(app_state.clone(), cx);
 
-        auto_update::init(client.clone(), cx);
         dap_adapters::init(cx);
-        auto_update_ui::init(cx);
         reliability::init(client.clone(), cx);
         extension_host::init(
             extension_host_proxy.clone(),
@@ -1007,18 +1003,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
         return;
     }
 
-    if let Some(connection_options) = request.remote_connection {
-        let open_behavior = request.open_behavior;
-        let location = workspace::SerializedWorkspaceLocation::Remote(connection_options.clone());
-        let base_open_options = zed::open_options_for_request(open_behavior, &location, cx);
-        cx.spawn(async move |cx| {
-            let paths: Vec<PathBuf> = request.open_paths.into_iter().map(PathBuf::from).collect();
-            open_remote_project(connection_options, paths, app_state, base_open_options, cx).await
-        })
-        .detach_and_log_err(cx);
-        return;
-    }
-
     let mut task = None;
     let dev_container = request.dev_container;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
@@ -1125,43 +1109,6 @@ pub(crate) async fn restore_or_create_workspace(
                     restore_multiworkspace(multi_workspace, app_state.clone(), cx)
                         .await
                         .map(|_| ())
-                }
-                SerializedWorkspaceLocation::Remote(connection_options) => {
-                    let mut connection_options = connection_options.clone();
-                    if let RemoteConnectionOptions::Ssh(options) = &mut connection_options {
-                        cx.update(|cx| {
-                            RemoteSettings::get_global(cx)
-                                .fill_connection_options_from_settings(options)
-                        });
-                    }
-
-                    let paths = multi_workspace
-                        .active_workspace
-                        .paths
-                        .paths()
-                        .iter()
-                        .map(PathBuf::from)
-                        .collect::<Vec<_>>();
-                    let state = multi_workspace.state.clone();
-                    async {
-                        let window = open_remote_project(
-                            connection_options,
-                            paths,
-                            app_state.clone(),
-                            workspace::OpenOptions::default(),
-                            cx,
-                        )
-                        .await?;
-                        workspace::apply_restored_multiworkspace_state(
-                            window,
-                            &state,
-                            app_state.fs.clone(),
-                            cx,
-                        )
-                        .await;
-                        Ok::<(), anyhow::Error>(())
-                    }
-                    .await
                 }
             };
 

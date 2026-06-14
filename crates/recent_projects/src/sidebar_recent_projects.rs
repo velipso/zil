@@ -9,19 +9,17 @@ use picker::{
     Picker, PickerDelegate,
     highlighted_match_with_paths::{HighlightedMatch, HighlightedMatchWithPaths},
 };
-use remote::RemoteConnectionOptions;
-use settings::Settings;
 use ui::{ButtonLike, KeyBinding, ListItem, ListItemSpacing, Tooltip, prelude::*};
 use ui_input::ErasedEditor;
 use util::{ResultExt, paths::PathExt};
 use workspace::{
-    MultiWorkspace, OpenMode, OpenOptions, ProjectGroupKey, RecentWorkspace,
-    SerializedWorkspaceLocation, Workspace, WorkspaceDb, notifications::DetachAndPromptErr,
+    MultiWorkspace, OpenMode, ProjectGroupKey, RecentWorkspace,
+    SerializedWorkspaceLocation, Workspace, WorkspaceDb,
 };
 
 use zed_actions::OpenRemote;
 
-use crate::{highlights_for_path, icon_for_remote_connection, open_remote_project};
+use crate::{highlights_for_path};
 
 pub struct SidebarRecentProjects {
     pub picker: Entity<Picker<SidebarRecentProjectsDelegate>>,
@@ -240,7 +238,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
             return;
         };
 
-        let Some(workspace) = self.workspace.upgrade() else {
+        let Some(_) = self.workspace.upgrade() else {
             return;
         };
 
@@ -259,32 +257,6 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                         }
                     });
                 }
-            }
-            SerializedWorkspaceLocation::Remote(connection) => {
-                let mut connection = connection.clone();
-                workspace.update(cx, |workspace, cx| {
-                    let app_state = workspace.app_state().clone();
-                    let replace_window = window.window_handle().downcast::<MultiWorkspace>();
-                    let open_options = OpenOptions {
-                        requesting_window: replace_window,
-                        ..Default::default()
-                    };
-                    if let RemoteConnectionOptions::Ssh(connection) = &mut connection {
-                        crate::RemoteSettings::get_global(cx)
-                            .fill_connection_options_from_settings(connection);
-                    };
-                    let paths = recent_workspace.paths.paths().to_vec();
-                    cx.spawn_in(window, async move |_, cx| {
-                        open_remote_project(connection.clone(), paths, app_state, open_options, cx)
-                            .await
-                    })
-                    .detach_and_prompt_err(
-                        "Failed to open project",
-                        window,
-                        cx,
-                        |_, _, _| None,
-                    );
-                });
             }
         }
         cx.emit(DismissEvent);
@@ -317,17 +289,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
             .map(|p| p.compact().to_string_lossy().to_string())
             .collect();
 
-        let tooltip_path: SharedString = match &workspace.location {
-            SerializedWorkspaceLocation::Remote(options) => {
-                let host = options.display_name();
-                if ordered_paths.len() == 1 {
-                    format!("{} ({})", ordered_paths[0], host).into()
-                } else {
-                    format!("{}\n({})", ordered_paths.join("\n"), host).into()
-                }
-            }
-            _ => ordered_paths.join("\n").into(),
-        };
+        let tooltip_path: SharedString = ordered_paths.join("\n").into();
 
         let mut path_start_offset = 0;
         let match_labels: Vec<_> = workspace
@@ -342,24 +304,12 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
             })
             .collect();
 
-        let prefix = match &workspace.location {
-            SerializedWorkspaceLocation::Remote(options) => {
-                Some(SharedString::from(options.display_name()))
-            }
-            _ => None,
-        };
-
         let highlighted_match = HighlightedMatchWithPaths {
-            prefix,
+            prefix: None,
             match_label: HighlightedMatch::join(match_labels.into_iter().flatten(), ", "),
             paths: Vec::new(),
             active: false,
         };
-
-        let icon = icon_for_remote_connection(match &workspace.location {
-            SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(options) => Some(options),
-        });
 
         Some(
             ListItem::new(ix)
@@ -372,9 +322,6 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                         .min_w_0()
                         .gap_3()
                         .flex_grow_1()
-                        .when(self.has_any_non_local_projects, |this| {
-                            this.child(Icon::new(icon).color(Color::Muted))
-                        })
                         .child(highlighted_match.render(window, cx)),
                 )
                 .tooltip(move |_, cx| {

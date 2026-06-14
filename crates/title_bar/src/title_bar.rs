@@ -1,7 +1,6 @@
 mod application_menu;
 mod onboarding_banner;
 mod title_bar_settings;
-mod update_version;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
 use arrayvec::ArrayVec;
@@ -30,7 +29,6 @@ use ui::{
     Tooltip, prelude::*,
     utils::platform_title_bar_height,
 };
-use update_version::UpdateVersion;
 use util::ResultExt;
 use workspace::{MultiWorkspace, Workspace};
 
@@ -38,16 +36,7 @@ pub use onboarding_banner::restore_banner;
 
 actions!(
     collab,
-    [
-        /// Toggles the user menu dropdown.
-        ToggleUserMenu,
-        /// Toggles the project menu dropdown.
-        ToggleProjectMenu,
-        /// Switches to a different git branch.
-        SwitchBranch,
-        /// A debug action to simulate an update being available to test the update banner UI.
-        SimulateUpdateAvailable
-    ]
+    []
 );
 
 actions!(
@@ -70,17 +59,6 @@ pub fn init(cx: &mut App) {
         let multi_workspace = workspace.multi_workspace().cloned();
         let item = cx.new(|cx| TitleBar::new("title-bar", workspace, multi_workspace, window, cx));
         workspace.set_titlebar_item(item.into(), window, cx);
-
-        workspace.register_action(|workspace, _: &SimulateUpdateAvailable, _window, cx| {
-            if let Some(titlebar) = workspace
-                .titlebar_item()
-                .and_then(|item| item.downcast::<TitleBar>().ok())
-            {
-                titlebar.update(cx, |titlebar, cx| {
-                    titlebar.toggle_update_simulation(cx);
-                });
-            }
-        });
 
         #[cfg(not(target_os = "macos"))]
         workspace.register_action(|workspace, action: &OpenApplicationMenu, window, cx| {
@@ -140,7 +118,6 @@ pub struct TitleBar {
     application_menu: Option<Entity<ApplicationMenu>>,
     _subscriptions: Vec<Subscription>,
     banner: Option<Entity<OnboardingBanner>>,
-    update_version: Entity<UpdateVersion>,
     _diagnostics_subscription: Option<gpui::Subscription>,
 }
 
@@ -178,15 +155,6 @@ impl Render for TitleBar {
                 children.push(banner.clone().into_any_element())
             }
         }
-
-        children.push(
-            h_flex()
-                .pr_1()
-                .gap_1()
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(self.update_version.clone())
-                .into_any_element(),
-        );
 
         if show_menus {
             self.platform_titlebar.update(cx, |this, _| {
@@ -287,7 +255,6 @@ impl TitleBar {
             }));
         }
 
-        let update_version = cx.new(|cx| UpdateVersion::new(cx));
         let platform_titlebar = cx.new(|cx| {
             let mut titlebar = PlatformTitleBar::new(id, cx);
             if let Some(mw) = multi_workspace.clone() {
@@ -307,15 +274,8 @@ impl TitleBar {
             user_store,
             _subscriptions: subscriptions,
             banner,
-            update_version,
             _diagnostics_subscription: None,
         }
-    }
-
-    fn toggle_update_simulation(&mut self, cx: &mut Context<Self>) {
-        self.update_version
-            .update(cx, |banner, cx| banner.update_simulation(cx));
-        cx.notify();
     }
 
     /// Returns the worktree to display in the title bar.

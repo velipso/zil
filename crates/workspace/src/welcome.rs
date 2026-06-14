@@ -331,19 +331,13 @@ impl WelcomePage {
         &self,
         project_index: usize,
         tab_index: usize,
-        location: &SerializedWorkspaceLocation,
+        _location: &SerializedWorkspaceLocation,
         paths: &PathList,
     ) -> impl IntoElement {
         let name = project_name(paths);
-
-        let (icon, title) = match location {
-            SerializedWorkspaceLocation::Local => (IconName::Folder, name),
-            SerializedWorkspaceLocation::Remote(_) => (IconName::Server, name),
-        };
-
         SectionButton::new(
-            title,
-            icon,
+            name,
+            IconName::Folder,
             &OpenRecentProject {
                 index: project_index,
             },

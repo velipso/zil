@@ -1,12 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/activity_indicator",
     "crates/agent_skills",
     "crates/askpass",
     "crates/assets",
-    "crates/auto_update",
-    "crates/auto_update_ui",
     "crates/breadcrumbs",
     "crates/buffer_diff",
     "crates/channel",
@@ -107,7 +104,6 @@ members = [
     "crates/refineable/derive_refineable",
     "crates/release_channel",
     "crates/remote",
-    "crates/remote_connection",
     "crates/reqwest_client",
     "crates/rope",
     "crates/rpc",
@@ -194,12 +190,9 @@ edition = "2024"
 # Workspace member crates
 #
 
-activity_indicator = { path = "crates/activity_indicator" }
 agent_skills = { path = "crates/agent_skills" }
 askpass = { path = "crates/askpass" }
 assets = { path = "crates/assets" }
-auto_update = { path = "crates/auto_update" }
-auto_update_ui = { path = "crates/auto_update_ui" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
 channel = { path = "crates/channel" }
@@ -304,7 +297,6 @@ recent_projects = { path = "crates/recent_projects" }
 refineable = { path = "crates/refineable" }
 release_channel = { path = "crates/release_channel" }
 remote = { path = "crates/remote" }
-remote_connection = { path = "crates/remote_connection" }
 reqwest_client = { path = "crates/reqwest_client" }
 rope = { path = "crates/rope" }
 rpc = { path = "crates/rpc" }
@@ -799,7 +791,6 @@ wasmtime-environ = { opt-level = 3 }
 wasmtime-internal-cranelift = { opt-level = 3 }
 minidumper = { opt-level = 3 }
 # Build single-source-file crates with cg=1 as it helps make `cargo build` of a whole workspace a bit faster
-activity_indicator = { codegen-units = 1 }
 assets = { codegen-units = 1 }
 breadcrumbs = { codegen-units = 1 }
 collections = { codegen-units = 1 }
