@@ -5475,17 +5475,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "input_latency_ui"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "collections",
- "gpui",
- "hdrhistogram",
- "telemetry",
-]
-
-[[package]]
 name = "inspector_ui"
 version = "0.1.0"
 dependencies = [
@@ -15832,7 +15821,6 @@ dependencies = [
  "http_client",
  "image",
  "image_viewer",
- "input_latency_ui",
  "inspector_ui",
  "install_cli",
  "itertools 0.14.0",
