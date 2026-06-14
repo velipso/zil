@@ -1,5 +1,3 @@
-mod preview;
-
 use editor::actions::{
     AddSelectionAbove, AddSelectionBelow, CodeActionSource, DuplicateLineDown, GoToDiagnostic,
     GoToHunk, GoToPreviousDiagnostic, GoToPreviousHunk, MoveLineDown, MoveLineUp, SelectAll,
@@ -11,7 +9,7 @@ use editor::{Editor, EditorSettings};
 use gpui::{
     Action, Anchor, AnchoredPositionMode, ClickEvent, Context, ElementId, Entity, EventEmitter,
     FocusHandle, Focusable, InteractiveElement, ParentElement, Render, Styled, Subscription,
-    WeakEntity, Window, anchored, deferred, point,
+    Window, anchored, deferred, point,
 };
 use project::project_settings::DiagnosticSeverity;
 use search::{BufferSearchBar, buffer_search};
@@ -22,7 +20,7 @@ use ui::{
 };
 use workspace::item::ItemBufferKind;
 use workspace::{
-    ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace, item::ItemHandle,
+    ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, item::ItemHandle,
 };
 use zed_actions::outline::ToggleOutline;
 
@@ -35,13 +33,11 @@ pub struct QuickActionBar {
     show: bool,
     toggle_selections_handle: PopoverMenuHandle<ContextMenu>,
     toggle_settings_handle: PopoverMenuHandle<ContextMenu>,
-    workspace: WeakEntity<Workspace>,
 }
 
 impl QuickActionBar {
     pub fn new(
         buffer_search_bar: Entity<BufferSearchBar>,
-        workspace: &Workspace,
         cx: &mut Context<Self>,
     ) -> Self {
         let mut this = Self {
@@ -51,7 +47,6 @@ impl QuickActionBar {
             show: true,
             toggle_selections_handle: Default::default(),
             toggle_settings_handle: Default::default(),
-            workspace: workspace.weak_handle(),
         };
         this.apply_settings(cx);
         cx.observe_global::<SettingsStore>(|this, cx| this.apply_settings(cx))
@@ -565,7 +560,6 @@ impl Render for QuickActionBar {
         h_flex()
             .id("quick action bar")
             .gap(DynamicSpacing::Base01.rems(cx))
-            .children(self.render_preview_button(self.workspace.clone(), cx))
             .children(search_button)
             .children(code_actions_dropdown)
             .children(editor_selections_dropdown)

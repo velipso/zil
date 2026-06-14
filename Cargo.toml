@@ -19,7 +19,6 @@ members = [
     "crates/context_server",
     "crates/crashes",
     "crates/credentials_provider",
-    "crates/csv_preview",
     "crates/dap",
     "crates/dap_adapters",
     "crates/db",
@@ -73,7 +72,6 @@ members = [
     "crates/line_ending_selector",
     "crates/lsp",
     "crates/markdown",
-    "crates/markdown_preview",
     "crates/mermaid_render",
     "crates/media",
     "crates/menu",
@@ -115,7 +113,6 @@ members = [
     "crates/sqlez",
     "crates/sqlez_macros",
     "crates/sum_tree",
-    "crates/svg_preview",
     "crates/system_specs",
     "crates/syntax_theme",
     "crates/tab_switcher",
@@ -198,7 +195,6 @@ context_server = { path = "crates/context_server" }
 crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
-csv_preview = { path = "crates/csv_preview"}
 dap = { path = "crates/dap" }
 dap_adapters = { path = "crates/dap_adapters" }
 db = { path = "crates/db" }
@@ -252,9 +248,7 @@ languages = { path = "crates/languages" }
 line_ending_selector = { path = "crates/line_ending_selector" }
 lsp = { path = "crates/lsp" }
 markdown = { path = "crates/markdown" }
-markdown_preview = { path = "crates/markdown_preview" }
 mermaid_render = { path = "crates/mermaid_render" }
-svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
 migrator = { path = "crates/migrator" }

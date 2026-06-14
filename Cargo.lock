@@ -2455,20 +2455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "csv_preview"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "editor",
- "feature_flags",
- "gpui",
- "log",
- "text",
- "ui",
- "workspace",
-]
-
-[[package]]
 name = "ctor"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6616,30 +6602,6 @@ dependencies = [
  "theme_settings",
  "ui",
  "util",
-]
-
-[[package]]
-name = "markdown_preview"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "editor",
- "fs",
- "gpui",
- "language",
- "log",
- "markdown",
- "project",
- "serde_json",
- "settings",
- "tempfile",
- "theme",
- "theme_settings",
- "ui",
- "urlencoding",
- "util",
- "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -11407,19 +11369,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "svg_preview"
-version = "0.1.0"
-dependencies = [
- "file_icons",
- "gpui",
- "language",
- "multi_buffer",
- "ui",
- "workspace",
- "zed_actions",
-]
-
-[[package]]
 name = "svgtypes"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15291,7 +15240,6 @@ dependencies = [
  "async-recursion",
  "chrono",
  "client",
- "clock",
  "collections",
  "component",
  "db",
@@ -15711,7 +15659,6 @@ dependencies = [
  "command_palette",
  "component",
  "crashes",
- "csv_preview",
  "dap_adapters",
  "db",
  "debug_adapter_extension",
@@ -15749,7 +15696,6 @@ dependencies = [
  "line_ending_selector",
  "log",
  "markdown",
- "markdown_preview",
  "menu",
  "migrator",
  "mimalloc",
@@ -15783,7 +15729,6 @@ dependencies = [
  "smol",
  "snippet_provider",
  "snippets_ui",
- "svg_preview",
  "sysinfo 0.37.2",
  "system_specs",
  "tab_switcher",
