@@ -140,8 +140,6 @@ members = [
     "crates/util",
     "crates/util_macros",
     "crates/watch",
-    "crates/web_search",
-    "crates/web_search_providers",
     "crates/which_key",
     "crates/workspace",
     "crates/worktree",
@@ -328,8 +326,6 @@ util_macros = { path = "crates/util_macros" }
 which_key = { path = "crates/which_key" }
 
 watch = { path = "crates/watch" }
-web_search = { path = "crates/web_search" }
-web_search_providers = { path = "crates/web_search_providers" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 zed = { path = "crates/zed" }
