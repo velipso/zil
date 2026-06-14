@@ -3648,20 +3648,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feedback"
-version = "0.1.0"
-dependencies = [
- "client",
- "extension_host",
- "gpui",
- "system_specs",
- "urlencoding",
- "util",
- "workspace",
- "zed_actions",
-]
-
-[[package]]
 name = "file_icons"
 version = "0.1.0"
 dependencies = [
@@ -15864,7 +15850,6 @@ dependencies = [
  "extension_host",
  "extensions_ui",
  "feature_flags",
- "feedback",
  "fs",
  "futures",
  "git",
