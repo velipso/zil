@@ -40,7 +40,7 @@ use workspace::{
     RecentWorkspace, SerializedWorkspaceLocation, Workspace, WorkspaceDb, WorkspaceId,
     notifications::DetachAndPromptErr, with_active_or_new_workspace,
 };
-use zed_actions::{OpenRecent, OpenRemote};
+use zed_actions::{OpenRecent};
 
 actions!(
     recent_projects,
@@ -1533,33 +1533,6 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 }
                             })
                     })
-                    .child(
-                        ButtonLike::new("open_remote_folder")
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .gap_1()
-                                    .justify_between()
-                                    .child(Label::new("Open Remote Folder"))
-                                    .child(KeyBinding::for_action(
-                                        &OpenRemote {
-                                            from_existing_connection: false,
-                                            create_new_window: false,
-                                        },
-                                        cx,
-                                    )),
-                            )
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(
-                                    OpenRemote {
-                                        from_existing_connection: false,
-                                        create_new_window: false,
-                                    }
-                                    .boxed_clone(),
-                                    cx,
-                                )
-                            }),
-                    )
                     .into_any(),
             );
         }
@@ -1753,14 +1726,6 @@ impl PickerDelegate for RecentProjectsDelegate {
                                                         );
                                                     }
                                                 },
-                                            )
-                                            .action(
-                                                "Open Remote Folder",
-                                                OpenRemote {
-                                                    from_existing_connection: false,
-                                                    create_new_window: false,
-                                                }
-                                                .boxed_clone(),
                                             )
                                     }
                                 }))

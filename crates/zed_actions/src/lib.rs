@@ -1,7 +1,6 @@
 use gpui::{Action, actions};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 // If the zed binary doesn't use anything in this crate, it will be optimized away
 // and the actions won't initialize. So we just provide an empty initialization function
@@ -69,8 +68,6 @@ actions!(
         OpenLicenses,
         /// Opens the Zed status page.
         OpenStatusPage,
-        /// Opens the telemetry log.
-        OpenTelemetryLog,
         /// Opens the performance profiler.
         OpenPerformanceProfiler,
         /// Opens the onboarding view.
@@ -253,83 +250,6 @@ pub mod workspace {
     );
 }
 
-/// Describes which ref to base a new git worktree on. The worktree is
-/// always created in a detached HEAD state; users can opt into creating
-/// a branch afterwards from the worktree itself.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", tag = "kind")]
-pub enum NewWorktreeBranchTarget {
-    /// Create a detached worktree from the current HEAD.
-    #[default]
-    CurrentBranch,
-    /// Create a detached worktree at the tip of an existing branch.
-    ExistingBranch { name: String },
-    /// Create a detached worktree at the tip of a remote-tracking branch.
-    RemoteBranch {
-        remote_name: String,
-        branch_name: String,
-    },
-}
-
-/// Creates a new git worktree and switches the workspace to it.
-/// Dispatched by the unified worktree picker when the user selects a "Create new worktree" entry.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Action)]
-#[action(namespace = git)]
-#[serde(deny_unknown_fields)]
-pub struct CreateWorktree {
-    /// When this is None, Zed will randomly generate a worktree name.
-    pub worktree_name: Option<String>,
-    pub branch_target: NewWorktreeBranchTarget,
-}
-
-/// Switches the workspace to an existing linked worktree.
-/// Dispatched by the unified worktree picker when the user selects an existing worktree.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Action)]
-#[action(namespace = git)]
-#[serde(deny_unknown_fields)]
-pub struct SwitchWorktree {
-    pub path: PathBuf,
-    pub display_name: String,
-}
-
-/// Opens an existing worktree in a new window.
-/// Dispatched by the worktree picker's "Open in New Window" button.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Action)]
-#[action(namespace = git)]
-#[serde(deny_unknown_fields)]
-pub struct OpenWorktreeInNewWindow {
-    pub path: PathBuf,
-}
-
-pub mod git {
-    use gpui::actions;
-
-    actions!(
-        git,
-        [
-            /// Checks out a different git branch.
-            CheckoutBranch,
-            /// Switches to a different git branch.
-            Switch,
-            /// Selects a different repository.
-            SelectRepo,
-            /// Filter remotes.
-            FilterRemotes,
-            /// Create a git remote.
-            CreateRemote,
-            /// Opens the git branch selector.
-            #[action(deprecated_aliases = ["branches::OpenRecent"])]
-            Branch,
-            /// Opens the git stash selector.
-            ViewStash,
-            /// Opens the git worktree selector.
-            Worktree,
-            /// Creates a pull request for the current branch.
-            CreatePullRequest
-        ]
-    );
-}
-
 pub mod toast {
     use gpui::actions;
 
@@ -350,35 +270,6 @@ pub mod command_palette {
         [
             /// Toggles the command palette.
             Toggle,
-        ]
-    );
-}
-
-pub mod project_panel {
-    use gpui::actions;
-
-    actions!(
-        project_panel,
-        [
-            /// Toggles the project panel.
-            Toggle,
-            /// Toggles focus on the project panel.
-            ToggleFocus
-        ]
-    );
-}
-pub mod feedback {
-    use gpui::actions;
-
-    actions!(
-        feedback,
-        [
-            /// Opens email client to send feedback to Zed support.
-            EmailZed,
-            /// Opens the bug report form.
-            FileBugReport,
-            /// Opens the feature request form.
-            RequestFeature
         ]
     );
 }
@@ -489,124 +380,6 @@ pub mod settings_profile_selector {
     pub struct Toggle;
 }
 
-pub mod agent {
-    use gpui::{Action, SharedString, actions};
-    use schemars::JsonSchema;
-    use serde::Deserialize;
-
-    actions!(
-        agent,
-        [
-            /// Opens the agent settings panel.
-            #[action(deprecated_aliases = ["agent::OpenConfiguration"])]
-            OpenSettings,
-            /// Opens the agent onboarding modal.
-            OpenOnboardingModal,
-            /// Resets the agent onboarding state.
-            ResetOnboarding,
-            /// Starts a chat conversation with the agent.
-            Chat,
-            /// Toggles the language model selector dropdown.
-            #[action(deprecated_aliases = ["assistant::ToggleModelSelector", "assistant2::ToggleModelSelector"])]
-            ToggleModelSelector,
-            /// Triggers re-authentication on Gemini
-            ReauthenticateAgent,
-            /// Logs out of the current external agent
-            LogoutAgent,
-            /// Add the current selection as context for threads in the agent panel.
-            #[action(deprecated_aliases = ["assistant::QuoteSelection", "agent::QuoteSelection"])]
-            AddSelectionToThread,
-            /// Resets the agent panel zoom levels (agent UI and buffer font sizes).
-            ResetAgentZoom,
-            /// Pastes clipboard content without any formatting.
-            PasteRaw,
-        ]
-    );
-
-    /// Opens a new agent thread with the provided branch diff for review.
-    #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-    #[action(namespace = agent)]
-    #[serde(deny_unknown_fields)]
-    pub struct ReviewBranchDiff {
-        /// The full text of the diff to review.
-        pub diff_text: SharedString,
-        /// The base ref that the diff was computed against (e.g. "main").
-        pub base_ref: SharedString,
-    }
-
-    /// A single merge conflict region extracted from a file.
-    #[derive(Clone, Debug, PartialEq, Deserialize, JsonSchema)]
-    pub struct ConflictContent {
-        pub file_path: String,
-        pub conflict_text: String,
-        pub ours_branch_name: String,
-        pub theirs_branch_name: String,
-    }
-
-    /// Opens a new agent thread to resolve specific merge conflicts.
-    #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-    #[action(namespace = agent)]
-    #[serde(deny_unknown_fields)]
-    pub struct ResolveConflictsWithAgent {
-        /// Individual conflicts with their full text.
-        pub conflicts: Vec<ConflictContent>,
-    }
-
-    /// Opens a new agent thread to resolve merge conflicts in the given file paths.
-    #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-    #[action(namespace = agent)]
-    #[serde(deny_unknown_fields)]
-    pub struct ResolveConflictedFilesWithAgent {
-        /// File paths with unresolved conflicts (for project-wide resolution).
-        pub conflicted_file_paths: Vec<String>,
-    }
-}
-
-pub mod assistant {
-    use gpui::{Action, actions};
-    use schemars::JsonSchema;
-    use serde::Deserialize;
-    use uuid::Uuid;
-
-    actions!(
-        agent,
-        [
-            /// Toggles the agent panel.
-            Toggle,
-            #[action(deprecated_aliases = ["assistant::ToggleFocus"])]
-            ToggleFocus,
-            FocusAgent,
-            /// Opens the skill creator window for creating a new skill.
-            OpenSkillCreator,
-            /// Opens the skill creator window to import a skill from a GitHub URL.
-            CreateSkillFromUrl,
-            /// Opens the user-global AGENTS.md rules file.
-            #[action(name = "OpenGlobalAGENTS.mdRules")]
-            OpenGlobalAgentsMdRules,
-            /// Opens the project AGENTS.md rules file.
-            #[action(name = "OpenProjectAGENTS.mdRules")]
-            OpenProjectAgentsMdRules,
-        ]
-    );
-
-    /// Opens the rules library for managing agent rules and prompts.
-    #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-    #[action(namespace = agent, deprecated_aliases = ["assistant::OpenRulesLibrary", "assistant::DeployPromptLibrary"])]
-    #[serde(deny_unknown_fields)]
-    pub struct OpenRulesLibrary {
-        #[serde(skip)]
-        pub prompt_to_select: Option<Uuid>,
-    }
-
-    /// Deploys the assistant interface with the specified configuration.
-    #[derive(Clone, Default, Deserialize, PartialEq, JsonSchema, Action)]
-    #[action(namespace = assistant)]
-    #[serde(deny_unknown_fields)]
-    pub struct InlineAssist {
-        pub prompt: Option<String>,
-    }
-}
-
 /// Opens the recent projects interface.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
 #[action(namespace = projects)]
@@ -615,23 +388,6 @@ pub struct OpenRecent {
     #[serde(default)]
     pub create_new_window: bool,
 }
-
-/// Creates a project from a selected template.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = projects)]
-#[serde(deny_unknown_fields)]
-pub struct OpenRemote {
-    #[serde(default)]
-    pub from_existing_connection: bool,
-    #[serde(default)]
-    pub create_new_window: bool,
-}
-
-/// Opens the dev container connection modal.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = projects)]
-#[serde(deny_unknown_fields)]
-pub struct OpenDevContainer;
 
 /// Where to spawn the task in the UI.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -718,58 +474,6 @@ pub mod outline {
     pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
 }
 
-actions!(
-    zed_predict_onboarding,
-    [
-        /// Opens the Zed Predict onboarding modal.
-        OpenZedPredictOnboarding
-    ]
-);
-actions!(
-    git_onboarding,
-    [
-        /// Opens the git integration onboarding modal.
-        OpenGitIntegrationOnboarding
-    ]
-);
-
-pub mod debug_panel {
-    use gpui::actions;
-    actions!(
-        debug_panel,
-        [
-            /// Toggles the debug panel.
-            Toggle,
-            /// Toggles focus on the debug panel.
-            ToggleFocus
-        ]
-    );
-}
-
-actions!(
-    debugger,
-    [
-        /// Toggles the enabled state of a breakpoint.
-        ToggleEnableBreakpoint,
-        /// Removes a breakpoint.
-        UnsetBreakpoint,
-        /// Opens the project debug tasks configuration.
-        OpenProjectDebugTasks,
-    ]
-);
-
-pub mod vim {
-    use gpui::actions;
-
-    actions!(
-        vim,
-        [
-            /// Opens the default keymap file.
-            OpenDefaultKeymap
-        ]
-    );
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WslConnectionOptions {
     pub distro_name: String,
@@ -799,97 +503,4 @@ pub mod wsl_actions {
         #[serde(default)]
         pub create_new_window: bool,
     }
-}
-
-pub mod preview {
-    pub mod markdown {
-        use gpui::actions;
-
-        actions!(
-            markdown,
-            [
-                /// Opens a markdown preview for the current file.
-                OpenPreview,
-                /// Opens a markdown preview in a split pane.
-                OpenPreviewToTheSide,
-            ]
-        );
-    }
-
-    pub mod svg {
-        use gpui::actions;
-
-        actions!(
-            svg,
-            [
-                /// Opens an SVG preview for the current file.
-                OpenPreview,
-                /// Opens an SVG preview in a split pane.
-                OpenPreviewToTheSide,
-            ]
-        );
-    }
-}
-
-pub mod agents_sidebar {
-    use gpui::{Action, actions};
-    use schemars::JsonSchema;
-    use serde::Deserialize;
-
-    /// Toggles the thread switcher popup when the sidebar is focused.
-    #[derive(PartialEq, Clone, Deserialize, JsonSchema, Default, Action)]
-    #[action(namespace = agents_sidebar)]
-    #[serde(deny_unknown_fields)]
-    pub struct ToggleThreadSwitcher {
-        #[serde(default)]
-        pub select_last: bool,
-    }
-
-    actions!(
-        agents_sidebar,
-        [
-            /// Moves focus to the sidebar's search/filter editor.
-            FocusSidebarFilter,
-        ]
-    );
-}
-
-pub mod notebook {
-    use gpui::actions;
-
-    actions!(
-        notebook,
-        [
-            /// Opens a Jupyter notebook file.
-            OpenNotebook,
-            /// Runs all cells in the notebook.
-            RunAll,
-            /// Runs the current cell and stays on it.
-            Run,
-            /// Runs the current cell and advances to the next cell.
-            RunAndAdvance,
-            /// Clears all cell outputs.
-            ClearOutputs,
-            /// Moves the current cell up.
-            MoveCellUp,
-            /// Moves the current cell down.
-            MoveCellDown,
-            /// Adds a new markdown cell.
-            AddMarkdownBlock,
-            /// Adds a new code cell.
-            AddCodeBlock,
-            /// Restarts the kernel.
-            RestartKernel,
-            /// Interrupts the current execution.
-            InterruptKernel,
-            /// Move down in cells.
-            NotebookMoveDown,
-            /// Move up in cells.
-            NotebookMoveUp,
-            /// Enters the current cell's editor (edit mode).
-            EnterEditMode,
-            /// Exits the cell editor and returns to cell command mode.
-            EnterCommandMode,
-        ]
-    );
 }

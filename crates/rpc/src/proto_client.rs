@@ -387,9 +387,6 @@ impl AnyProtoClient {
                             Response::GetSignatureHelpResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }
-                            Response::GetCodeLensResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
                             Response::GetDocumentDiagnosticsResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }

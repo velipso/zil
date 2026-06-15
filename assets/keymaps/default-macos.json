@@ -333,22 +333,6 @@
     },
   },
   {
-    "context": "Editor && extension == md",
-    "use_key_equivalents": true,
-    "bindings": {
-      "cmd-k v": "markdown::OpenPreviewToTheSide",
-      "cmd-shift-v": "markdown::OpenPreview",
-    },
-  },
-  {
-    "context": "Editor && extension == svg",
-    "use_key_equivalents": true,
-    "bindings": {
-      "cmd-k v": "svg::OpenPreviewToTheSide",
-      "cmd-shift-v": "svg::OpenPreview",
-    },
-  },
-  {
     "context": "Editor && mode == full",
     "use_key_equivalents": true,
     "bindings": {
@@ -385,9 +369,6 @@
       // "alt-cmd-o": ["projects::OpenRecent", {"create_new_window": true }],
       "alt-cmd-o": ["projects::OpenRecent", { "create_new_window": false }],
       "ctrl-r": ["projects::OpenRecent", { "create_new_window": false }],
-      "ctrl-cmd-o": ["projects::OpenRemote", { "from_existing_connection": false, "create_new_window": false }],
-      "ctrl-cmd-shift-o": ["projects::OpenRemote", { "from_existing_connection": true, "create_new_window": false }],
-      "cmd-ctrl-b": "branches::OpenRecent",
       "ctrl-~": "workspace::NewTerminal",
       "cmd-s": "workspace::Save",
       "cmd-k s": "workspace::SaveWithoutFormat",
@@ -429,7 +410,6 @@
       "ctrl-shift-tab": ["tab_switcher::Toggle", { "select_last": true }],
       "ctrl-tab": "tab_switcher::Toggle",
       "cmd-shift-p": "command_palette::Toggle",
-      "cmd-shift-d": "debug_panel::ToggleFocus",
       "cmd-alt-s": "workspace::SaveAll",
       "cmd-k n": "encoding_selector::Toggle",
       "cmd-k m": "language_selector::Toggle",
@@ -572,7 +552,6 @@
       "cmd-shift-e": "pane::RevealInProjectPanel",
       "cmd-f8": "editor::GoToHunk",
       "cmd-shift-f8": "editor::GoToPreviousHunk",
-      "ctrl-enter": "assistant::InlineAssist",
       "ctrl-:": "editor::ToggleInlayHints",
     },
   },
@@ -637,7 +616,6 @@
       "cmd-a": "editor::SelectAll",
       "cmd-k": "terminal::Clear",
       "cmd-n": "workspace::NewTerminal",
-      "ctrl-enter": "assistant::InlineAssist",
       "ctrl-_": null, // emacs undo
       // Some nice conveniences
       "cmd-backspace": ["terminal::SendKeystroke", "ctrl-u"], // clear line
@@ -712,20 +690,6 @@
     "bindings": {
       "ctrl-tab": "pane::ActivateNextItem",
       "ctrl-shift-tab": "pane::ActivatePreviousItem",
-    },
-  },
-  {
-    "context": "MarkdownPreview",
-    "bindings": {
-      "pageup": "markdown::ScrollPageUp",
-      "pagedown": "markdown::ScrollPageDown",
-      "up": "markdown::ScrollUp",
-      "down": "markdown::ScrollDown",
-      "alt-up": "markdown::ScrollUpByItem",
-      "alt-down": "markdown::ScrollDownByItem",
-      "cmd-up": "markdown::ScrollToTop",
-      "cmd-down": "markdown::ScrollToBottom",
-      "cmd-f": "buffer_search::Deploy",
     },
   },
   {
@@ -853,44 +817,6 @@
       "cmd-0": "image_viewer::ResetZoom",
       "cmd-1": "image_viewer::ZoomToActualSize",
       "cmd-shift-0": "image_viewer::FitToView",
-    },
-  },
-  {
-    "context": "NotebookEditor",
-    "bindings": {
-      "shift-enter": "notebook::RunAndAdvance",
-      "cmd-enter": "notebook::Run",
-      "cmd-shift-enter": "notebook::RunAll",
-      "alt-up": "notebook::MoveCellUp",
-      "alt-down": "notebook::MoveCellDown",
-      "cmd-m": "notebook::AddCodeBlock",
-      "cmd-shift-m": "notebook::AddMarkdownBlock",
-      "cmd-shift-r": "notebook::RestartKernel",
-      "cmd-c": "notebook::InterruptKernel",
-    },
-  },
-  {
-    "context": "NotebookEditor && notebook_mode == command",
-    "bindings": {
-      "enter": "notebook::EnterEditMode",
-      "down": "menu::SelectNext",
-      "up": "menu::SelectPrevious",
-    },
-  },
-  {
-    "context": "NotebookEditor > Editor",
-    "bindings": {
-      "enter": "editor::Newline",
-      "shift-enter": "notebook::RunAndAdvance",
-      "cmd-enter": "notebook::Run",
-      "cmd-shift-enter": "notebook::RunAll",
-      "alt-up": "notebook::MoveCellUp",
-      "alt-down": "notebook::MoveCellDown",
-      "cmd-m": "notebook::AddCodeBlock",
-      "cmd-shift-m": "notebook::AddMarkdownBlock",
-      "cmd-shift-r": "notebook::RestartKernel",
-      "cmd-c": "notebook::InterruptKernel",
-      "escape": "notebook::EnterCommandMode",
     },
   },
 ]

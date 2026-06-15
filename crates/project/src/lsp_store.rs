@@ -10,7 +10,6 @@
 //!
 //! Most of the interesting work happens at the local layer, as bulk of the complexity is with managing the lifecycle of language servers. The actual implementation of the LSP protocol is handled by [`lsp`] crate.
 pub mod clangd_ext;
-pub mod code_lens;
 mod document_colors;
 mod document_links;
 mod document_symbols;
@@ -23,7 +22,6 @@ pub mod rust_analyzer_ext;
 mod semantic_tokens;
 pub mod vue_language_server_ext;
 
-use self::code_lens::CodeLensData;
 use self::document_colors::DocumentColorData;
 use self::document_links::DocumentLinksData;
 use self::document_symbols::DocumentSymbolsData;
@@ -1118,29 +1116,6 @@ impl LocalLspStore {
                                     })
                             })?
                             .transpose()?;
-                        Ok(())
-                    }
-                }
-            })
-            .detach();
-
-        language_server
-            .on_request::<lsp::request::CodeLensRefresh, _, _>({
-                let this = lsp_store.clone();
-                move |(), cx| {
-                    let this = this.clone();
-                    let mut cx = cx.clone();
-                    async move {
-                        this.update(&mut cx, |this, cx| {
-                            this.invalidate_code_lens();
-                            cx.emit(LspStoreEvent::RefreshCodeLens);
-                            this.downstream_client.as_ref().map(|(client, project_id)| {
-                                client.send(proto::RefreshCodeLens {
-                                    project_id: *project_id,
-                                })
-                            })
-                        })?
-                        .transpose()?;
                         Ok(())
                     }
                 }
@@ -2501,14 +2476,6 @@ impl LocalLspStore {
                             *lsp_action.clone(),
                             request_timeout,
                         )
-                        .await
-                        .into_response()?;
-                }
-            }
-            LspAction::CodeLens(lens) => {
-                if !action.resolved && GetCodeLens::can_resolve_lens(&lang_server.capabilities()) {
-                    *lens = lang_server
-                        .request::<lsp::request::CodeLensResolve>(lens.clone(), request_timeout)
                         .await
                         .into_response()?;
                 }
@@ -3967,7 +3934,6 @@ pub struct LspStore {
 pub struct BufferLspData {
     buffer_version: Global,
     document_colors: Option<DocumentColorData>,
-    code_lens: Option<CodeLensData>,
     semantic_tokens: Option<SemanticTokensData>,
     folding_ranges: Option<FoldingRangeData>,
     document_links: Option<DocumentLinksData>,
@@ -3988,7 +3954,6 @@ impl BufferLspData {
         Self {
             buffer_version: buffer.read(cx).version(),
             document_colors: None,
-            code_lens: None,
             semantic_tokens: None,
             folding_ranges: None,
             document_links: None,
@@ -4002,10 +3967,6 @@ impl BufferLspData {
     fn remove_server_data(&mut self, for_server: LanguageServerId) {
         if let Some(document_colors) = &mut self.document_colors {
             document_colors.remove_server_data(for_server);
-        }
-
-        if let Some(code_lens) = &mut self.code_lens {
-            code_lens.remove_server_data(for_server);
         }
 
         self.inlay_hints.remove_server_data(for_server);
@@ -4057,7 +4018,6 @@ pub enum LspStoreEvent {
         server_id: LanguageServerId,
         request_id: Option<usize>,
     },
-    RefreshCodeLens,
     DiagnosticsUpdated {
         server_id: LanguageServerId,
         paths: Vec<ProjectPath>,
@@ -4150,7 +4110,6 @@ impl LspStore {
         client.add_entity_request_handler(Self::handle_open_buffer_for_symbol);
         client.add_entity_request_handler(Self::handle_refresh_inlay_hints);
         client.add_entity_request_handler(Self::handle_refresh_semantic_tokens);
-        client.add_entity_request_handler(Self::handle_refresh_code_lens);
         client.add_entity_request_handler(Self::handle_on_type_formatting);
         client.add_entity_request_handler(Self::handle_apply_additional_edits_for_completion);
         client.add_entity_request_handler(Self::handle_register_buffer_with_language_servers);
@@ -9258,18 +9217,6 @@ impl LspStore {
                 )
                 .await?;
             }
-            Request::GetCodeLens(get_code_lens) => {
-                Self::query_lsp_locally::<GetCodeLens>(
-                    lsp_store,
-                    server_id,
-                    sender_id,
-                    lsp_request_id,
-                    get_code_lens,
-                    None,
-                    &mut cx,
-                )
-                .await?;
-            }
             Request::GetDefinition(get_definition) => {
                 let position = get_definition.position.clone().and_then(deserialize_anchor);
                 Self::query_lsp_locally::<GetDefinitions>(
@@ -12257,10 +12204,6 @@ impl LspStore {
                 proto::code_action::Kind::Command as i32,
                 serde_json::to_vec(command).unwrap(),
             ),
-            LspAction::CodeLens(code_lens) => (
-                proto::code_action::Kind::CodeLens as i32,
-                serde_json::to_vec(code_lens).unwrap(),
-            ),
         };
 
         proto::CodeAction {
@@ -12288,9 +12231,6 @@ impl LspStore {
             }
             Some(proto::code_action::Kind::Command) => {
                 LspAction::Command(serde_json::from_slice(&action.lsp_action)?)
-            }
-            Some(proto::code_action::Kind::CodeLens) => {
-                LspAction::CodeLens(serde_json::from_slice(&action.lsp_action)?)
             }
             None => anyhow::bail!("Unknown action kind {}", action.kind),
         };
@@ -12843,18 +12783,6 @@ impl LspStore {
                         notify_server_capabilities_updated(&server, cx);
                     }
                 }
-                "textDocument/codeLens" => {
-                    if let Some(caps) = reg
-                        .register_options
-                        .map(serde_json::from_value)
-                        .transpose()?
-                    {
-                        server.update_capabilities(|capabilities| {
-                            capabilities.code_lens_provider = Some(caps);
-                        });
-                        notify_server_capabilities_updated(&server, cx);
-                    }
-                }
                 "textDocument/diagnostic" => {
                     if let Some(caps) = reg
                         .register_options
@@ -13023,12 +12951,6 @@ impl LspStore {
                     });
                     notify_server_capabilities_updated(&server, cx);
                 }
-                "textDocument/onTypeFormatting" => {
-                    server.update_capabilities(|capabilities| {
-                        capabilities.document_on_type_formatting_provider = None;
-                    });
-                    notify_server_capabilities_updated(&server, cx);
-                }
                 "textDocument/formatting" => {
                     server.update_capabilities(|capabilities| {
                         capabilities.document_formatting_provider = None;
@@ -13084,12 +13006,6 @@ impl LspStore {
                         sync_options.save = None;
                         capabilities.text_document_sync =
                             Some(lsp::TextDocumentSyncCapability::Options(sync_options));
-                    });
-                    notify_server_capabilities_updated(&server, cx);
-                }
-                "textDocument/codeLens" => {
-                    server.update_capabilities(|capabilities| {
-                        capabilities.code_lens_provider = None;
                     });
                     notify_server_capabilities_updated(&server, cx);
                 }

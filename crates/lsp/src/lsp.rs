@@ -807,9 +807,6 @@ impl LanguageServer {
                         refresh_support: Some(true),
                     })
                     .filter(|_| pull_diagnostics),
-                    code_lens: Some(CodeLensWorkspaceClientCapabilities {
-                        refresh_support: Some(true),
-                    }),
                     workspace_edit: Some(WorkspaceEditClientCapabilities {
                         resource_operations: Some(vec![
                             ResourceOperationKind::Create,
@@ -980,9 +977,6 @@ impl LanguageServer {
                         did_save: Some(true),
                         dynamic_registration: Some(true),
                         ..TextDocumentSyncClientCapabilities::default()
-                    }),
-                    code_lens: Some(CodeLensClientCapabilities {
-                        dynamic_registration: Some(true),
                     }),
                     document_symbol: Some(DocumentSymbolClientCapabilities {
                         hierarchical_document_symbol_support: Some(true),

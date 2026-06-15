@@ -42,7 +42,7 @@ use migrate::{MigrationBanner, MigrationEvent, MigrationNotification, MigrationT
 use migrator::migrate_keymap;
 pub use open_listener::*;
 use paths::{
-    local_debug_file_relative_path, local_settings_file_relative_path,
+    local_settings_file_relative_path,
     local_tasks_file_relative_path,
 };
 use project::{ProjectItem};
@@ -52,7 +52,7 @@ use rope::Rope;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, InvalidSettingsError, KeybindSource, KeymapFile,
     KeymapFileLoadResult, MigrationStatus, Settings, SettingsFile, SettingsStore,
-    initial_local_debug_tasks_content, initial_project_settings_content, initial_tasks_content,
+    initial_project_settings_content, initial_tasks_content,
     update_settings_file,
 };
 
@@ -857,7 +857,6 @@ fn register_actions(
         })
         .register_action(open_project_settings_file)
         .register_action(open_project_tasks_file)
-        .register_action(open_project_debug_tasks_file)
         .register_action(
             |workspace: &mut Workspace,
              _: &terminal_panel::ToggleFocus,
@@ -1813,21 +1812,6 @@ fn open_project_tasks_file(
         workspace,
         local_tasks_file_relative_path(),
         initial_tasks_content(),
-        window,
-        cx,
-    )
-}
-
-fn open_project_debug_tasks_file(
-    workspace: &mut Workspace,
-    _: &zed_actions::OpenProjectDebugTasks,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    open_local_file(
-        workspace,
-        local_debug_file_relative_path(),
-        initial_local_debug_tasks_content(),
         window,
         cx,
     )

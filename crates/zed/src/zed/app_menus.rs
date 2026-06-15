@@ -1,7 +1,7 @@
 use gpui::{App, Menu, MenuItem, OsAction};
 use release_channel::ReleaseChannel;
 use terminal_view::terminal_panel;
-use zed_actions::{debug_panel, dev};
+use zed_actions::{dev};
 
 pub fn app_menus(cx: &mut App) -> Vec<Menu> {
     use zed_actions::Quit;
@@ -39,9 +39,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             ],
         }),
         MenuItem::separator(),
-        MenuItem::action("Project Panel", zed_actions::project_panel::ToggleFocus),
         MenuItem::action("Terminal Panel", terminal_panel::ToggleFocus),
-        MenuItem::action("Debugger Panel", debug_panel::ToggleFocus),
         MenuItem::separator(),
     ];
 
@@ -117,13 +115,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     "Open Recent...",
                     zed_actions::OpenRecent {
                         create_new_window: false,
-                    },
-                ),
-                MenuItem::action(
-                    "Open Remote...",
-                    zed_actions::OpenRemote {
-                        create_new_window: false,
-                        from_existing_connection: false,
                     },
                 ),
                 MenuItem::separator(),

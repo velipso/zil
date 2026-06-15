@@ -15877,7 +15877,6 @@ dependencies = [
  "schemars",
  "serde",
  "util",
- "uuid",
 ]
 
 [[package]]

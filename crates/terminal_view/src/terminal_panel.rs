@@ -38,7 +38,6 @@ use workspace::{
 };
 
 use anyhow::{Result, anyhow};
-use zed_actions::assistant::InlineAssist;
 
 const TERMINAL_PANEL_KEY: &str = "TerminalPanel";
 
@@ -106,27 +105,6 @@ impl TerminalPanel {
         };
         terminal_panel.apply_tab_bar_buttons(&terminal_panel.active_pane, cx);
         terminal_panel
-    }
-
-    pub fn set_assistant_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
-        self.assistant_enabled = enabled;
-        if enabled {
-            let focus_handle = self
-                .active_pane
-                .read(cx)
-                .active_item()
-                .map(|item| item.item_focus_handle(cx))
-                .unwrap_or(self.focus_handle(cx));
-            self.assistant_tab_bar_button = Some(
-                cx.new(move |_| InlineAssistTabBarButton { focus_handle })
-                    .into(),
-            );
-        } else {
-            self.assistant_tab_bar_button = None;
-        }
-        for pane in self.center.panes() {
-            self.apply_tab_bar_buttons(pane, cx);
-        }
     }
 
     pub(crate) fn apply_tab_bar_buttons(
@@ -1702,24 +1680,6 @@ impl workspace::TerminalProvider for TerminalProvider {
                 Err(e) => Some(Err(e)),
             }
         })
-    }
-}
-
-struct InlineAssistTabBarButton {
-    focus_handle: FocusHandle,
-}
-
-impl Render for InlineAssistTabBarButton {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.focus_handle.clone();
-        IconButton::new("terminal_inline_assistant", IconName::ZedAssistant)
-            .icon_size(IconSize::Small)
-            .on_click(cx.listener(|_, _, window, cx| {
-                window.dispatch_action(InlineAssist::default().boxed_clone(), cx);
-            }))
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Inline Assist", &InlineAssist::default(), &focus_handle, cx)
-            })
     }
 }
 

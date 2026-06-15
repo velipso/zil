@@ -230,9 +230,6 @@ impl LspAdapter for GoLspAdapter {
                 "parameterNames": true,
                 "rangeVariableTypes": true
             },
-            "codelenses": {
-                "test": true
-            },
             "semanticTokens": semantic_tokens_enabled
         });
 

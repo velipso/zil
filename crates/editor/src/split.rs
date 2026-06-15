@@ -41,7 +41,6 @@ use crate::{
     actions::{DisableBreakpoint, EditLogBreakpoint, EnableBreakpoint, ToggleBreakpoint},
     display_map::Companion,
 };
-use zed_actions::assistant::InlineAssist;
 
 pub(crate) fn patches_for_lhs_range(
     rhs_snapshot: &MultiBufferSnapshot,
@@ -504,7 +503,6 @@ impl SplittableEditor {
                 Editor::for_multibuffer(rhs_multibuffer.clone(), Some(project.clone()), window, cx);
             editor.set_expand_all_diff_hunks(cx);
             editor.disable_runnables();
-            editor.disable_code_lens(cx);
             editor.disable_inline_diagnostics();
             editor.disable_mouse_wheel_zoom();
             editor.set_minimap_visibility(crate::MinimapVisibility::Disabled, window, cx);
@@ -989,19 +987,6 @@ impl SplittableEditor {
             } else {
                 cx.propagate();
             }
-        } else {
-            cx.propagate();
-        }
-    }
-
-    fn intercept_inline_assist(
-        &mut self,
-        _: &InlineAssist,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.lhs.is_some() {
-            cx.stop_propagation();
         } else {
             cx.propagate();
         }
@@ -2188,7 +2173,6 @@ impl Render for SplittableEditor {
             .on_action(cx.listener(Self::intercept_enable_breakpoint))
             .on_action(cx.listener(Self::intercept_disable_breakpoint))
             .on_action(cx.listener(Self::intercept_edit_log_breakpoint))
-            .on_action(cx.listener(Self::intercept_inline_assist))
             .capture_action(cx.listener(Self::toggle_soft_wrap))
             .size_full()
             .child(inner)

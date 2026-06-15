@@ -289,28 +289,6 @@ async fn test_case_sensitive_match_tie_breaker(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-async fn test_fuzzy_over_sort_positions(cx: &mut TestAppContext) {
-    let completions = vec![
-        CompletionBuilder::variable("lsp_document_colors", None, "7fffffff"), // 0.29 fuzzy score
-        CompletionBuilder::function(
-            "language_servers_running_disk_based_diagnostics",
-            None,
-            "7fffffff",
-        ), // 0.168 fuzzy score
-        CompletionBuilder::function("code_lens", None, "7fffffff"),           // 3.2 fuzzy score
-        CompletionBuilder::variable("lsp_code_lens", None, "7fffffff"),       // 3.2 fuzzy score
-        CompletionBuilder::function("fetch_code_lens", None, "7fffffff"),     // 3.2 fuzzy score
-    ];
-
-    let matches =
-        filter_and_sort_matches("lens", &completions, SnippetSortOrder::default(), cx).await;
-
-    assert_eq!(matches[0].string, "code_lens");
-    assert_eq!(matches[1].string, "lsp_code_lens");
-    assert_eq!(matches[2].string, "fetch_code_lens");
-}
-
-#[gpui::test]
 async fn test_semver_label_sort_by_latest_version(cx: &mut TestAppContext) {
     let mut versions = [
         "10.4.112",

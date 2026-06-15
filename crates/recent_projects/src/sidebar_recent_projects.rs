@@ -17,8 +17,6 @@ use workspace::{
     SerializedWorkspaceLocation, Workspace, WorkspaceDb,
 };
 
-use zed_actions::OpenRemote;
-
 use crate::{highlights_for_path};
 
 pub struct SidebarRecentProjects {
@@ -365,34 +363,6 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                             cx.emit(DismissEvent);
                         }))
                 })
-                .child(
-                    ButtonLike::new("open_remote_folder")
-                        .child(
-                            h_flex()
-                                .w_full()
-                                .gap_1()
-                                .justify_between()
-                                .child(Label::new("Add Remote Folder"))
-                                .child(KeyBinding::for_action(
-                                    &OpenRemote {
-                                        from_existing_connection: false,
-                                        create_new_window: false,
-                                    },
-                                    cx,
-                                )),
-                        )
-                        .on_click(cx.listener(|_, _, window, cx| {
-                            window.dispatch_action(
-                                OpenRemote {
-                                    from_existing_connection: false,
-                                    create_new_window: false,
-                                }
-                                .boxed_clone(),
-                                cx,
-                            );
-                            cx.emit(DismissEvent);
-                        })),
-                )
                 .into_any(),
         )
     }
