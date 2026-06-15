@@ -135,9 +135,6 @@ message Envelope {
     Unfollow unfollow = 101;
     UpdateDiffBases update_diff_bases = 104;
 
-    OnTypeFormatting on_type_formatting = 105;
-    OnTypeFormattingResponse on_type_formatting_response = 106;
-
     UpdateWorktreeSettings update_worktree_settings = 107;
 
     InlayHints inlay_hints = 108;

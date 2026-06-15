@@ -611,7 +611,6 @@ impl VsCodeSettings {
                 _ => None,
             }),
             use_autoclose: None,
-            use_on_type_format: self.read_bool("editor.formatOnType"),
             whitespace_map: None,
             wrap_guides: self
                 .read_value("editor.rulers")

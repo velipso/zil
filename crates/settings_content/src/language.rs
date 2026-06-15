@@ -312,11 +312,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: false
     pub always_treat_brackets_as_autoclosed: Option<bool>,
-    /// Whether to use additional LSP queries to format (and amend) the code after
-    /// every "trigger" symbol input, defined by LSP server capabilities.
-    ///
-    /// Default: true
-    pub use_on_type_format: Option<bool>,
     /// Which code actions to run on save before the formatter.
     /// These are not run if formatting is off.
     ///

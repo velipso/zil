@@ -90,7 +90,7 @@ use gpui::{
 use language::{
     Buffer, BufferEditSource, BufferEvent, Capability, CodeLabel, CursorShape, DiskState, Language,
     LanguageName, LanguageRegistry, PointUtf16, ToOffset, ToPointUtf16, Toolchain,
-    ToolchainMetadata, ToolchainScope, Transaction, Unclipped, language_settings::InlayHintKind,
+    ToolchainMetadata, ToolchainScope, Unclipped, language_settings::InlayHintKind,
     proto::split_operations,
 };
 use lsp::{
@@ -4401,19 +4401,6 @@ impl Project {
             },
             cx,
         )
-    }
-
-    pub fn on_type_format<T: ToPointUtf16>(
-        &mut self,
-        buffer: Entity<Buffer>,
-        position: T,
-        trigger: String,
-        push_to_history: bool,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Option<Transaction>>> {
-        self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.on_type_format(buffer, position, trigger, push_to_history, cx)
-        })
     }
 
     pub fn inline_values(

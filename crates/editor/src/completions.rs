@@ -907,12 +907,9 @@ impl Editor {
 
     pub fn current_completions(&self) -> Option<Vec<project::Completion>> {
         let menu = self.context_menu.borrow();
-        if let CodeContextMenu::Completions(menu) = menu.as_ref()? {
-            let completions = menu.completions.borrow();
-            Some(completions.to_vec())
-        } else {
-            None
-        }
+        let CodeContextMenu::Completions(menu) = menu.as_ref()?;
+        let completions = menu.completions.borrow();
+        Some(completions.to_vec())
     }
 
     #[cfg(test)]

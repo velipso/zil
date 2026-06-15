@@ -125,9 +125,6 @@ pub struct LanguageSettings {
     pub use_autoclose: bool,
     /// Whether to automatically surround text with brackets.
     pub use_auto_surround: bool,
-    /// Whether to use additional LSP queries to format (and amend) the code after
-    /// every "trigger" symbol input, defined by LSP server capabilities.
-    pub use_on_type_format: bool,
     /// Controls automatic indentation behavior when typing.
     pub auto_indent: AutoIndentMode,
     /// Whether indentation of pasted content should be adjusted based on the context.
@@ -628,7 +625,6 @@ impl settings::Settings for AllLanguageSettings {
                 },
                 use_autoclose: settings.use_autoclose.unwrap(),
                 use_auto_surround: settings.use_auto_surround.unwrap(),
-                use_on_type_format: settings.use_on_type_format.unwrap(),
                 auto_indent: settings.auto_indent.unwrap(),
                 auto_indent_on_paste: settings.auto_indent_on_paste.unwrap(),
                 always_treat_brackets_as_autoclosed: settings

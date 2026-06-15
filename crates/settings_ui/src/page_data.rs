@@ -7740,7 +7740,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn formatting_section() -> [SettingsPageItem; 8] {
+    fn formatting_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader("Formatting"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -7852,25 +7852,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                     }
                     .unimplemented(),
                 ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Use On Type Format",
-                description: "Whether to use additional LSP queries to format (and amend) the code after every \"trigger\" symbol input, defined by LSP server capabilities",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).use_on_type_format"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.use_on_type_format.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.use_on_type_format = value;
-                        })
-                    },
-                }),
                 metadata: None,
                 files: USER | PROJECT,
             }),
