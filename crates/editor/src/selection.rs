@@ -1532,13 +1532,9 @@ impl Editor {
                 self.register_buffer(anchor.buffer_id, cx);
             }
 
-            let mut context_menu = self.context_menu.borrow_mut();
+            let context_menu = self.context_menu.borrow_mut();
             let completion_menu = match context_menu.as_ref() {
                 Some(CodeContextMenu::Completions(menu)) => Some(menu),
-                Some(CodeContextMenu::CodeActions(_)) => {
-                    *context_menu = None;
-                    None
-                }
                 None => None,
             };
             let completion_position = completion_menu.map(|menu| menu.initial_position);
@@ -1577,7 +1573,6 @@ impl Editor {
 
             hide_hover(self, cx);
 
-            self.refresh_code_actions_for_selection(window, cx);
             self.refresh_document_highlights(cx);
             refresh_linked_ranges(self, window, cx);
 

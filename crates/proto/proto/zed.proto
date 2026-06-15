@@ -110,8 +110,6 @@ message Envelope {
     ResolveCompletionDocumentationResponse resolve_completion_documentation_response = 74;
     ApplyCompletionAdditionalEdits apply_completion_additional_edits = 75;
     ApplyCompletionAdditionalEditsResponse apply_completion_additional_edits_response = 76;
-    GetCodeActions get_code_actions = 77;
-    GetCodeActionsResponse get_code_actions_response = 78;
     GetHover get_hover = 79;
     GetHoverResponse get_hover_response = 80;
     ApplyCodeAction apply_code_action = 81;

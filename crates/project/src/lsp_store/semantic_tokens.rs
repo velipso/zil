@@ -279,7 +279,6 @@ impl LspStore {
                 .filter_map(|server_id| {
                     let capabilities = AdapterServerCapabilities {
                         server_capabilities: self.lsp_server_capabilities.get(&server_id)?.clone(),
-                        code_action_kinds: None,
                     };
                     let request_task = match self.semantic_tokens_result_id(server_id, buffer, cx) {
                         Some(result_id) => {

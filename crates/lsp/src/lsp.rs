@@ -110,7 +110,6 @@ pub struct LanguageServer {
     /// buffer. This is represented as the message sent to the LSP in order to avoid cloning it (can
     /// be large in cases like sending schemas to the json server).
     configuration: Arc<DidChangeConfigurationParams>,
-    code_action_kinds: Option<Vec<CodeActionKind>>,
     notification_handlers: Arc<Mutex<HashMap<&'static str, NotificationHandler>>>,
     response_handlers: Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
     /// Tasks spawned by `on_custom_request` to compute responses. Tracked so that
@@ -337,8 +336,6 @@ where
 pub struct AdapterServerCapabilities {
     // Reported capabilities by the server
     pub server_capabilities: ServerCapabilities,
-    // List of code actions supported by the LspAdapter matching the server
-    pub code_action_kinds: Option<Vec<CodeActionKind>>,
 }
 
 // See the VSCode docs [1] and the LSP Spec [2]
@@ -400,7 +397,6 @@ impl LanguageServer {
         server_name: LanguageServerName,
         binary: LanguageServerBinary,
         root_path: &Path,
-        code_action_kinds: Option<Vec<CodeActionKind>>,
         workspace_folders: Option<Arc<Mutex<BTreeSet<Uri>>>>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
@@ -443,7 +439,6 @@ impl LanguageServer {
             Some(stderr),
             stderr_capture,
             Some(server),
-            code_action_kinds,
             binary,
             root_uri,
             workspace_folders,
@@ -470,7 +465,6 @@ impl LanguageServer {
         stderr: Option<Stderr>,
         stderr_capture: Arc<Mutex<Option<String>>>,
         server: Option<Child>,
-        code_action_kinds: Option<Vec<CodeActionKind>>,
         binary: LanguageServerBinary,
         root_uri: Uri,
         workspace_folders: Option<Arc<Mutex<BTreeSet<Uri>>>>,
@@ -594,7 +588,6 @@ impl LanguageServer {
             binary,
             capabilities: Default::default(),
             configuration,
-            code_action_kinds,
             next_id: Default::default(),
             outbound_tx,
             executor: cx.background_executor().clone(),
@@ -604,11 +597,6 @@ impl LanguageServer {
             workspace_folders,
             root_uri,
         }
-    }
-
-    /// List of code action kinds this language server reports being able to emit.
-    pub fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {
-        self.code_action_kinds.clone()
     }
 
     async fn handle_incoming_messages<Stdout>(
@@ -836,30 +824,6 @@ impl LanguageServer {
                     definition: Some(GotoCapability {
                         link_support: Some(true),
                         dynamic_registration: Some(true),
-                    }),
-                    code_action: Some(CodeActionClientCapabilities {
-                        code_action_literal_support: Some(CodeActionLiteralSupport {
-                            code_action_kind: CodeActionKindLiteralSupport {
-                                value_set: vec![
-                                    CodeActionKind::REFACTOR.as_str().into(),
-                                    CodeActionKind::QUICKFIX.as_str().into(),
-                                    CodeActionKind::SOURCE.as_str().into(),
-                                ],
-                            },
-                        }),
-                        data_support: Some(true),
-                        resolve_support: Some(CodeActionCapabilityResolveSupport {
-                            properties: vec![
-                                "kind".to_string(),
-                                "diagnostics".to_string(),
-                                "isPreferred".to_string(),
-                                "disabled".to_string(),
-                                "edit".to_string(),
-                                "command".to_string(),
-                            ],
-                        }),
-                        dynamic_registration: Some(true),
-                        ..CodeActionClientCapabilities::default()
                     }),
                     completion: Some(CompletionClientCapabilities {
                         completion_item: Some(CompletionItemCapability {
@@ -1339,7 +1303,6 @@ impl LanguageServer {
     pub fn adapter_server_capabilities(&self) -> AdapterServerCapabilities {
         AdapterServerCapabilities {
             server_capabilities: self.capabilities(),
-            code_action_kinds: self.code_action_kinds(),
         }
     }
 
@@ -1918,7 +1881,6 @@ impl LanguageServer {
     pub fn full_capabilities() -> ServerCapabilities {
         ServerCapabilities {
             document_highlight_provider: Some(OneOf::Left(true)),
-            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             document_formatting_provider: Some(OneOf::Left(true)),
             document_range_formatting_provider: Some(OneOf::Left(true)),
             definition_provider: Some(OneOf::Left(true)),

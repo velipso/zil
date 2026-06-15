@@ -86,8 +86,6 @@ messages!(
     (GetChannelMessages, Background),
     (GetChannelMessagesById, Background),
     (GetChannelMessagesResponse, Background),
-    (GetCodeActions, Background),
-    (GetCodeActionsResponse, Background),
     (GetCompletions, Background),
     (GetCompletionsResponse, Background),
     (GetDeclaration, Background),
@@ -407,7 +405,6 @@ request_messages!(
     (GetChannelMembers, GetChannelMembersResponse),
     (GetChannelMessages, GetChannelMessagesResponse),
     (GetChannelMessagesById, GetChannelMessagesResponse),
-    (GetCodeActions, GetCodeActionsResponse),
     (GetCompletions, GetCompletionsResponse),
     (GetDefinition, GetDefinitionResponse),
     (GetDeclaration, GetDeclarationResponse),
@@ -598,7 +595,6 @@ lsp_messages!(
     (GetDocumentSymbols, GetDocumentSymbolsResponse, true),
     (GetDocumentLinks, GetDocumentLinksResponse, true),
     (GetHover, GetHoverResponse, true),
-    (GetCodeActions, GetCodeActionsResponse, true),
     (GetSignatureHelp, GetSignatureHelpResponse, true),
     (GetDocumentDiagnostics, GetDocumentDiagnosticsResponse, true),
     (GetDefinition, GetDefinitionResponse, true),
@@ -638,7 +634,6 @@ entity_messages!(
     FindSearchCandidates,
     ApplyCodeActionKind,
     FormatBuffers,
-    GetCodeActions,
     GetCompletions,
     GetDefinition,
     GetDeclaration,
@@ -966,7 +961,6 @@ impl LspQuery {
     pub fn query_name_and_write_permissions(&self) -> (&str, bool) {
         match self.request {
             Some(lsp_query::Request::GetHover(_)) => ("GetHover", false),
-            Some(lsp_query::Request::GetCodeActions(_)) => ("GetCodeActions", true),
             Some(lsp_query::Request::GetSignatureHelp(_)) => ("GetSignatureHelp", false),
             Some(lsp_query::Request::GetDocumentDiagnostics(_)) => {
                 ("GetDocumentDiagnostics", false)

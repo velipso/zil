@@ -291,19 +291,6 @@ message Completion {
   }
 }
 
-message GetCodeActions {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor start = 3;
-  Anchor end = 4;
-  repeated VectorClockEntry version = 5;
-}
-
-message GetCodeActionsResponse {
-  repeated CodeAction actions = 1;
-  repeated VectorClockEntry version = 2;
-}
-
 message GetSignatureHelp {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -854,7 +841,6 @@ message LspQuery {
     GetReferences get_references = 3;
     GetDocumentColor get_document_color = 4;
     GetHover get_hover = 5;
-    GetCodeActions get_code_actions = 6;
     GetSignatureHelp get_signature_help = 7;
     GetDocumentDiagnostics get_document_diagnostics = 9;
     GetDefinition get_definition = 10;
@@ -878,7 +864,6 @@ message LspQueryResponse {
 message LspResponse {
   oneof response {
     GetHoverResponse get_hover_response = 1;
-    GetCodeActionsResponse get_code_actions_response = 2;
     GetSignatureHelpResponse get_signature_help_response = 3;
     GetDocumentDiagnosticsResponse get_document_diagnostics_response = 5;
     GetDocumentColorResponse get_document_color_response = 6;

@@ -3,22 +3,20 @@ use std::{collections::BTreeMap, mem, ops::Range, sync::Arc};
 use clock::Global;
 use collections::{HashMap, HashSet};
 use gpui::{
-    App, AppContext as _, AsyncWindowContext, ClickEvent, Context, Entity, Focusable as _,
-    MouseButton, Task, Window,
+    App, AppContext as _, AsyncWindowContext, Context, Entity,
+    Task, Window,
 };
 use language::{Buffer, BufferRow, Runnable};
 use lsp::LanguageServerName;
 use multi_buffer::{Anchor, BufferOffset, MultiBufferRow, MultiBufferSnapshot, ToPoint as _};
 use project::{Location, Project, TaskSourceKind, project_settings::ProjectSettings};
 use settings::Settings as _;
-use smallvec::SmallVec;
 use task::{ResolvedTask, RunnableTag, TaskContext, TaskTemplate, TaskVariables, VariableName};
 use text::{BufferId, OffsetRangeExt as _, ToOffset as _, ToPoint as _};
-use ui::{Clickable as _, Color, IconButton, IconSize, Toggleable as _};
 
 use crate::{
-    CodeActionSource, Editor, EditorSettings, EditorStyle, RangeToAnchorExt, SpawnNearestTask,
-    ToggleCodeActions, UPDATE_DEBOUNCE, display_map::DisplayRow,
+    Editor, EditorSettings, RangeToAnchorExt, SpawnNearestTask,
+    UPDATE_DEBOUNCE,
 };
 
 #[derive(Debug)]
@@ -35,13 +33,6 @@ impl RunnableData {
             invalidate_buffer_data: HashSet::default(),
             runnables_update_task: Task::ready(()),
         }
-    }
-
-    pub fn runnables(
-        &self,
-        (buffer_id, buffer_row): (BufferId, BufferRow),
-    ) -> Option<&RunnableTasks> {
-        self.runnables.get(&buffer_id)?.1.get(&buffer_row)
     }
 
     pub fn all_runnables(&self) -> impl Iterator<Item = &RunnableTasks> {
@@ -95,12 +86,6 @@ impl RunnableTasks {
                 .map(|task| (kind.clone(), task))
         })
     }
-}
-
-#[derive(Clone)]
-pub struct ResolvedTasks {
-    pub templates: SmallVec<[(TaskSourceKind, ResolvedTask); 1]>,
-    pub position: Anchor,
 }
 
 impl Editor {
@@ -513,45 +498,6 @@ impl Editor {
             }
         }
         None
-    }
-
-    pub fn render_run_indicator(
-        &self,
-        _style: &EditorStyle,
-        is_active: bool,
-        active_breakpoint: Option<Anchor>,
-        row: DisplayRow,
-        cx: &mut Context<Self>,
-    ) -> IconButton {
-        let color = Color::Muted;
-
-        IconButton::new(
-            ("run_indicator", row.0 as usize),
-            ui::IconName::PlayOutlined,
-        )
-        .shape(ui::IconButtonShape::Square)
-        .icon_size(IconSize::XSmall)
-        .icon_color(color)
-        .toggle_state(is_active)
-        .on_click(cx.listener(move |editor, e: &ClickEvent, window, cx| {
-            let quick_launch = match e {
-                ClickEvent::Keyboard(_) => true,
-                ClickEvent::Mouse(e) => e.down.button == MouseButton::Left,
-            };
-
-            window.focus(&editor.focus_handle(cx), cx);
-            editor.toggle_code_actions(
-                &ToggleCodeActions {
-                    deployed_from: Some(CodeActionSource::RunMenu(row)),
-                    quick_launch,
-                },
-                window,
-                cx,
-            );
-        }))
-        .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-            editor.set_gutter_context_menu(row, active_breakpoint, event.position(), window, cx);
-        }))
     }
 
     fn insert_runnables(

@@ -90,28 +90,6 @@ pub struct SelectToEndOfLine {
     pub(super) stop_at_soft_wraps: bool,
 }
 
-/// Toggles the display of available code actions at the cursor position.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct ToggleCodeActions {
-    // Source from which the action was deployed.
-    #[serde(default)]
-    #[serde(skip)]
-    pub deployed_from: Option<CodeActionSource>,
-    // Run first available task if there is only one.
-    #[serde(default)]
-    #[serde(skip)]
-    pub quick_launch: bool,
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum CodeActionSource {
-    Indicator(DisplayRow),
-    RunMenu(DisplayRow),
-    QuickActionBar,
-}
-
 /// Confirms and accepts the currently selected completion suggestion.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
 #[action(namespace = editor)]
@@ -126,15 +104,6 @@ pub struct ConfirmCompletion {
 #[action(namespace = editor)]
 #[serde(deny_unknown_fields)]
 pub struct ComposeCompletion {
-    #[serde(default)]
-    pub item_ix: Option<usize>,
-}
-
-/// Confirms and applies the currently selected code action.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct ConfirmCodeAction {
     #[serde(default)]
     pub item_ix: Option<usize>,
 }

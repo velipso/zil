@@ -381,9 +381,6 @@ impl AnyProtoClient {
                             Response::GetHoverResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }
-                            Response::GetCodeActionsResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
                             Response::GetSignatureHelpResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }

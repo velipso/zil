@@ -1,14 +1,9 @@
-use editor::actions::{
-    CodeActionSource,
-    ToggleCodeActions,
-    ToggleDiagnostics, ToggleInlineDiagnostics,
-};
-use editor::code_context_menus::{CodeContextMenu, ContextMenuOrigin};
+use editor::actions::{ToggleDiagnostics, ToggleInlineDiagnostics};
 use editor::{Editor, EditorSettings};
 use gpui::{
-    Action, Anchor, AnchoredPositionMode, ClickEvent, Context, ElementId, Entity, EventEmitter,
+    Action, Anchor, ClickEvent, Context, ElementId, Entity, EventEmitter,
     FocusHandle, Focusable, InteractiveElement, ParentElement, Render, Styled, Subscription,
-    Window, anchored, deferred, point,
+    Window,
 };
 use project::project_settings::DiagnosticSeverity;
 use search::{BufferSearchBar, buffer_search};
@@ -21,8 +16,6 @@ use workspace::item::ItemBufferKind;
 use workspace::{
     ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, item::ItemHandle,
 };
-
-const MAX_CODE_ACTION_MENU_LINES: u32 = 16;
 
 pub struct QuickActionBar {
     _inlay_hints_enabled_subscription: Option<Subscription>,
@@ -76,7 +69,7 @@ impl QuickActionBar {
 }
 
 impl Render for QuickActionBar {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(editor) = self.active_editor() else {
             return div().id("empty quick action bar");
         };
@@ -98,8 +91,6 @@ impl Render for QuickActionBar {
         let show_line_numbers = editor_value.line_numbers_enabled(cx);
         let supports_minimap = editor_value.supports_minimap(cx);
         let minimap_enabled = supports_minimap && editor_value.minimap().is_some();
-        let has_available_code_actions = editor_value.has_available_code_actions_for_selection();
-        let code_action_enabled = editor_value.code_actions_enabled_for_toolbar(cx);
         let focus_handle = editor_value.focus_handle(cx);
 
         let search_button = (editor.buffer_kind(cx) == ItemBufferKind::Singleton).then(|| {
@@ -119,74 +110,6 @@ impl Render for QuickActionBar {
                     }
                 },
             )
-        });
-
-        let code_actions_dropdown = code_action_enabled.then(|| {
-            let is_deployed = {
-                let menu_ref = editor.read(cx).context_menu().borrow();
-                let code_action_menu = menu_ref
-                    .as_ref()
-                    .filter(|menu| matches!(menu, CodeContextMenu::CodeActions(..)));
-                code_action_menu
-                    .as_ref()
-                    .is_some_and(|menu| matches!(menu.origin(), ContextMenuOrigin::QuickActionBar))
-            };
-            let code_action_element = is_deployed
-                .then(|| {
-                    editor.update(cx, |editor, cx| {
-                        editor.render_context_menu(MAX_CODE_ACTION_MENU_LINES, window, cx)
-                    })
-                })
-                .flatten();
-            v_flex()
-                .child(
-                    IconButton::new("toggle_code_actions_icon", IconName::BoltOutlined)
-                        .icon_size(IconSize::Small)
-                        .style(ButtonStyle::Subtle)
-                        .disabled(!has_available_code_actions)
-                        .toggle_state(is_deployed)
-                        .when(!is_deployed, |this| {
-                            this.when(has_available_code_actions, |this| {
-                                this.tooltip(Tooltip::for_action_title(
-                                    "Code Actions",
-                                    &ToggleCodeActions::default(),
-                                ))
-                            })
-                            .when(
-                                !has_available_code_actions,
-                                |this| {
-                                    this.tooltip(Tooltip::for_action_title(
-                                        "No Code Actions Available",
-                                        &ToggleCodeActions::default(),
-                                    ))
-                                },
-                            )
-                        })
-                        .on_click({
-                            let editor = editor.clone();
-                            move |_, window, cx| {
-                                editor.update(cx, |editor, cx| {
-                                    editor.toggle_code_actions(
-                                        &ToggleCodeActions {
-                                            deployed_from: Some(CodeActionSource::QuickActionBar),
-                                            quick_launch: false,
-                                        },
-                                        window,
-                                        cx,
-                                    );
-                                })
-                            }
-                        }),
-                )
-                .children(code_action_element.map(|menu| {
-                    deferred(
-                        anchored()
-                            .position_mode(AnchoredPositionMode::Local)
-                            .position(point(px(20.), px(20.)))
-                            .anchor(Anchor::TopRight)
-                            .child(menu),
-                    )
-                }))
         });
 
         let editor_focus_handle = editor.focus_handle(cx);
@@ -417,7 +340,6 @@ impl Render for QuickActionBar {
             .id("quick action bar")
             .gap(DynamicSpacing::Base01.rems(cx))
             .children(search_button)
-            .children(code_actions_dropdown)
             .child(editor_settings_dropdown)
     }
 }

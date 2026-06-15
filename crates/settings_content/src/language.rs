@@ -730,8 +730,6 @@ pub enum Formatter {
         /// The arguments to pass to the program.
         arguments: Option<Vec<String>>,
     },
-    /// Files should be formatted using a code action executed by language servers.
-    CodeAction(String),
     /// Format code using a language server.
     #[serde(untagged)]
     LanguageServer(LanguageServerFormatterSpecifier),
