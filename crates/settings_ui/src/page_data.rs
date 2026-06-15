@@ -1544,7 +1544,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn multibuffer_section() -> [SettingsPageItem; 7] {
+    fn multibuffer_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader("Multibuffer"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -1606,34 +1606,6 @@ fn editor_page() -> SettingsPage {
                             .outline_panel
                             .get_or_insert_default()
                             .expand_outlines_with_depth = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Diff View Style",
-                description: "How to display diffs in the editor.",
-                field: Box::new(SettingField {
-                    json_path: Some("diff_view_style"),
-                    pick: |settings_content| settings_content.editor.diff_view_style.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.diff_view_style = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Minimum Split Diff Width",
-                description: "The minimum width (in columns) at which the split diff view is used. When the editor is narrower, the diff view automatically switches to unified mode. Set to 0 to disable.",
-                field: Box::new(SettingField {
-                    json_path: Some("minimum_split_diff_width"),
-                    pick: |settings_content| {
-                        settings_content.editor.minimum_split_diff_width.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.minimum_split_diff_width = value;
                     },
                 }),
                 metadata: None,
@@ -1770,7 +1742,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn signature_help_section() -> [SettingsPageItem; 4] {
+    fn signature_help_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Signature Help"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -1799,19 +1771,6 @@ fn editor_page() -> SettingsPage {
                     },
                     write: |settings_content, value, _| {
                         settings_content.editor.show_signature_help_after_edits = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Snippet Sort Order",
-                description: "Determines how snippets are sorted relative to other completion items.",
-                field: Box::new(SettingField {
-                    json_path: Some("snippet_sort_order"),
-                    pick: |settings_content| settings_content.editor.snippet_sort_order.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.snippet_sort_order = value;
                     },
                 }),
                 metadata: None,
@@ -1934,7 +1893,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn gutter_section() -> [SettingsPageItem; 9] {
+    fn gutter_section() -> [SettingsPageItem; 8] {
         [
             SettingsPageItem::SectionHeader("Gutter"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2079,19 +2038,6 @@ fn editor_page() -> SettingsPage {
                             .gutter
                             .get_or_insert_default()
                             .min_line_number_digits = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Inline Code Actions",
-                description: "Show code action button at start of buffer line.",
-                field: Box::new(SettingField {
-                    json_path: Some("inline_code_actions"),
-                    pick: |settings_content| settings_content.editor.inline_code_actions.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.inline_code_actions = value;
                     },
                 }),
                 metadata: None,
@@ -8044,136 +7990,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn completions_section() -> [SettingsPageItem; 8] {
-        [
-            SettingsPageItem::SectionHeader("Completions"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Completions On Input",
-                description: "Whether to pop the completions menu while typing in an editor without explicitly requesting it.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).show_completions_on_input"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.show_completions_on_input.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.show_completions_on_input = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Completion Documentation",
-                description: "Whether to display inline and alongside documentation for items in the completions menu.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).show_completion_documentation"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.show_completion_documentation.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.show_completion_documentation = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Words",
-                description: "Controls how words are completed.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).completions.words"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.completions.as_ref()?.words.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.completions.get_or_insert_default().words = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Words Min Length",
-                description: "How many characters has to be in the completions query to automatically show the words-based completions.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).completions.words_min_length"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.completions.as_ref()?.words_min_length.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language
-                                .completions
-                                .get_or_insert_default()
-                                .words_min_length = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Completion Menu Scrollbar",
-                description: "When to show the scrollbar in the completion menu.",
-                field: Box::new(SettingField {
-                    json_path: Some("editor.completion_menu_scrollbar"),
-                    pick: |settings_content| {
-                        settings_content.editor.completion_menu_scrollbar.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.completion_menu_scrollbar = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Completion Detail Alignment",
-                description: "Whether to align detail text in code completions context menus left or right.",
-                field: Box::new(SettingField {
-                    json_path: Some("editor.completion_detail_alignment"),
-                    pick: |settings_content| {
-                        settings_content.editor.completion_detail_alignment.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.completion_detail_alignment = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Completion Menu Item Kind",
-                description: "How to display the LSP item kind (function, method, variable, etc.) of each entry in the completions menu.",
-                field: Box::new(SettingField {
-                    json_path: Some("editor.completion_menu_item_kind"),
-                    pick: |settings_content| {
-                        settings_content.editor.completion_menu_item_kind.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.completion_menu_item_kind = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn inlay_hints_section() -> [SettingsPageItem; 10] {
         [
             SettingsPageItem::SectionHeader("Inlay Hints"),
@@ -8650,7 +8466,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             formatting_section(),
             autoclose_section(),
             whitespace_section(),
-            completions_section(),
             inlay_hints_section(),
             lsp_document_colors_item,
             tasks_section(),
@@ -8665,7 +8480,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             formatting_section(),
             autoclose_section(),
             whitespace_section(),
-            completions_section(),
             inlay_hints_section(),
             tasks_section(),
             miscellaneous_section(),
@@ -8852,72 +8666,6 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn lsp_completions_section() -> [SettingsPageItem; 4] {
-        [
-            SettingsPageItem::SectionHeader("LSP Completions"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enabled",
-                description: "Whether to fetch LSP completions or not.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).completions.lsp"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.completions.as_ref()?.lsp.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.completions.get_or_insert_default().lsp = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Fetch Timeout (milliseconds)",
-                description: "When fetching LSP completions, determines how long to wait for a response of a particular server (set to 0 to wait indefinitely).",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).completions.lsp_fetch_timeout_ms"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.completions.as_ref()?.lsp_fetch_timeout_ms.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language
-                                .completions
-                                .get_or_insert_default()
-                                .lsp_fetch_timeout_ms = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Insert Mode",
-                description: "Controls how LSP completions are inserted.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).completions.lsp_insert_mode"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.completions.as_ref()?.lsp_insert_mode.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.completions.get_or_insert_default().lsp_insert_mode = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     fn debugger_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("Debuggers"),
@@ -9048,7 +8796,6 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
 
     concat_sections!(
         lsp_section(),
-        lsp_completions_section(),
         debugger_section(),
         prettier_section(),
     )

@@ -1,4 +1,5 @@
 use super::*;
+use lsp::LanguageServerId;
 
 impl Editor {
     pub fn move_left(&mut self, _: &MoveLeft, window: &mut Window, cx: &mut Context<Self>) {
@@ -204,16 +205,6 @@ impl Editor {
             return;
         }
 
-        if self
-            .context_menu
-            .borrow_mut()
-            .as_mut()
-            .map(|menu| menu.select_first(self.completion_provider.as_deref(), window, cx))
-            .unwrap_or(false)
-        {
-            return;
-        }
-
         if matches!(self.mode, EditorMode::SingleLine) {
             cx.propagate();
             return;
@@ -320,16 +311,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
-        if self
-            .context_menu
-            .borrow_mut()
-            .as_mut()
-            .map(|menu| menu.select_last(self.completion_provider.as_deref(), window, cx))
-            .unwrap_or(false)
-        {
             return;
         }
 

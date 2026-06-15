@@ -55,7 +55,6 @@ settings.workspace = true
 smallvec.workspace = true
 semver.workspace = true
 smol.workspace = true
-snippet.workspace = true
 task.workspace = true
 terminal.workspace = true
 theme.workspace = true

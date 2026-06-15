@@ -4,11 +4,10 @@ use gpui::App;
 use language::CursorShape;
 use project::project_settings::DiagnosticSeverity;
 pub use settings::{
-    CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DelayMs,
-    DiffViewStyle, DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
+    CurrentLineHighlight, DelayMs,
+    DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
     GoToDefinitionFallback, GoToDefinitionScrollStrategy, MinimapThumb, MinimapThumbBorder,
     MultiCursorModifier, ScrollBeyondLastLine, ScrollbarDiagnostics, SeedQuerySetting, ShowMinimap,
-    SnippetSortOrder,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
 use ui::scrollbars::ShowScrollbar;
@@ -54,26 +53,11 @@ pub struct EditorSettings {
     pub show_signature_help_after_edits: bool,
     pub go_to_definition_fallback: GoToDefinitionFallback,
     pub go_to_definition_scroll_strategy: GoToDefinitionScrollStrategy,
-    pub jupyter: Jupyter,
-    pub snippet_sort_order: SnippetSortOrder,
     pub diagnostics_max_severity: Option<DiagnosticSeverity>,
-    pub inline_code_actions: bool,
     pub drag_and_drop_selection: DragAndDropSelection,
     pub lsp_document_colors: DocumentColorsRenderMode,
     pub lsp_document_links: bool,
     pub minimum_contrast_for_highlights: f32,
-    pub completion_menu_scrollbar: ShowScrollbar,
-    pub completion_detail_alignment: CompletionDetailAlignment,
-    pub completion_menu_item_kind: CompletionMenuItemKind,
-    pub diff_view_style: DiffViewStyle,
-    pub minimum_split_diff_width: f32,
-}
-#[derive(Debug, Clone)]
-pub struct Jupyter {
-    /// Whether the Jupyter feature is enabled.
-    ///
-    /// Default: true
-    pub enabled: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -185,12 +169,6 @@ pub struct SearchSettings {
     pub center_on_match: bool,
 }
 
-impl EditorSettings {
-    pub fn jupyter_enabled(cx: &App) -> bool {
-        EditorSettings::get_global(cx).jupyter.enabled
-    }
-}
-
 impl Settings for EditorSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let editor = content.editor.clone();
@@ -288,12 +266,7 @@ impl Settings for EditorSettings {
             show_signature_help_after_edits: editor.show_signature_help_after_edits.unwrap(),
             go_to_definition_fallback: editor.go_to_definition_fallback.unwrap(),
             go_to_definition_scroll_strategy: editor.go_to_definition_scroll_strategy.unwrap(),
-            jupyter: Jupyter {
-                enabled: editor.jupyter.unwrap().enabled.unwrap(),
-            },
-            snippet_sort_order: editor.snippet_sort_order.unwrap(),
             diagnostics_max_severity: editor.diagnostics_max_severity.map(Into::into),
-            inline_code_actions: editor.inline_code_actions.unwrap(),
             drag_and_drop_selection: DragAndDropSelection {
                 enabled: drag_and_drop_selection.enabled.unwrap(),
                 delay: drag_and_drop_selection.delay.unwrap(),
@@ -301,14 +274,6 @@ impl Settings for EditorSettings {
             lsp_document_colors: editor.lsp_document_colors.unwrap(),
             lsp_document_links: editor.lsp_document_links.unwrap(),
             minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,
-            completion_menu_scrollbar: editor
-                .completion_menu_scrollbar
-                .map(ui_scrollbar_settings_from_raw)
-                .unwrap(),
-            completion_detail_alignment: editor.completion_detail_alignment.unwrap(),
-            completion_menu_item_kind: editor.completion_menu_item_kind.unwrap(),
-            diff_view_style: editor.diff_view_style.unwrap(),
-            minimum_split_diff_width: editor.minimum_split_diff_width.unwrap(),
         }
     }
 }

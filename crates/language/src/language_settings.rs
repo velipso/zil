@@ -14,7 +14,7 @@ use itertools::{Either, Itertools};
 use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
 
 pub use settings::{
-    AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter, FormatterList,
+    AutoIndentMode, FormatOnSave, Formatter, FormatterList,
     InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode, RewrapBehavior,
     ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
@@ -137,14 +137,6 @@ pub struct LanguageSettings {
     pub linked_edits: bool,
     /// Task configuration for this language.
     pub tasks: LanguageTaskSettings,
-    /// Whether to pop the completions menu while typing in an editor without
-    /// explicitly requesting it.
-    pub show_completions_on_input: bool,
-    /// Whether to display inline and alongside documentation for items in the
-    /// completions menu.
-    pub show_completion_documentation: bool,
-    /// Completion settings for this language.
-    pub completions: CompletionSettings,
     /// Preferred debuggers for this language.
     pub debuggers: Vec<String>,
     /// Whether to enable word diff highlighting in the editor.
@@ -156,33 +148,6 @@ pub struct LanguageSettings {
     pub word_diff_enabled: bool,
     /// Whether to use tree-sitter bracket queries to detect and colorize the brackets in the editor.
     pub colorize_brackets: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct CompletionSettings {
-    /// Controls how words are completed.
-    /// For large documents, not all words may be fetched for completion.
-    ///
-    /// Default: `fallback`
-    pub words: WordsCompletionMode,
-    /// How many characters has to be in the completions query to automatically show the words-based completions.
-    /// Before that value, it's still possible to trigger the words-based completion manually with the corresponding editor command.
-    ///
-    /// Default: 3
-    pub words_min_length: usize,
-    /// Whether to fetch LSP completions or not.
-    ///
-    /// Default: true
-    pub lsp: bool,
-    /// When fetching LSP completions, determines how long to wait for a response of a particular server.
-    /// When set to 0, waits indefinitely.
-    ///
-    /// Default: 0
-    pub lsp_fetch_timeout_ms: u64,
-    /// Controls how LSP completions are inserted.
-    ///
-    /// Default: "replace_suffix"
-    pub lsp_insert_mode: LspInsertMode,
 }
 
 /// The settings for indent guides.
@@ -562,7 +527,6 @@ impl settings::Settings for AllLanguageSettings {
 
         fn load_from_content(settings: LanguageSettingsContent) -> LanguageSettings {
             let inlay_hints = settings.inlay_hints.unwrap();
-            let completions = settings.completions.unwrap();
             let prettier = settings.prettier.unwrap();
             let indent_guides = settings.indent_guides.unwrap();
             let tasks = settings.tasks.unwrap();
@@ -637,16 +601,7 @@ impl settings::Settings for AllLanguageSettings {
                     enabled: tasks.enabled.unwrap(),
                     prefer_lsp: tasks.prefer_lsp.unwrap(),
                 },
-                show_completions_on_input: settings.show_completions_on_input.unwrap(),
-                show_completion_documentation: settings.show_completion_documentation.unwrap(),
                 colorize_brackets: settings.colorize_brackets.unwrap(),
-                completions: CompletionSettings {
-                    words: completions.words.unwrap(),
-                    words_min_length: completions.words_min_length.unwrap() as usize,
-                    lsp: completions.lsp.unwrap(),
-                    lsp_fetch_timeout_ms: completions.lsp_fetch_timeout_ms.unwrap(),
-                    lsp_insert_mode: completions.lsp_insert_mode.unwrap(),
-                },
                 debuggers: settings.debuggers.unwrap(),
                 word_diff_enabled: settings.word_diff_enabled.unwrap(),
             }

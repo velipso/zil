@@ -250,47 +250,6 @@ message LspExtGoToParentModuleResponse {
   repeated LocationLink links = 1;
 }
 
-message GetCompletionsResponse {
-  repeated Completion completions = 1;
-  repeated VectorClockEntry version = 2;
-  // `!is_complete`, inverted for a default of `is_complete = true`
-  bool can_reuse = 3;
-}
-
-message ApplyCompletionAdditionalEdits {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Completion completion = 3;
-  repeated AnchorRange all_commit_ranges = 4;
-}
-
-message ApplyCompletionAdditionalEditsResponse {
-  Transaction transaction = 1;
-}
-
-message Completion {
-  Anchor old_replace_start = 1;
-  Anchor old_replace_end = 2;
-  string new_text = 3;
-  uint64 server_id = 4;
-  bytes lsp_completion = 5;
-  bool resolved = 6;
-  Source source = 7;
-  optional bytes lsp_defaults = 8;
-  optional Anchor buffer_word_start = 9;
-  optional Anchor buffer_word_end = 10;
-  Anchor old_insert_start = 11;
-  Anchor old_insert_end = 12;
-  optional string sort_text = 13;
-
-  enum Source {
-    Lsp = 0;
-    Custom = 1;
-    BufferWord = 2;
-    Dap = 3;
-  }
-}
-
 message GetSignatureHelp {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -357,16 +316,6 @@ message HoverBlock {
   string text = 1;
   optional string language = 2;
   bool is_markdown = 3;
-}
-
-message ApplyCodeAction {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  CodeAction action = 3;
-}
-
-message ApplyCodeActionResponse {
-  ProjectTransaction transaction = 1;
 }
 
 message PrepareRename {
@@ -464,27 +413,6 @@ message ResolveState {
   }
 }
 
-// This type is used to resolve more than just
-// the documentation, but for backwards-compatibility
-// reasons we can't rename the type.
-message ResolveCompletionDocumentation {
-  uint64 project_id = 1;
-  uint64 language_server_id = 2;
-  bytes lsp_completion = 3;
-  uint64 buffer_id = 4;
-}
-
-message ResolveCompletionDocumentationResponse {
-  string documentation = 1;
-  bool documentation_is_markdown = 2;
-  Anchor old_replace_start = 3;
-  Anchor old_replace_end = 4;
-  string new_text = 5;
-  bytes lsp_completion = 6;
-  Anchor old_insert_start = 7;
-  Anchor old_insert_end = 8;
-}
-
 message ResolveInlayHint {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -509,19 +437,6 @@ message MarkupContent {
 
 message PerformRenameResponse {
   ProjectTransaction transaction = 2;
-}
-
-message CodeAction {
-  uint64 server_id = 1;
-  Anchor start = 2;
-  Anchor end = 3;
-  bytes lsp_action = 4;
-  Kind kind = 5;
-  bool resolved = 6;
-  enum Kind {
-    Action = 0;
-    Command = 1;
-  }
 }
 
 message LanguageServer {
@@ -683,16 +598,6 @@ message LspLogTrace {
   optional string message = 1;
 }
 
-message ApplyCodeActionKind {
-  uint64 project_id = 1;
-  string kind = 2;
-  repeated uint64 buffer_ids = 3;
-}
-
-message ApplyCodeActionKindResponse {
-  ProjectTransaction transaction = 1;
-}
-
 message RegisterBufferWithLanguageServers {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -727,14 +632,6 @@ message FormatBuffers {
 
 message FormatBuffersResponse {
   ProjectTransaction transaction = 1;
-}
-
-message GetCompletions {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-  optional uint64 server_id = 5;
 }
 
 message CancelLanguageServerWork {

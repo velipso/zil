@@ -606,22 +606,6 @@ pub struct AnnotatedTextEdit {
     pub annotation_id: ChangeAnnotationIdentifier,
 }
 
-/// An interactive text edit.
-///
-/// @since 3.18.0
-#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SnippetTextEdit {
-    /// The range of the text document to be manipulated.
-    pub range: Range,
-    /// The snippet to be inserted.
-    pub snippet: StringValue,
-    /// The actual identifier of the snippet edit.
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotation_id: Option<ChangeAnnotationIdentifier>,
-}
-
 /// The kind of string value.
 ///
 /// @since 3.18.0
@@ -654,7 +638,6 @@ pub struct StringValue {
 pub enum Edit {
     Plain(TextEdit),
     Annotated(AnnotatedTextEdit),
-    Snippet(SnippetTextEdit),
 }
 
 /// Describes textual changes on a single text document. The text document is referred to as a
@@ -672,9 +655,6 @@ pub struct TextDocumentEdit {
     ///
     /// @since 3.16.0 - support for AnnotatedTextEdit. This is guarded by the
     /// client capability `workspace.workspaceEdit.changeAnnotationSupport`
-    ///
-    /// @since 3.18.0 - support for SnippetTextEdit. This is guarded by the
-    /// client capability `workspace.workspaceEdit.snippetEditSupport`
     pub edits: Vec<Edit>,
 }
 

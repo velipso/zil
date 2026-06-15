@@ -273,8 +273,6 @@ impl VsCodeSettings {
             hover_popover_enabled: self.read_bool("editor.hover.enabled"),
             hover_popover_sticky: self.read_bool("editor.hover.sticky"),
             hover_popover_hiding_delay: self.read_u64("editor.hover.hidingDelay").map(Into::into),
-            inline_code_actions: None,
-            jupyter: None,
             lsp_document_colors: None,
             lsp_document_links: self.read_bool("editor.links"),
             lsp_highlight_debounce: None,
@@ -309,15 +307,9 @@ impl VsCodeSettings {
             ),
             selection_highlight: self.read_bool("editor.selectionHighlight"),
             show_signature_help_after_edits: self.read_bool("editor.parameterHints.enabled"),
-            snippet_sort_order: None,
             toolbar: None,
             use_smartcase_search: self.read_bool("search.smartCase"),
             vertical_scroll_margin: self.read_f32("editor.cursorSurroundingLines"),
-            completion_menu_scrollbar: None,
-            completion_detail_alignment: None,
-            completion_menu_item_kind: None,
-            diff_view_style: None,
-            minimum_split_diff_width: None,
         }
     }
 
@@ -528,16 +520,6 @@ impl VsCodeSettings {
             auto_indent: None,
             auto_indent_on_paste: self.read_bool("editor.formatOnPaste"),
             code_actions_on_format: None,
-            completions: skip_default(CompletionSettingsContent {
-                words: self.read_bool("editor.suggest.showWords").map(|b| {
-                    if b {
-                        WordsCompletionMode::Enabled
-                    } else {
-                        WordsCompletionMode::Disabled
-                    }
-                }),
-                ..Default::default()
-            }),
             debuggers: None,
             enable_language_server: None,
             ensure_final_newline_on_save: self.read_bool("files.insertFinalNewline"),
@@ -581,9 +563,7 @@ impl VsCodeSettings {
             preferred_line_length: self.read_u32("editor.wordWrapColumn"),
             prettier: None,
             remove_trailing_whitespace_on_save: self.read_bool("editor.trimAutoWhitespace"),
-            show_completion_documentation: None,
             colorize_brackets: self.read_bool("editor.bracketPairColorization.enabled"),
-            show_completions_on_input: self.read_bool("editor.suggestOnTriggerCharacters"),
             show_whitespaces: self.read_enum("editor.renderWhitespace", |s| {
                 Some(match s {
                     "boundary" => ShowWhitespaceSetting::Boundary,

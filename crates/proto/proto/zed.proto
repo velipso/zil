@@ -104,16 +104,8 @@ message Envelope {
     SynchronizeBuffersResponse synchronize_buffers_response = 68;
     FormatBuffers format_buffers = 69;
     FormatBuffersResponse format_buffers_response = 70;
-    GetCompletions get_completions = 71;
-    GetCompletionsResponse get_completions_response = 72;
-    ResolveCompletionDocumentation resolve_completion_documentation = 73;
-    ResolveCompletionDocumentationResponse resolve_completion_documentation_response = 74;
-    ApplyCompletionAdditionalEdits apply_completion_additional_edits = 75;
-    ApplyCompletionAdditionalEditsResponse apply_completion_additional_edits_response = 76;
     GetHover get_hover = 79;
     GetHoverResponse get_hover_response = 80;
-    ApplyCodeAction apply_code_action = 81;
-    ApplyCodeActionResponse apply_code_action_response = 82;
     PrepareRename prepare_rename = 83;
     PrepareRenameResponse prepare_rename_response = 84;
     PerformRename perform_rename = 85;
@@ -299,9 +291,6 @@ message Envelope {
     GetRemotes get_remotes = 306;
     GetRemotesResponse get_remotes_response = 307;
     Pull pull = 308;
-
-    ApplyCodeActionKind apply_code_action_kind = 309;
-    ApplyCodeActionKindResponse apply_code_action_kind_response = 310;
 
     RemoteMessageResponse remote_message_response = 311;
 

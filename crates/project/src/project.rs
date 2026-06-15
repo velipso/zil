@@ -63,7 +63,7 @@ use clock::ReplicaId;
 
 use dap::client::DebugAdapterClient;
 
-use collections::{BTreeSet, HashMap, HashSet, IndexSet};
+use collections::{HashMap, HashSet, IndexSet};
 use debounced_delay::DebouncedDelay;
 pub use debugger::breakpoint_store::BreakpointWithPosition;
 use debugger::{
@@ -84,22 +84,22 @@ use image_store::{ImageItemEvent, ImageStoreEvent};
 
 use ::git::{blame::Blame, status::FileStatus};
 use gpui::{
-    App, AppContext, AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, Hsla, SharedString,
-    Task, TaskExt, WeakEntity, Window,
+    App, AppContext, AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, SharedString,
+    Task, TaskExt, WeakEntity,
 };
 use language::{
     Buffer, BufferEditSource, BufferEvent, Capability, CodeLabel, CursorShape, DiskState, Language,
-    LanguageName, LanguageRegistry, PointUtf16, ToOffset, ToPointUtf16, Toolchain,
+    LanguageName, LanguageRegistry, PointUtf16, ToPointUtf16, Toolchain,
     ToolchainMetadata, ToolchainScope, Unclipped, language_settings::InlayHintKind,
     proto::split_operations,
 };
 use lsp::{
-    CompletionContext, CompletionItemKind, DocumentHighlightKind, InsertTextMode,
+    DocumentHighlightKind,
     LanguageServerBinary, LanguageServerId, LanguageServerName, LanguageServerSelector,
     MessageActionItem,
 };
 use lsp_command::*;
-use lsp_store::{CompletionDocumentation, LspFormatTarget, OpenLspBufferHandle};
+use lsp_store::{LspFormatTarget, OpenLspBufferHandle};
 pub use manifest_tree::ManifestProvidersStore;
 use node_runtime::NodeRuntime;
 use parking_lot::Mutex;
@@ -114,9 +114,6 @@ use rpc::{
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
 use settings::{InvalidSettingsError, RegisterSetting, Settings, SettingsLocation, SettingsStore};
-use snippet::Snippet;
-pub use snippet_provider;
-use snippet_provider::SnippetProvider;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -238,7 +235,6 @@ pub struct Project {
     search_history: SearchHistory,
     search_included_history: SearchHistory,
     search_excluded_history: SearchHistory,
-    snippets: Entity<SnippetProvider>,
     environment: Entity<ProjectEnvironment>,
     settings_observer: Entity<SettingsObserver>,
     toolchain_store: Option<Entity<ToolchainStore>>,
@@ -398,7 +394,6 @@ pub enum Event {
         request_id: Option<usize>,
     },
     RevealInProjectPanel(ProjectEntryId),
-    SnippetEdit(BufferId, Vec<(lsp::Range, Snippet)>),
     ExpandedAllForEntry(WorktreeId, ProjectEntryId),
     EntryRenamed(ProjectTransaction, ProjectPath, PathBuf),
     WorkspaceEditApplied(ProjectTransaction),
@@ -492,248 +487,6 @@ pub struct InlayHint {
     pub padding_right: bool,
     pub tooltip: Option<InlayHintTooltip>,
     pub resolve_state: ResolveState,
-}
-
-/// The user's intent behind a given completion confirmation.
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
-pub enum CompletionIntent {
-    /// The user intends to 'commit' this result, if possible.
-    /// Completion confirmations should run side effects.
-    ///
-    /// For LSP completions, will respect the setting `completions.lsp_insert_mode`.
-    Complete,
-    /// Similar to [Self::Complete], but behaves like `lsp_insert_mode` is set to `insert`.
-    CompleteWithInsert,
-    /// Similar to [Self::Complete], but behaves like `lsp_insert_mode` is set to `replace`.
-    CompleteWithReplace,
-    /// The user intends to continue 'composing' this completion.
-    /// Completion confirmations should not run side effects and
-    /// let the user continue composing their action.
-    Compose,
-}
-
-impl CompletionIntent {
-    pub fn is_complete(&self) -> bool {
-        self == &Self::Complete
-    }
-
-    pub fn is_compose(&self) -> bool {
-        self == &Self::Compose
-    }
-}
-
-/// Describes a visual group for a completion item in the menu.
-/// When the group changes between consecutive completions, the menu inserts a divider.
-/// If a label is provided, a non-selectable header row is also rendered.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CompletionGroup {
-    /// Identity of this group, used to detect transitions between consecutive items.
-    pub key: SharedString,
-    /// When set, a non-selectable header with this text is rendered below the divider.
-    pub label: Option<SharedString>,
-}
-
-/// Similar to `CoreCompletion`, but with extra metadata attached.
-#[derive(Clone)]
-pub struct Completion {
-    /// The range of text that will be replaced by this completion.
-    pub replace_range: Range<Anchor>,
-    /// The new text that will be inserted.
-    pub new_text: String,
-    /// A label for this completion that is shown in the menu.
-    pub label: CodeLabel,
-    /// The documentation for this completion.
-    pub documentation: Option<CompletionDocumentation>,
-    /// Completion data source which it was constructed from.
-    pub source: CompletionSource,
-    /// A path to an icon for this completion that is shown in the menu.
-    pub icon_path: Option<SharedString>,
-    /// Text starting here and ending at the cursor will be used as the query for filtering this completion.
-    ///
-    /// If None, the start of the surrounding word is used.
-    pub match_start: Option<text::Anchor>,
-    /// Key used for de-duplicating snippets. If None, always considered unique.
-    pub snippet_deduplication_key: Option<(usize, usize)>,
-    /// Whether to adjust indentation (the default) or not.
-    pub insert_text_mode: Option<InsertTextMode>,
-    /// An optional callback to invoke when this completion is confirmed.
-    /// Returns whether new completions should be retriggered after the current one.
-    /// If `true` is returned, the editor will show a new completion menu after this completion is confirmed.
-    /// if no confirmation is provided or `false` is returned, the completion will be committed.
-    pub confirm: Option<Arc<dyn Send + Sync + Fn(CompletionIntent, &mut Window, &mut App) -> bool>>,
-    /// An optional group for this completion. When the group changes between consecutive
-    /// items, the completion menu inserts a divider. If the group also carries a label,
-    /// a non-selectable header row is rendered below the divider.
-    pub group: Option<CompletionGroup>,
-}
-
-#[derive(Debug, Clone)]
-pub enum CompletionSource {
-    Lsp {
-        /// The alternate `insert` range, if provided by the LSP server.
-        insert_range: Option<Range<Anchor>>,
-        /// The id of the language server that produced this completion.
-        server_id: LanguageServerId,
-        /// The raw completion provided by the language server.
-        lsp_completion: Box<lsp::CompletionItem>,
-        /// A set of defaults for this completion item.
-        lsp_defaults: Option<Arc<lsp::CompletionListItemDefaults>>,
-        /// Whether this completion has been resolved, to ensure it happens once per completion.
-        resolved: bool,
-    },
-    Dap {
-        /// The sort text for this completion.
-        sort_text: String,
-    },
-    Custom,
-    BufferWord {
-        word_range: Range<Anchor>,
-        resolved: bool,
-    },
-}
-
-impl CompletionSource {
-    pub fn server_id(&self) -> Option<LanguageServerId> {
-        if let CompletionSource::Lsp { server_id, .. } = self {
-            Some(*server_id)
-        } else {
-            None
-        }
-    }
-
-    pub fn lsp_completion(&self, apply_defaults: bool) -> Option<Cow<'_, lsp::CompletionItem>> {
-        if let Self::Lsp {
-            lsp_completion,
-            lsp_defaults,
-            ..
-        } = self
-        {
-            if apply_defaults && let Some(lsp_defaults) = lsp_defaults {
-                let mut completion_with_defaults = *lsp_completion.clone();
-                let default_commit_characters = lsp_defaults.commit_characters.as_ref();
-                let default_edit_range = lsp_defaults.edit_range.as_ref();
-                let default_insert_text_format = lsp_defaults.insert_text_format.as_ref();
-                let default_insert_text_mode = lsp_defaults.insert_text_mode.as_ref();
-
-                if default_commit_characters.is_some()
-                    || default_edit_range.is_some()
-                    || default_insert_text_format.is_some()
-                    || default_insert_text_mode.is_some()
-                {
-                    if completion_with_defaults.commit_characters.is_none()
-                        && default_commit_characters.is_some()
-                    {
-                        completion_with_defaults.commit_characters =
-                            default_commit_characters.cloned()
-                    }
-                    if completion_with_defaults.text_edit.is_none() {
-                        match default_edit_range {
-                            Some(lsp::CompletionListItemDefaultsEditRange::Range(range)) => {
-                                completion_with_defaults.text_edit =
-                                    Some(lsp::CompletionTextEdit::Edit(lsp::TextEdit {
-                                        range: *range,
-                                        new_text: completion_with_defaults.label.clone(),
-                                    }))
-                            }
-                            Some(lsp::CompletionListItemDefaultsEditRange::InsertAndReplace {
-                                insert,
-                                replace,
-                            }) => {
-                                completion_with_defaults.text_edit =
-                                    Some(lsp::CompletionTextEdit::InsertAndReplace(
-                                        lsp::InsertReplaceEdit {
-                                            new_text: completion_with_defaults.label.clone(),
-                                            insert: *insert,
-                                            replace: *replace,
-                                        },
-                                    ))
-                            }
-                            None => {}
-                        }
-                    }
-                    if completion_with_defaults.insert_text_format.is_none()
-                        && default_insert_text_format.is_some()
-                    {
-                        completion_with_defaults.insert_text_format =
-                            default_insert_text_format.cloned()
-                    }
-                    if completion_with_defaults.insert_text_mode.is_none()
-                        && default_insert_text_mode.is_some()
-                    {
-                        completion_with_defaults.insert_text_mode =
-                            default_insert_text_mode.cloned()
-                    }
-                }
-                return Some(Cow::Owned(completion_with_defaults));
-            }
-            Some(Cow::Borrowed(lsp_completion))
-        } else {
-            None
-        }
-    }
-}
-
-impl std::fmt::Debug for Completion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Completion")
-            .field("replace_range", &self.replace_range)
-            .field("new_text", &self.new_text)
-            .field("label", &self.label)
-            .field("documentation", &self.documentation)
-            .field("source", &self.source)
-            .finish()
-    }
-}
-
-/// Response from a source of completions.
-pub struct CompletionResponse {
-    pub completions: Vec<Completion>,
-    pub display_options: CompletionDisplayOptions,
-    /// When false, indicates that the list is complete and does not need to be re-queried if it
-    /// can be filtered instead.
-    pub is_incomplete: bool,
-}
-
-#[derive(Default)]
-pub struct CompletionDisplayOptions {
-    pub dynamic_width: bool,
-}
-
-impl CompletionDisplayOptions {
-    pub fn merge(&mut self, other: &CompletionDisplayOptions) {
-        self.dynamic_width = self.dynamic_width && other.dynamic_width;
-    }
-}
-
-/// Response from language server completion request.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct CoreCompletionResponse {
-    pub completions: Vec<CoreCompletion>,
-    /// When false, indicates that the list is complete and does not need to be re-queried if it
-    /// can be filtered instead.
-    pub is_incomplete: bool,
-}
-
-/// A generic completion that can come from different sources.
-#[derive(Clone, Debug)]
-pub(crate) struct CoreCompletion {
-    replace_range: Range<Anchor>,
-    new_text: String,
-    source: CompletionSource,
-}
-
-/// A code action provided by a language server.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CodeAction {
-    /// The id of the language server that produced this code action.
-    pub server_id: LanguageServerId,
-    /// The range of the buffer where this code action is applicable.
-    pub range: Range<Anchor>,
-    /// The raw code action provided by the language server.
-    /// Can be either an action or a command.
-    pub lsp_action: LspAction,
-    /// Whether the action needs to be resolved using the language server.
-    pub resolved: bool,
 }
 
 /// An action sent back by a language server.
@@ -1042,12 +795,6 @@ impl DirectoryLister {
 
 pub const CURRENT_PROJECT_FEATURES: &[&str] = &["new-style-anchors"];
 
-#[cfg(feature = "test-support")]
-pub const DEFAULT_COMPLETION_CONTEXT: CompletionContext = CompletionContext {
-    trigger_kind: lsp::CompletionTriggerKind::INVOKED,
-    trigger_character: None,
-};
-
 /// An LSP diagnostics associated with a certain language server.
 #[derive(Clone, Debug, Default)]
 pub enum LspPullDiagnostics {
@@ -1157,7 +904,6 @@ impl Project {
             let (tx, rx) = mpsc::unbounded();
             cx.spawn(async move |this, cx| Self::send_buffer_ordered_messages(this, rx, cx).await)
                 .detach();
-            let snippets = SnippetProvider::new(fs.clone(), BTreeSet::from_iter([]), cx);
             let worktree_store =
                 cx.new(|cx| WorktreeStore::local(false, fs.clone(), WorktreeIdCounter::get(cx)));
             if flags.init_worktree_trust {
@@ -1302,7 +1048,6 @@ impl Project {
                 client_subscriptions: Vec::new(),
                 _subscriptions: vec![cx.on_release(Self::release)],
                 active_entry: None,
-                snippets,
                 languages,
                 collab_client: client,
                 task_store,
@@ -1351,7 +1096,6 @@ impl Project {
             let (tx, rx) = mpsc::unbounded();
             cx.spawn(async move |this, cx| Self::send_buffer_ordered_messages(this, rx, cx).await)
                 .detach();
-            let snippets = SnippetProvider::new(fs.clone(), BTreeSet::from_iter([]), cx);
 
             let (remote_proto, path_style, connection_options) =
                 remote.read_with(cx, |remote, _| {
@@ -1550,7 +1294,6 @@ impl Project {
                     }),
                 ],
                 active_entry: None,
-                snippets,
                 languages,
                 collab_client: client,
                 task_store,
@@ -1781,8 +1524,6 @@ impl Project {
         let replica_id = ReplicaId::new(response.payload.replica_id as u16);
 
         let project = cx.new(|cx| {
-            let snippets = SnippetProvider::new(fs.clone(), BTreeSet::from_iter([]), cx);
-
             let weak_self = cx.weak_entity();
             let context_server_store = cx.new(|cx| {
                 ContextServerStore::local(worktree_store.clone(), Some(weak_self), false, cx)
@@ -1829,7 +1570,6 @@ impl Project {
                 languages,
                 user_store: user_store.clone(),
                 task_store,
-                snippets,
                 fs,
                 remote_client: None,
                 settings_observer: settings_observer.clone(),
@@ -2294,11 +2034,6 @@ impl Project {
     #[inline]
     pub fn task_store(&self) -> &Entity<TaskStore> {
         &self.task_store
-    }
-
-    #[inline]
-    pub fn snippets(&self) -> &Entity<SnippetProvider> {
-        &self.snippets
     }
 
     #[inline]
@@ -3608,15 +3343,6 @@ impl Project {
                 message: message.clone(),
                 link: None,
             }),
-            LspStoreEvent::SnippetEdit {
-                buffer_id,
-                edits,
-                most_recent_edit,
-            } => {
-                if most_recent_edit.replica_id == self.replica_id() {
-                    cx.emit(Event::SnippetEdit(*buffer_id, edits.clone()))
-                }
-            }
             LspStoreEvent::WorkspaceEditApplied(transaction) => {
                 cx.emit(Event::WorkspaceEditApplied(transaction.clone()))
             }
@@ -4351,19 +4077,6 @@ impl Project {
     ) -> Task<Result<Vec<Range<Anchor>>>> {
         self.lsp_store.update(cx, |lsp_store, cx| {
             lsp_store.linked_edits(buffer, position, cx)
-        })
-    }
-
-    pub fn completions<T: ToOffset + ToPointUtf16>(
-        &self,
-        buffer: &Entity<Buffer>,
-        position: T,
-        context: CompletionContext,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<CompletionResponse>>> {
-        let position = position.to_point_utf16(buffer.read(cx));
-        self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.completions(buffer, position, context, cx)
         })
     }
 
@@ -6473,69 +6186,6 @@ impl ProjectItem for Buffer {
 
     fn is_dirty(&self) -> bool {
         self.is_dirty()
-    }
-}
-
-impl Completion {
-    pub fn kind(&self) -> Option<CompletionItemKind> {
-        self.source
-            // `lsp::CompletionListItemDefaults` has no `kind` field
-            .lsp_completion(false)
-            .and_then(|lsp_completion| lsp_completion.kind)
-    }
-
-    pub fn label(&self) -> Option<String> {
-        self.source
-            .lsp_completion(false)
-            .map(|lsp_completion| lsp_completion.label.clone())
-    }
-
-    /// A key that can be used to sort completions when displaying
-    /// them to the user.
-    pub fn sort_key(&self) -> (usize, &str) {
-        const DEFAULT_KIND_KEY: usize = 4;
-        let kind_key = self
-            .kind()
-            .and_then(|lsp_completion_kind| match lsp_completion_kind {
-                lsp::CompletionItemKind::KEYWORD => Some(0),
-                lsp::CompletionItemKind::VARIABLE => Some(1),
-                lsp::CompletionItemKind::CONSTANT => Some(2),
-                lsp::CompletionItemKind::PROPERTY => Some(3),
-                _ => None,
-            })
-            .unwrap_or(DEFAULT_KIND_KEY);
-        (kind_key, self.label.filter_text())
-    }
-
-    /// Whether this completion is a snippet.
-    pub fn is_snippet_kind(&self) -> bool {
-        matches!(
-            &self.source,
-            CompletionSource::Lsp { lsp_completion, .. }
-            if lsp_completion.kind == Some(CompletionItemKind::SNIPPET)
-        )
-    }
-
-    /// Whether this completion is a snippet or snippet-style LSP completion.
-    pub fn is_snippet(&self) -> bool {
-        self.source
-            // `lsp::CompletionListItemDefaults` has `insert_text_format` field
-            .lsp_completion(true)
-            .is_some_and(|lsp_completion| {
-                lsp_completion.insert_text_format == Some(lsp::InsertTextFormat::SNIPPET)
-            })
-    }
-
-    /// Returns the corresponding color for this completion.
-    ///
-    /// Will return `None` if this completion's kind is not [`CompletionItemKind::COLOR`].
-    pub fn color(&self) -> Option<Hsla> {
-        // `lsp::CompletionListItemDefaults` has no `kind` field
-        let lsp_completion = self.source.lsp_completion(false)?;
-        if lsp_completion.kind? == CompletionItemKind::COLOR {
-            return color_extractor::extract_color(&lsp_completion);
-        }
-        None
     }
 }
 

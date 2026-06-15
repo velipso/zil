@@ -7,12 +7,11 @@ use std::{
     time::{Instant},
 };
 
-mod action_completion_provider;
 mod ui_components;
 
 use anyhow::{Context as _, anyhow};
 use collections::{HashMap, HashSet};
-use editor::{CompletionProvider, Editor, EditorEvent, EditorMode, SizingBehavior};
+use editor::{Editor, EditorEvent, EditorMode, SizingBehavior};
 use fs::Fs;
 use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{
@@ -23,10 +22,10 @@ use gpui::{
     ScrollWheelEvent, Stateful, StyledText, Subscription, TextStyleRefinement, WeakEntity,
     actions, anchored, deferred, div,
 };
-use language::{Language, LanguageConfig, ToOffset as _};
+use language::{Language, LanguageConfig};
 
 use notifications::status_toast::StatusToast;
-use project::{CompletionDisplayOptions, Project};
+use project::{Project};
 use settings::{
     BaseKeymap, KeybindSource, KeymapFile, Settings as _, SettingsAssets, infer_json_indent_size,
 };
@@ -47,7 +46,6 @@ pub use ui_components::*;
 use zed_actions::{ChangeKeybinding, OpenKeymap};
 
 use crate::{
-    action_completion_provider::ActionCompletionProvider,
     persistence::KeybindingEditorDb,
     ui_components::keystroke_input::{
         ClearKeystrokes, KeystrokeInput, StartRecording, StopRecording,
@@ -2467,7 +2465,7 @@ impl KeybindingEditorModal {
                 .clone();
             let workspace = workspace.clone();
             cx.spawn(async move |_input_handle, cx| {
-                let contexts = cx
+                let _ = cx
                     .background_spawn(async { collect_contexts_from_assets() })
                     .await;
 
@@ -2478,9 +2476,6 @@ impl KeybindingEditorModal {
                             buffer.set_language(Some(language), cx);
                         });
                     }
-                    editor.set_completion_provider(Some(std::rc::Rc::new(
-                        KeyContextCompletionProvider { contexts },
-                    )));
                 });
             })
             .detach();
@@ -2493,33 +2488,15 @@ impl KeybindingEditorModal {
         let (action_editor, action_name_to_static) = if has_action_editor {
             let actions: Vec<&'static str> = cx.all_action_names().to_vec();
 
-            let humanized_names: HashMap<&'static str, SharedString> = actions
-                .iter()
-                .map(|&name| (name, command_palette::humanize_action_name(name).into()))
-                .collect();
-
             let action_name_to_static: HashMap<String, &'static str> = actions
                 .iter()
                 .map(|&name| (name.to_string(), name))
                 .collect();
 
             let editor = cx.new(|cx| {
-                let input = InputField::new(window, cx, "Type an action name")
+                InputField::new(window, cx, "Type an action name")
                     .label("Action")
-                    .label_size(LabelSize::Default);
-
-                let editor_entity = input.editor();
-                let editor_entity = editor_entity
-                    .as_any()
-                    .downcast_ref::<Entity<Editor>>()
-                    .unwrap();
-                editor_entity.update(cx, |editor, _cx| {
-                    editor.set_completion_provider(Some(std::rc::Rc::new(
-                        ActionCompletionProvider::new(actions, humanized_names),
-                    )));
-                });
-
-                input
+                    .label_size(LabelSize::Default)
             });
 
             (Some(editor), action_name_to_static)
@@ -2868,65 +2845,13 @@ impl KeybindingEditorModal {
         Ok(())
     }
 
-    fn is_any_editor_showing_completions(&self, window: &Window, cx: &App) -> bool {
-        let is_editor_showing_completions =
-            |focus_handle: &FocusHandle, editor_entity: &Entity<Editor>| -> bool {
-                focus_handle.contains_focused(window, cx)
-                    && editor_entity.read_with(cx, |editor, _cx| {
-                        editor
-                            .context_menu()
-                            .borrow()
-                            .as_ref()
-                            .is_some_and(|menu| menu.visible())
-                    })
-            };
-
-        self.action_editor.as_ref().is_some_and(|action_editor| {
-            let focus_handle = action_editor.read(cx).focus_handle(cx);
-            let editor_entity = action_editor.read(cx).editor();
-            let editor_entity = editor_entity
-                .as_any()
-                .downcast_ref::<Entity<Editor>>()
-                .unwrap();
-            is_editor_showing_completions(&focus_handle, editor_entity)
-        }) || {
-            let focus_handle = self.context_editor.read(cx).focus_handle(cx);
-            let editor_entity = self.context_editor.read(cx).editor();
-            let editor_entity = editor_entity
-                .as_any()
-                .downcast_ref::<Entity<Editor>>()
-                .unwrap();
-            is_editor_showing_completions(&focus_handle, editor_entity)
-        } || self
-            .action_arguments_editor
-            .as_ref()
-            .is_some_and(|args_editor| {
-                let focus_handle = args_editor.read(cx).focus_handle(cx);
-                let editor_entity = &args_editor.read(cx).editor;
-                is_editor_showing_completions(&focus_handle, editor_entity)
-            })
-    }
-
     fn key_context(&self) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add("KeybindEditorModal");
         key_context
     }
 
-    fn key_context_internal(&self, window: &Window, cx: &App) -> KeyContext {
-        let mut key_context = self.key_context();
-
-        if self.is_any_editor_showing_completions(window, cx) {
-            key_context.add("showing_completions");
-        }
-
-        key_context
-    }
-
     fn focus_next(&mut self, _: &menu::SelectNext, window: &mut Window, cx: &mut Context<Self>) {
-        if self.is_any_editor_showing_completions(window, cx) {
-            return;
-        }
         self.focus_state.focus_next(window, cx);
     }
 
@@ -2936,9 +2861,6 @@ impl KeybindingEditorModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.is_any_editor_showing_completions(window, cx) {
-            return;
-        }
         self.focus_state.focus_previous(window, cx);
     }
 
@@ -3002,7 +2924,7 @@ impl Render for KeybindingEditorModal {
 
         let theme = cx.theme().colors();
         let matching_bindings_count = self.get_matching_bindings_count(cx);
-        let key_context = self.key_context_internal(window, cx);
+        let key_context = self.key_context();
         let showing_completions = key_context.contains("showing_completions");
 
         v_flex()
@@ -3426,68 +3348,6 @@ impl Render for ActionArgumentsEditor {
             .border_color(border_color)
             .track_focus(&self.focus_handle)
             .child(self.editor.clone())
-    }
-}
-
-struct KeyContextCompletionProvider {
-    contexts: Vec<SharedString>,
-}
-
-impl CompletionProvider for KeyContextCompletionProvider {
-    fn completions(
-        &self,
-        buffer: &Entity<language::Buffer>,
-        buffer_position: language::Anchor,
-        _trigger: editor::CompletionContext,
-        _window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) -> gpui::Task<anyhow::Result<Vec<project::CompletionResponse>>> {
-        let buffer = buffer.read(cx);
-        let mut count_back = 0;
-        for char in buffer.reversed_chars_at(buffer_position) {
-            if char.is_ascii_alphanumeric() || char == '_' {
-                count_back += 1;
-            } else {
-                break;
-            }
-        }
-        let start_anchor =
-            buffer.anchor_before(buffer_position.to_offset(buffer).saturating_sub(count_back));
-        let replace_range = start_anchor..buffer_position;
-        gpui::Task::ready(Ok(vec![project::CompletionResponse {
-            completions: self
-                .contexts
-                .iter()
-                .map(|context| project::Completion {
-                    replace_range: replace_range.clone(),
-                    label: language::CodeLabel::plain(context.to_string(), None),
-                    new_text: context.to_string(),
-                    documentation: None,
-                    source: project::CompletionSource::Custom,
-                    icon_path: None,
-                    match_start: None,
-                    snippet_deduplication_key: None,
-                    insert_text_mode: None,
-                    confirm: None,
-                    group: None,
-                })
-                .collect(),
-            display_options: CompletionDisplayOptions::default(),
-            is_incomplete: false,
-        }]))
-    }
-
-    fn is_completion_trigger(
-        &self,
-        _buffer: &Entity<language::Buffer>,
-        _position: language::Anchor,
-        text: &str,
-        _trigger_in_words: bool,
-        _cx: &mut Context<Editor>,
-    ) -> bool {
-        text.chars()
-            .last()
-            .is_some_and(|last_char| last_char.is_ascii_alphanumeric() || last_char == '_')
     }
 }
 

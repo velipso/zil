@@ -591,7 +591,7 @@ pub(crate) fn handle_from(
                     .collect::<Vec<_>>();
                 this.update_in(cx, |this, window, cx| {
                     this.change_selections(
-                        SelectionEffects::no_scroll().completions(false),
+                        SelectionEffects::no_scroll(),
                         window,
                         cx,
                         |s| {

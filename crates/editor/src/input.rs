@@ -477,7 +477,7 @@ impl Editor {
             }
 
             this.change_selections(
-                SelectionEffects::scroll(Autoscroll::fit()).completions(false),
+                SelectionEffects::scroll(Autoscroll::fit()),
                 window,
                 cx,
                 |s| s.select(new_selections),
@@ -491,7 +491,6 @@ impl Editor {
                 this.show_signature_help(&ShowSignatureHelp, window, cx);
             }
 
-            let trigger_in_words = true;
             if this.hard_wrap.is_some() {
                 let latest: Range<Point> = this.selections.newest(&map).range();
                 if latest.is_empty()
@@ -512,7 +511,6 @@ impl Editor {
                     )
                 }
             }
-            this.trigger_completion_on_input(&text, trigger_in_words, window, cx);
             refresh_linked_ranges(this, window, cx);
             jsx_tag_auto_close::handle_from(this, initial_buffer_versions, window, cx);
         });
@@ -1141,16 +1139,6 @@ impl Editor {
             let item = this.cut_common(false, window, cx);
             cx.write_to_clipboard(item);
         });
-    }
-
-    pub fn insert_snippet_at_selections(
-        &mut self,
-        action: &InsertSnippet,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.try_insert_snippet_at_selections(action, window, cx)
-            .log_err();
     }
 
     pub fn toggle_block_comments(
@@ -2136,42 +2124,6 @@ impl Editor {
 
             (selection, enclosing)
         })
-    }
-
-    fn try_insert_snippet_at_selections(
-        &mut self,
-        action: &InsertSnippet,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
-        let insertion_ranges = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx))
-            .into_iter()
-            .map(|selection| selection.range())
-            .collect_vec();
-
-        let snippet = if let Some(snippet_body) = &action.snippet {
-            if action.language.is_none() && action.name.is_none() {
-                Snippet::parse(snippet_body)?
-            } else {
-                bail!("`snippet` is mutually exclusive with `language` and `name`")
-            }
-        } else if let Some(name) = &action.name {
-            let project = self.project().context("no project")?;
-            let snippet_store = project.read(cx).snippets().read(cx);
-            let snippet = snippet_store
-                .snippets_for(action.language.clone(), cx)
-                .into_iter()
-                .find(|snippet| snippet.name == *name)
-                .context("snippet not found")?;
-            Snippet::parse(&snippet.body)?
-        } else {
-            // todo(andrew): open modal to select snippet
-            bail!("`name` or `snippet` is required")
-        };
-
-        self.insert_snippet(&insertion_ranges, snippet, window, cx)
     }
 }
 

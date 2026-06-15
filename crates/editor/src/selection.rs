@@ -60,7 +60,6 @@ impl Editor {
         let snapshot = self.display_snapshot(cx);
         if let Some(state) = &mut self.deferred_selection_effects_state {
             state.effects.scroll = effects.scroll.or(state.effects.scroll);
-            state.effects.completions = effects.completions;
             state.effects.nav_history = effects.nav_history.or(state.effects.nav_history);
             let (changed, result) = self.selections.change_with(&snapshot, change);
             state.changed |= changed;
@@ -1078,8 +1077,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.hide_context_menu(window, cx);
-
         match phase {
             SelectPhase::Begin {
                 position,
@@ -1510,12 +1507,10 @@ impl Editor {
         self.select_prev_state = None;
         self.select_syntax_node_history.try_clear();
         self.invalidate_autoclose_regions(&selection_anchors, buffer);
-        self.snippet_stack.invalidate(&selection_anchors, buffer);
         self.take_rename(false, window, cx);
 
         let newest_selection = self.selections.newest_anchor();
         let new_cursor_position = newest_selection.head();
-        let selection_start = newest_selection.start;
 
         if effects.nav_history.is_none() || effects.nav_history == Some(true) {
             self.push_to_nav_history(
@@ -1530,45 +1525,6 @@ impl Editor {
         if local {
             if let Some((anchor, _)) = buffer.anchor_to_buffer_anchor(new_cursor_position) {
                 self.register_buffer(anchor.buffer_id, cx);
-            }
-
-            let context_menu = self.context_menu.borrow_mut();
-            let completion_menu = match context_menu.as_ref() {
-                Some(CodeContextMenu::Completions(menu)) => Some(menu),
-                None => None,
-            };
-            let completion_position = completion_menu.map(|menu| menu.initial_position);
-            drop(context_menu);
-
-            if effects.completions
-                && let Some(completion_position) = completion_position
-            {
-                let start_offset = selection_start.to_offset(buffer);
-                let position_matches = start_offset == completion_position.to_offset(buffer);
-                let continue_showing = if let Some((snap, ..)) =
-                    buffer.point_to_buffer_offset(completion_position)
-                    && !snap.capability.editable()
-                {
-                    false
-                } else if position_matches {
-                    if self.snippet_stack.is_empty() {
-                        buffer.char_kind_before(start_offset, Some(CharScopeContext::Completion))
-                            == Some(CharKind::Word)
-                    } else {
-                        // Snippet choices can be shown even when the cursor is in whitespace.
-                        // Dismissing the menu with actions like backspace is handled by
-                        // invalidation regions.
-                        true
-                    }
-                } else {
-                    false
-                };
-
-                if continue_showing {
-                    self.open_or_update_completions_menu(None, None, false, window, cx);
-                } else {
-                    self.hide_context_menu(window, cx);
-                }
             }
 
             hide_hover(self, cx);

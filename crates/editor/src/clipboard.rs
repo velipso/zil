@@ -230,12 +230,6 @@ impl Editor {
                     s.select_anchors(selection_anchors);
                 });
             }
-
-            //   🤔                 |    ..     | show_in_menu |
-            // | ..                  |   true        true
-            // | had_edit_prediction |   false       true
-
-            this.trigger_completion_on_input(text, true, window, cx);
         });
     }
 

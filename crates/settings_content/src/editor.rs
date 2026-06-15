@@ -1,7 +1,6 @@
 use std::fmt::Display;
 use std::num;
 
-use collections::HashMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
@@ -22,10 +21,6 @@ pub struct EditorSettingsContent {
     ///
     /// Default: bar
     pub cursor_shape: Option<CursorShape>,
-    /// Determines how snippets are sorted relative to other completion items.
-    ///
-    /// Default: inline
-    pub snippet_sort_order: Option<SnippetSortOrder>,
     /// How to highlight the current line in the editor.
     ///
     /// Default: all
@@ -194,9 +189,6 @@ pub struct EditorSettingsContent {
     /// Default: center
     pub go_to_definition_scroll_strategy: Option<GoToDefinitionScrollStrategy>,
 
-    /// Jupyter REPL settings.
-    pub jupyter: Option<JupyterContent>,
-
     /// Which level to use to filter out diagnostics displayed in the editor.
     ///
     /// Affects the editor rendering only, and does not interrupt
@@ -209,11 +201,6 @@ pub struct EditorSettingsContent {
     /// Default: warning
     pub diagnostics_max_severity: Option<DiagnosticSeverityContent>,
 
-    /// Whether to show code action button at start of buffer line.
-    ///
-    /// Default: true
-    pub inline_code_actions: Option<bool>,
-
     /// Drag and drop related settings
     pub drag_and_drop_selection: Option<DragAndDropSelectionContent>,
 
@@ -225,47 +212,6 @@ pub struct EditorSettingsContent {
     ///
     /// Default: true
     pub lsp_document_links: Option<bool>,
-    /// When to show the scrollbar in the completion menu.
-    /// This setting can take four values:
-    ///
-    /// 1. Show the scrollbar if there's important information or
-    ///    follow the system's configured behavior
-    ///   "auto"
-    /// 2. Match the system's configured behavior:
-    ///    "system"
-    /// 3. Always show the scrollbar:
-    ///    "always"
-    /// 4. Never show the scrollbar:
-    ///    "never" (default)
-    pub completion_menu_scrollbar: Option<ShowScrollbar>,
-
-    /// Whether to align detail text in code completions context menus left or right.
-    ///
-    /// Default: left
-    pub completion_detail_alignment: Option<CompletionDetailAlignment>,
-
-    /// How to display the LSP item kind (function, method, variable, etc.)
-    /// of each entry in the completions menu.
-    ///
-    /// - "off": do not display item kinds (default).
-    /// - "symbol": display a single-letter badge, colorized based on the
-    ///   active syntax theme.
-    ///
-    /// Default: off
-    pub completion_menu_item_kind: Option<CompletionMenuItemKind>,
-
-    /// How to display diffs in the editor.
-    ///
-    /// Default: split
-    pub diff_view_style: Option<DiffViewStyle>,
-
-    /// The minimum width (in em-widths) at which the split diff view is used.
-    /// When the editor is narrower than this, the diff view automatically
-    /// switches to unified mode and switches back when the editor is wide
-    /// enough. Set to 0 to disable automatic switching.
-    ///
-    /// Default: 100
-    pub minimum_split_diff_width: Option<f32>,
 }
 
 #[derive(
@@ -307,27 +253,6 @@ pub enum CompletionDetailAlignment {
     #[default]
     Left,
     Right,
-}
-
-#[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum CompletionMenuItemKind {
-    #[default]
-    Off,
-    Symbol,
 }
 
 impl RelativeLineNumbers {
@@ -822,64 +747,6 @@ pub enum GoToDefinitionScrollStrategy {
     Preserve,
 }
 
-/// Determines how snippets are sorted relative to other completion items.
-///
-/// Default: inline
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum SnippetSortOrder {
-    /// Place snippets at the top of the completion list
-    Top,
-    /// Sort snippets normally using the default comparison logic
-    #[default]
-    Inline,
-    /// Place snippets at the bottom of the completion list
-    Bottom,
-    /// Do not show snippets in the completion list
-    None,
-}
-
-/// How to display diffs in the editor.
-///
-/// Default: unified
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::Display,
-    strum::EnumIter,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum DiffViewStyle {
-    /// Show diffs in a single unified view.
-    Unified,
-    /// Show diffs in a split view.
-    #[default]
-    Split,
-}
-
 /// Default options for buffer and project search items.
 #[with_fallible_options]
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
@@ -896,21 +763,6 @@ pub struct SearchSettingsContent {
     pub regex: Option<bool>,
     /// Whether to center the cursor on each search match when navigating.
     pub center_on_match: Option<bool>,
-}
-
-#[with_fallible_options]
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub struct JupyterContent {
-    /// Whether the Jupyter feature is enabled.
-    ///
-    /// Default: true
-    pub enabled: Option<bool>,
-
-    /// Default kernels to select for each language.
-    ///
-    /// Default: `{}`
-    pub kernel_selections: Option<HashMap<String, String>>,
 }
 
 /// Whether to allow drag and drop text selection in buffer.

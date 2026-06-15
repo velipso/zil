@@ -338,18 +338,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: {}
     pub tasks: Option<LanguageTaskSettingsContent>,
-    /// Whether to pop the completions menu while typing in an editor without
-    /// explicitly requesting it.
-    ///
-    /// Default: true
-    pub show_completions_on_input: Option<bool>,
-    /// Whether to display inline and alongside documentation for items in the
-    /// completions menu.
-    ///
-    /// Default: true
-    pub show_completion_documentation: Option<bool>,
-    /// Controls how completions are processed for this language.
-    pub completions: Option<CompletionSettingsContent>,
     /// Preferred debuggers for this language.
     ///
     /// Default: []
@@ -519,36 +507,6 @@ impl InlayHintKind {
             InlayHintKind::Parameter => "parameter",
         }
     }
-}
-
-/// Controls how completions are processed for this language.
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct CompletionSettingsContent {
-    /// Controls how words are completed.
-    /// For large documents, not all words may be fetched for completion.
-    ///
-    /// Default: `fallback`
-    pub words: Option<WordsCompletionMode>,
-    /// How many characters has to be in the completions query to automatically show the words-based completions.
-    /// Before that value, it's still possible to trigger the words-based completion manually with the corresponding editor command.
-    ///
-    /// Default: 3
-    pub words_min_length: Option<u32>,
-    /// Whether to fetch LSP completions or not.
-    ///
-    /// Default: true
-    pub lsp: Option<bool>,
-    /// When fetching LSP completions, determines how long to wait for a response of a particular server.
-    /// When set to 0, waits indefinitely.
-    ///
-    /// Default: 0
-    pub lsp_fetch_timeout_ms: Option<u64>,
-    /// Controls how LSP completions are inserted.
-    ///
-    /// Default: "replace_suffix"
-    pub lsp_insert_mode: Option<LspInsertMode>,
 }
 
 #[derive(

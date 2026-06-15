@@ -254,9 +254,6 @@ impl Editor {
         }) {
             popover.scroll(amount, window, cx);
             true
-        } else if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
-            context_menu.scroll_aside(amount, window, cx);
-            true
         } else {
             false
         }

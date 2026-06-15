@@ -802,7 +802,6 @@ impl LanguageServer {
                             ResourceOperationKind::Delete,
                         ]),
                         document_changes: Some(true),
-                        snippet_edit_support: Some(true),
                         ..WorkspaceEditClientCapabilities::default()
                     }),
                     file_operations: Some(WorkspaceFileOperationsClientCapabilities {
@@ -824,51 +823,6 @@ impl LanguageServer {
                     definition: Some(GotoCapability {
                         link_support: Some(true),
                         dynamic_registration: Some(true),
-                    }),
-                    completion: Some(CompletionClientCapabilities {
-                        completion_item: Some(CompletionItemCapability {
-                            snippet_support: Some(true),
-                            resolve_support: Some(CompletionItemCapabilityResolveSupport {
-                                properties: vec![
-                                    "additionalTextEdits".to_string(),
-                                    "command".to_string(),
-                                    "detail".to_string(),
-                                    "documentation".to_string(),
-                                    // NB: Do not have this resolved, otherwise Zed becomes slow to complete things
-                                    // "textEdit".to_string(),
-                                ],
-                            }),
-                            deprecated_support: Some(true),
-                            tag_support: Some(TagSupport {
-                                value_set: vec![CompletionItemTag::DEPRECATED],
-                            }),
-                            insert_replace_support: Some(true),
-                            label_details_support: Some(true),
-                            insert_text_mode_support: Some(InsertTextModeSupport {
-                                value_set: vec![
-                                    InsertTextMode::AS_IS,
-                                    InsertTextMode::ADJUST_INDENTATION,
-                                ],
-                            }),
-                            documentation_format: Some(vec![
-                                MarkupKind::Markdown,
-                                MarkupKind::PlainText,
-                            ]),
-                            ..CompletionItemCapability::default()
-                        }),
-                        insert_text_mode: Some(InsertTextMode::ADJUST_INDENTATION),
-                        completion_list: Some(CompletionListCapability {
-                            item_defaults: Some(vec![
-                                "commitCharacters".to_owned(),
-                                "editRange".to_owned(),
-                                "insertTextMode".to_owned(),
-                                "insertTextFormat".to_owned(),
-                                "data".to_owned(),
-                            ]),
-                        }),
-                        context_support: Some(true),
-                        dynamic_registration: Some(true),
-                        ..CompletionClientCapabilities::default()
                     }),
                     rename: Some(RenameClientCapabilities {
                         prepare_support: Some(true),

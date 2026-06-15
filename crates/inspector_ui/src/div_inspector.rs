@@ -1,26 +1,20 @@
 use anyhow::{Result, anyhow};
 use editor::{
-    Bias, CompletionProvider, Editor, EditorEvent, EditorMode, MinimapVisibility, MultiBuffer,
+    Bias, Editor, EditorEvent, EditorMode, MinimapVisibility, MultiBuffer,
 };
-use fuzzy::StringMatch;
 use gpui::{
     AsyncWindowContext, DivInspectorState, Entity, InspectorElementId, IntoElement,
-    StyleRefinement, Task, Window, inspector_reflection::FunctionReflection, styled_reflection,
+    StyleRefinement, Window, inspector_reflection::FunctionReflection, styled_reflection,
 };
 use language::language_settings::SoftWrap;
 use language::{
-    Anchor, Buffer, BufferSnapshot, CodeLabel, Diagnostic, DiagnosticEntry, DiagnosticSet,
-    DiagnosticSeverity, LanguageServerId, Point, ToOffset as _, ToPoint as _,
+    Anchor, Buffer, BufferSnapshot, Diagnostic, DiagnosticEntry, DiagnosticSet,
+    DiagnosticSeverity, LanguageServerId, ToOffset as _,
 };
-use project::lsp_store::CompletionDocumentation;
-use project::{
-    Completion, CompletionDisplayOptions, CompletionResponse, CompletionSource, Project,
-    ProjectPath,
-};
+use project::{Project, ProjectPath};
 use std::fmt::Write as _;
 use std::ops::Range;
 use std::path::Path;
-use std::rc::Rc;
 use std::sync::LazyLock;
 use ui::{Label, LabelSize, Tooltip, prelude::*, styled_ext_reflection, v_flex};
 use util::rel_path::RelPath;
@@ -179,15 +173,6 @@ impl DivInspector {
         let json_style_editor = self.create_editor(json_style_buffer.clone(), window, cx);
         let rust_style_editor = self.create_editor(rust_style_buffer.clone(), window, cx);
 
-        rust_style_editor.update(cx, {
-            let div_inspector = cx.entity();
-            |rust_style_editor, _cx| {
-                rust_style_editor.set_completion_provider(Some(Rc::new(
-                    RustStyleCompletionProvider { div_inspector },
-                )));
-            }
-        });
-
         let rust_style = match self.reset_style_editors(&rust_style_buffer, &json_style_buffer, cx)
         {
             Ok(rust_style) => {
@@ -318,26 +303,6 @@ impl DivInspector {
         });
 
         Ok(rust_style)
-    }
-
-    fn handle_rust_completion_selection_change(
-        &mut self,
-        rust_completion: Option<String>,
-        cx: &mut Context<Self>,
-    ) {
-        self.rust_completion = rust_completion;
-        if let State::Ready {
-            rust_style_buffer,
-            json_style_buffer,
-            ..
-        } = &self.state
-        {
-            self.update_json_style_from_rust(
-                &json_style_buffer.clone(),
-                &rust_style_buffer.clone(),
-                cx,
-            );
-        }
     }
 
     fn update_json_style_from_rust(
@@ -630,101 +595,4 @@ fn guess_rust_code_from_style(goal_style: &StyleRefinement) -> (String, StyleRef
 
 fn is_not_identifier_char(c: char) -> bool {
     !c.is_alphanumeric() && c != '_'
-}
-
-struct RustStyleCompletionProvider {
-    div_inspector: Entity<DivInspector>,
-}
-
-impl CompletionProvider for RustStyleCompletionProvider {
-    fn completions(
-        &self,
-        buffer: &Entity<Buffer>,
-        position: Anchor,
-        _: editor::CompletionContext,
-        _window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) -> Task<Result<Vec<CompletionResponse>>> {
-        let Some(replace_range) = completion_replace_range(&buffer.read(cx).snapshot(), &position)
-        else {
-            return Task::ready(Ok(Vec::new()));
-        };
-
-        self.div_inspector.update(cx, |div_inspector, _cx| {
-            div_inspector.rust_completion_replace_range = Some(replace_range.clone());
-        });
-
-        Task::ready(Ok(vec![CompletionResponse {
-            completions: STYLE_METHODS
-                .iter()
-                .map(|(_, method)| Completion {
-                    replace_range: replace_range.clone(),
-                    new_text: format!(".{}()", method.name),
-                    label: CodeLabel::plain(method.name.to_string(), None),
-                    match_start: None,
-                    snippet_deduplication_key: None,
-                    icon_path: None,
-                    documentation: method.documentation.map(|documentation| {
-                        CompletionDocumentation::MultiLineMarkdown(documentation.into())
-                    }),
-                    source: CompletionSource::Custom,
-                    insert_text_mode: None,
-                    confirm: None,
-                    group: None,
-                })
-                .collect(),
-            display_options: CompletionDisplayOptions::default(),
-            is_incomplete: false,
-        }]))
-    }
-
-    fn is_completion_trigger(
-        &self,
-        buffer: &Entity<language::Buffer>,
-        position: language::Anchor,
-        _text: &str,
-        _trigger_in_words: bool,
-        cx: &mut Context<Editor>,
-    ) -> bool {
-        completion_replace_range(&buffer.read(cx).snapshot(), &position).is_some()
-    }
-
-    fn selection_changed(&self, mat: Option<&StringMatch>, _window: &mut Window, cx: &mut App) {
-        let div_inspector = self.div_inspector.clone();
-        let rust_completion = mat.as_ref().map(|mat| mat.string.clone());
-        cx.defer(move |cx| {
-            div_inspector.update(cx, |div_inspector, cx| {
-                div_inspector.handle_rust_completion_selection_change(rust_completion, cx);
-            });
-        });
-    }
-
-    fn sort_completions(&self) -> bool {
-        false
-    }
-}
-
-fn completion_replace_range(snapshot: &BufferSnapshot, anchor: &Anchor) -> Option<Range<Anchor>> {
-    let point = anchor.to_point(snapshot);
-    let offset = point.to_offset(snapshot);
-    let line_start = Point::new(point.row, 0).to_offset(snapshot);
-    let line_end = Point::new(point.row, snapshot.line_len(point.row)).to_offset(snapshot);
-    let mut lines = snapshot.text_for_range(line_start..line_end).lines();
-    let line = lines.next()?;
-
-    let start_in_line = &line[..offset - line_start]
-        .rfind(|c| is_not_identifier_char(c) && c != '.')
-        .map(|ix| ix + 1)
-        .unwrap_or(0);
-    let end_in_line = &line[offset - line_start..]
-        .rfind(|c| is_not_identifier_char(c) && c != '(' && c != ')')
-        .unwrap_or(line_end - line_start);
-
-    if end_in_line > start_in_line {
-        let replace_start = snapshot.anchor_before(line_start + start_in_line);
-        let replace_end = snapshot.anchor_after(line_start + end_in_line);
-        Some(replace_start..replace_end)
-    } else {
-        None
-    }
 }
