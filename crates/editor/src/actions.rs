@@ -849,10 +849,6 @@ actions!(
         /// Toggles automatic signature help.
         ToggleAutoSignatureHelp,
         /// Toggles inline git blame display.
-        ToggleGitBlameInline,
-        /// Opens the git commit for the blame at cursor.
-        OpenGitBlameCommit,
-        /// Toggles the diagnostics panel.
         ToggleDiagnostics,
         /// Toggles indent guides display.
         ToggleIndentGuides,

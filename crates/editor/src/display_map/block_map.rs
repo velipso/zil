@@ -743,25 +743,6 @@ impl BlockMap {
         id
     }
 
-    // Warning: doesn't sync the block map, use advisedly
-    pub(crate) fn retain_blocks_raw(&mut self, pred: &mut dyn FnMut(&Arc<CustomBlock>) -> bool) {
-        let mut ids_to_remove = HashSet::default();
-        self.custom_blocks.retain(|block| {
-            let keep = pred(block);
-            if !keep {
-                ids_to_remove.insert(block.id);
-            }
-            keep
-        });
-        self.custom_blocks_by_id
-            .retain(|id, _| !ids_to_remove.contains(id));
-    }
-
-    // Warning: doesn't sync the block map, use advisedly
-    pub(crate) fn blocks_raw(&self) -> impl Iterator<Item = &Arc<CustomBlock>> {
-        self.custom_blocks.iter()
-    }
-
     #[ztracing::instrument(skip_all, fields(edits = ?edits))]
     fn sync(
         &self,

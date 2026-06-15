@@ -24,7 +24,6 @@ mod editor_settings;
 mod element;
 mod fold;
 mod folding_ranges;
-mod git;
 mod highlight_matching_bracket;
 pub mod hover_links;
 pub mod hover_popover;
@@ -42,8 +41,6 @@ mod rust_analyzer_ext;
 pub mod scroll;
 mod selections_collection;
 pub mod semantic_tokens;
-mod split;
-pub mod split_editor_view;
 
 mod bookmarks;
 #[cfg(test)]
@@ -88,14 +85,6 @@ pub use element::{
     CursorLayout, EditorElement, HighlightedRange, HighlightedRangeLine, PointForPosition,
     render_breadcrumb_text,
 };
-pub use git::blame::BlameRenderer;
-pub(crate) use git::{DiffHunkKey, StoredReviewComment};
-use git::{
-    DiffReviewDragState, DiffReviewOverlay, InlineBlamePopover, render_diff_hunk_controls,
-    update_uncommitted_diff_for_buffer,
-};
-pub(crate) use git::{DisplayDiffHunk, PhantomDiffReviewIndicator};
-pub use git::{RenderDiffHunkControlsFn, set_blame_renderer};
 pub use hover_popover::hover_markdown_style;
 pub use inlays::Inlay;
 pub use items::MAX_TAB_TITLE_LEN;
@@ -107,13 +96,11 @@ pub use multi_buffer::{
     MultiBufferOffset, MultiBufferOffsetUtf16, MultiBufferSnapshot, PathKey, RowInfo, ToOffset,
     ToPoint,
 };
-pub use split::{SplittableEditor, ToggleSplitDiff};
-pub use split_editor_view::SplitEditorView;
 pub use text::Bias;
 
 use ::git::status::FileStatus;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, bail};
 use blink_manager::BlinkManager;
 use client::{Collaborator, ParticipantIndex, parse_zed_link};
 use clock::ReplicaId;
@@ -133,13 +120,12 @@ use futures::{
     future::{self, Shared},
 };
 use fuzzy::{StringMatch, StringMatchCandidate};
-use git::blame::{GitBlame, GlobalBlameRenderer};
 use gpui::{
     Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds, ClickEvent,
     ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
     EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle, FontWeight, Global,
     HighlightStyle, Hsla, KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
-    PaintQuad, ParentElement, Pixels, PressureStage, Render, ScrollHandle, SharedString, SharedUri,
+    PaintQuad, ParentElement, Pixels, PressureStage, Render, SharedString,
     Size, Styled, Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection,
     UnderlineStyle, UniformListScrollHandle, WeakEntity, WeakFocusHandle, Window, div, point,
     prelude::*, px, relative, size,
@@ -167,7 +153,6 @@ use lsp::{
     CodeActionKind, CompletionItemKind, CompletionTriggerKind, InsertTextFormat, InsertTextMode,
     LanguageServerId,
 };
-use markdown::Markdown;
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
 use multi_buffer::{
@@ -189,7 +174,6 @@ use project::{
         },
         session::{Session, SessionEvent},
     },
-    git_store::GitStoreEvent,
     lsp_store::{
         BufferSemanticTokens, CacheInlayHints, CompletionDocumentation, FormatTrigger,
         LspFormatTarget, OpenLspBufferHandle, RefreshForServer,
@@ -230,7 +214,7 @@ use theme::{
 };
 use theme_settings::{ThemeSettings, observe_buffer_font_size_adjustment};
 use ui::{
-    Avatar, ButtonStyle, ContextMenu, Disclosure, IconButton, IconButtonShape, IconName, IconSize,
+    ButtonStyle, ContextMenu, Disclosure, IconButton, IconButtonShape, IconName, IconSize,
     Indicator, Tooltip, h_flex, prelude::*, scrollbars::ScrollbarAutoHide, utils::WithRemSize,
 };
 use ui_input::ErasedEditor;
@@ -238,9 +222,9 @@ use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
 use workspace::{
     CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal,
     OpenTerminal, Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
-    TabBarSettings, Toast, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
-    item::{ItemBufferKind, ItemHandle, PreviewTabsSettings, SaveOptions},
-    notifications::{DetachAndPromptErr, NotificationId, NotifyResultExt, NotifyTaskExt},
+    TabBarSettings, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
+    item::{ItemBufferKind, ItemHandle, PreviewTabsSettings},
+    notifications::{DetachAndPromptErr, NotifyResultExt, NotifyTaskExt},
     searchable::SearchEvent,
 };
 pub use zed_actions::editor::RevealInFileManager;
@@ -305,7 +289,6 @@ impl Navigated {
 }
 
 pub fn init(cx: &mut App) {
-    cx.set_global(GlobalBlameRenderer(Arc::new(())));
     cx.set_global(breadcrumbs::RenderBreadcrumbText(render_breadcrumb_text));
 
     workspace::register_project_item::<Editor>(cx);
@@ -462,11 +445,6 @@ impl EditorMode {
 
 #[derive(Copy, Clone, Debug)]
 pub enum SoftWrap {
-    /// Prefer not to wrap at all.
-    ///
-    /// Note: this is currently internal, as actually limited by [`crate::MAX_LINE_LEN`] until it wraps.
-    /// The mode is used inside git diff hunks, where it's seems currently more useful to not wrap as much as possible.
-    GitDiff,
     /// Prefer a single line generally, unless an overly long line is encountered.
     None,
     /// Soft wrap lines that exceed the editor width.
@@ -934,7 +912,6 @@ pub struct Editor {
     offset_content: bool,
     disable_expand_excerpt_buttons: bool,
     delegate_expand_excerpts: bool,
-    delegate_stage_and_restore: bool,
     delegate_open_excerpts: bool,
     enable_lsp_data: bool,
     needs_initial_data_update: bool,
@@ -947,7 +924,6 @@ pub struct Editor {
     show_runnables: Option<bool>,
     show_bookmarks: Option<bool>,
     show_breakpoints: Option<bool>,
-    show_diff_review_button: bool,
     show_wrap_guides: Option<bool>,
     show_indent_guides: Option<bool>,
     buffers_with_disabled_indent_guides: HashSet<BufferId>,
@@ -963,8 +939,6 @@ pub struct Editor {
     context_menu_options: Option<ContextMenuOptions>,
     mouse_context_menu: Option<MouseContextMenu>,
     completion_tasks: Vec<(CompletionId, Task<()>)>,
-    inline_blame_popover: Option<InlineBlamePopover>,
-    inline_blame_popover_show_task: Option<Task<()>>,
     signature_help_state: SignatureHelpState,
     auto_signature_help: Option<bool>,
     find_all_references_task_sources: Vec<Anchor>,
@@ -1022,15 +996,8 @@ pub struct Editor {
     use_selection_highlight: bool,
     auto_replace_emoji_shortcode: bool,
     jsx_tag_auto_close_enabled_in_any_buffer: bool,
-    show_git_blame_gutter: bool,
-    show_git_blame_inline: bool,
-    show_git_blame_inline_delay_task: Option<Task<()>>,
-    git_blame_inline_enabled: bool,
-    render_diff_hunk_controls: RenderDiffHunkControlsFn,
     buffer_serialization: Option<BufferSerialization>,
     show_selection_menu: Option<bool>,
-    blame: Option<Entity<GitBlame>>,
-    blame_subscription: Option<Subscription>,
     custom_context_menu: Option<
         Box<
             dyn 'static
@@ -1049,18 +1016,6 @@ pub struct Editor {
     bookmark_store: Option<Entity<BookmarkStore>>,
     breakpoint_store: Option<Entity<BreakpointStore>>,
     gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
-    pub(crate) gutter_diff_review_indicator: (Option<PhantomDiffReviewIndicator>, Option<Task<()>>),
-    pub(crate) diff_review_drag_state: Option<DiffReviewDragState>,
-    /// Active diff review overlays. Multiple overlays can be open simultaneously
-    /// when hunks have comments stored.
-    pub(crate) diff_review_overlays: Vec<DiffReviewOverlay>,
-    /// Stored review comments grouped by hunk.
-    /// Uses a Vec instead of HashMap because DiffHunkKey contains an Anchor
-    /// which doesn't implement Hash/Eq in a way suitable for HashMap keys.
-    stored_review_comments: Vec<(DiffHunkKey, Vec<StoredReviewComment>)>,
-    /// Counter for generating unique comment IDs.
-    next_review_comment_id: usize,
-    hovered_diff_hunk_row: Option<DisplayRow>,
     pull_diagnostics_task: Task<()>,
     in_project_search: bool,
     previous_search_ranges: Option<Arc<[Range<Anchor>]>>,
@@ -1069,9 +1024,6 @@ pub struct Editor {
     next_scroll_position: NextScrollCursorCenterTopBottom,
     addons: HashMap<TypeId, Box<dyn Addon>>,
     registered_buffers: HashMap<BufferId, OpenLspBufferHandle>,
-    load_diff_task: Option<Shared<Task<()>>>,
-    /// Whether we are temporarily displaying a diff other than git's
-    temporary_diff_override: bool,
     selection_mark_mode: bool,
     toggle_fold_multiple_buffers: Task<()>,
     _scroll_cursor_center_top_bottom_task: Task<()>,
@@ -1154,7 +1106,6 @@ pub struct EditorSnapshot {
     show_runnables: Option<bool>,
     show_breakpoints: Option<bool>,
     show_bookmarks: Option<bool>,
-    git_blame_gutter_max_author_length: Option<usize>,
     pub display_snapshot: DisplaySnapshot,
     pub placeholder_display_snapshot: Option<DisplaySnapshot>,
     is_focused: bool,
@@ -1186,7 +1137,6 @@ pub struct GutterDimensions {
     pub right_padding: Pixels,
     pub width: Pixels,
     pub margin: Pixels,
-    pub git_blame_entries_width: Option<Pixels>,
 }
 
 impl GutterDimensions {
@@ -2003,22 +1953,6 @@ impl Editor {
                     _ => {}
                 },
             ));
-            let git_store = project.read(cx).git_store().clone();
-            let project = project.clone();
-            project_subscriptions.push(cx.subscribe(&git_store, move |this, _, event, cx| {
-                if let GitStoreEvent::RepositoryAdded = event {
-                    this.load_diff_task = Some(
-                        update_uncommitted_diff_for_buffer(
-                            cx.entity(),
-                            &project,
-                            this.buffer.read(cx).all_buffers(),
-                            this.buffer.clone(),
-                            cx,
-                        )
-                        .shared(),
-                    );
-                }
-            }));
         }
 
         let buffer_snapshot = multi_buffer.read(cx).snapshot(cx);
@@ -2057,18 +1991,7 @@ impl Editor {
         };
 
         let mut code_action_providers = Vec::new();
-        let mut load_uncommitted_diff = None;
         if let Some(project) = project.clone() {
-            load_uncommitted_diff = Some(
-                update_uncommitted_diff_for_buffer(
-                    cx.entity(),
-                    &project,
-                    multi_buffer.read(cx).all_buffers(),
-                    multi_buffer.clone(),
-                    cx,
-                )
-                .shared(),
-            );
             code_action_providers.push(Rc::new(project) as Rc<_>);
         }
 
@@ -2119,7 +2042,6 @@ impl Editor {
             use_relative_line_numbers: None,
             disable_expand_excerpt_buttons: !full_mode,
             delegate_expand_excerpts: false,
-            delegate_stage_and_restore: false,
             delegate_open_excerpts: false,
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
@@ -2130,7 +2052,6 @@ impl Editor {
             show_runnables: None,
             show_bookmarks: None,
             show_breakpoints: None,
-            show_diff_review_button: false,
             show_wrap_guides: None,
             show_indent_guides,
             buffers_with_disabled_indent_guides: HashSet::default(),
@@ -2146,8 +2067,6 @@ impl Editor {
             context_menu_options: None,
             mouse_context_menu: None,
             completion_tasks: Vec::new(),
-            inline_blame_popover: None,
-            inline_blame_popover_show_task: None,
             signature_help_state: SignatureHelpState::default(),
             auto_signature_help: None,
             find_all_references_task_sources: Vec::new(),
@@ -2205,13 +2124,7 @@ impl Editor {
             show_completions_on_input_override: None,
             in_leading_whitespace: false,
             custom_context_menu: None,
-            show_git_blame_gutter: false,
-            show_git_blame_inline: false,
             show_selection_menu: None,
-            show_git_blame_inline_delay_task: None,
-            git_blame_inline_enabled: full_mode
-                && ProjectSettings::get_global(cx).git.inline_blame.enabled,
-            render_diff_hunk_controls: Arc::new(render_diff_hunk_controls),
             buffer_serialization: is_minimap.not().then(|| {
                 BufferSerialization::new(
                     ProjectSettings::get_global(cx)
@@ -2219,18 +2132,10 @@ impl Editor {
                         .restore_unsaved_buffers,
                 )
             }),
-            blame: None,
-            blame_subscription: None,
 
             bookmark_store,
             breakpoint_store,
             gutter_hover_button: (None, None),
-            gutter_diff_review_indicator: (None, None),
-            diff_review_drag_state: None,
-            diff_review_overlays: Vec::new(),
-            stored_review_comments: Vec::new(),
-            next_review_comment_id: 0,
-            hovered_diff_hunk_row: None,
             _subscriptions: (!is_minimap)
                 .then(|| {
                     vec![
@@ -2277,8 +2182,6 @@ impl Editor {
             serialize_selections: Task::ready(()),
             serialize_folds: Task::ready(()),
             text_style_refinement: None,
-            load_diff_task: load_uncommitted_diff,
-            temporary_diff_override: false,
             minimap: None,
             change_list: ChangeList::new(),
             mode,
@@ -2327,7 +2230,6 @@ impl Editor {
                 EditorEvent::ScrollPositionChanged { local, .. } => {
                     if *local {
                         editor.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
-                        editor.hide_blame_popover(true, cx);
                         let snapshot = editor.snapshot(window, cx);
                         let new_anchor = editor
                             .scroll_manager
@@ -2409,10 +2311,6 @@ impl Editor {
         if full_mode {
             let should_auto_hide_scrollbars = cx.should_auto_hide_scrollbars();
             cx.set_global(ScrollbarAutoHide(should_auto_hide_scrollbars));
-
-            if editor.git_blame_inline_enabled {
-                editor.start_git_blame_inline(false, window, cx);
-            }
 
             editor.go_to_active_debug_line(window, cx);
 
@@ -2568,11 +2466,6 @@ impl Editor {
                 key_context.add("end_of_input");
             }
         }
-
-        if self.has_any_expanded_diff_hunks(cx) {
-            key_context.add("diffs_expanded");
-        }
-
         key_context
     }
 
@@ -2772,19 +2665,6 @@ impl Editor {
     }
 
     pub fn snapshot(&self, window: &Window, cx: &mut App) -> EditorSnapshot {
-        let git_blame_gutter_max_author_length = self
-            .render_git_blame_gutter(cx)
-            .then(|| {
-                if let Some(blame) = self.blame.as_ref() {
-                    let max_author_length =
-                        blame.update(cx, |blame, cx| blame.max_author_length(cx));
-                    Some(max_author_length)
-                } else {
-                    None
-                }
-            })
-            .flatten();
-
         let display_snapshot = self.display_map.update(cx, |map, cx| map.snapshot(cx));
 
         EditorSnapshot {
@@ -2799,7 +2679,6 @@ impl Editor {
             show_runnables: self.show_runnables,
             show_bookmarks: self.show_bookmarks,
             show_breakpoints: self.show_breakpoints,
-            git_blame_gutter_max_author_length,
             scroll_anchor: self.scroll_manager.shared_scroll_anchor(cx),
             display_snapshot,
             placeholder_display_snapshot: self
@@ -3061,15 +2940,6 @@ impl Editor {
             cx.notify();
             return;
         }
-        if self.clear_expanded_diff_hunks(cx) {
-            cx.notify();
-            return;
-        }
-        if self.show_git_blame_gutter {
-            self.show_git_blame_gutter = false;
-            cx.notify();
-            return;
-        }
 
         if self.mode.is_full()
             && self.change_selections(Default::default(), window, cx, |s| s.try_cancel())
@@ -3088,28 +2958,16 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> bool {
         let mut dismissed = false;
-
         dismissed |= self.take_rename(false, window, cx).is_some();
-        dismissed |= self.hide_blame_popover(true, cx);
         dismissed |= hide_hover(self, cx);
         dismissed |= self.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
         dismissed |= self.hide_context_menu(window, cx).is_some();
         dismissed |= self.mouse_context_menu.take().is_some();
         dismissed |= self.snippet_stack.pop().is_some();
-        if self.diff_review_drag_state.is_some() {
-            self.cancel_diff_review_drag(cx);
-            dismissed = true;
-        }
-        if !self.diff_review_overlays.is_empty() {
-            self.dismiss_all_diff_review_overlays(cx);
-            dismissed = true;
-        }
-
         if self.mode.is_full() && self.has_active_diagnostic_group() {
             self.dismiss_diagnostics(cx);
             dismissed = true;
         }
-
         dismissed
     }
 
@@ -9158,9 +9016,6 @@ impl Editor {
                 self.refresh_outline_symbols_at_cursor(cx);
                 self.refresh_sticky_headers(&snapshot, cx);
 
-                // Clean up orphaned review comments after edits
-                self.cleanup_orphaned_review_comments(cx);
-
                 if let Some(buffer) = edited_buffer {
                     if buffer.read(cx).file().is_none() {
                         cx.emit(EditorEvent::TitleChanged);
@@ -9196,18 +9051,6 @@ impl Editor {
             } => {
                 self.refresh_document_highlights(cx);
                 let buffer_id = buffer.read(cx).remote_id();
-                if self.buffer.read(cx).diff_for(buffer_id).is_none()
-                    && let Some(project) = &self.project
-                {
-                    update_uncommitted_diff_for_buffer(
-                        cx.entity(),
-                        project,
-                        [buffer.clone()],
-                        self.buffer.clone(),
-                        cx,
-                    )
-                    .detach();
-                }
                 self.register_visible_buffers(cx);
                 self.update_lsp_data(Some(buffer_id), window, cx);
                 self.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
@@ -9398,12 +9241,11 @@ impl Editor {
             cx.emit(EditorEvent::BreadcrumbsChanged);
         }
 
-        let (restore_unsaved_buffers, show_inline_diagnostics, inline_blame_enabled) = {
+        let (restore_unsaved_buffers, show_inline_diagnostics) = {
             let project_settings = ProjectSettings::get_global(cx);
             (
                 project_settings.session.restore_unsaved_buffers,
                 project_settings.diagnostics.inline.enabled,
-                project_settings.git.inline_blame.enabled,
             )
         };
         self.buffer_serialization = self
@@ -9414,10 +9256,6 @@ impl Editor {
             if self.show_inline_diagnostics != show_inline_diagnostics {
                 self.show_inline_diagnostics = show_inline_diagnostics;
                 self.refresh_inline_diagnostics(false, window, cx);
-            }
-
-            if self.git_blame_inline_enabled != inline_blame_enabled {
-                self.toggle_git_blame_inline_internal(false, window, cx);
             }
 
             let minimap_settings = EditorSettings::get_global(cx).minimap;
@@ -9915,10 +9753,6 @@ impl Editor {
         {
             window.focus(&descendant, cx);
         } else {
-            if let Some(blame) = self.blame.as_ref() {
-                blame.update(cx, GitBlame::focus)
-            }
-
             self.blink_manager.update(cx, BlinkManager::enable);
             self.show_cursor_names(window, cx);
             self.buffer.update(cx, |buffer, cx| {
@@ -9974,9 +9808,6 @@ impl Editor {
         self.buffer
             .update(cx, |buffer, cx| buffer.remove_active_selections(cx));
 
-        if let Some(blame) = self.blame.as_ref() {
-            blame.update(cx, GitBlame::blur)
-        }
         if !self.hover_state.focused(window, cx) {
             hide_hover(self, cx);
         }
@@ -10138,10 +9969,6 @@ impl Editor {
             em_advance,
             line_height,
         }
-    }
-
-    pub fn wait_for_diff_to_load(&self) -> Option<Shared<Task<()>>> {
-        self.load_diff_task.clone()
     }
 
     fn read_metadata_from_db(
@@ -10461,14 +10288,6 @@ impl Editor {
             highlights: symbol.highlight_ranges.clone(),
         }));
         Some(breadcrumbs)
-    }
-
-    fn disable_lsp_data(&mut self) {
-        self.enable_lsp_data = false;
-    }
-
-    fn disable_runnables(&mut self) {
-        self.enable_runnables = false;
     }
 
     pub fn disable_mouse_wheel_zoom(&mut self) {
@@ -11105,26 +10924,9 @@ impl EditorSnapshot {
             let show_breakpoints = self.show_breakpoints.unwrap_or(gutter_settings.breakpoints);
             let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
 
-            let git_blame_entries_width =
-                self.git_blame_gutter_max_author_length
-                    .map(|max_author_length| {
-                        let renderer = cx.global::<GlobalBlameRenderer>().0.clone();
-                        const MAX_RELATIVE_TIMESTAMP: &str = "60 minutes ago";
-
-                        /// The number of characters to dedicate to gaps and margins.
-                        const SPACING_WIDTH: usize = 4;
-
-                        let max_char_count = max_author_length.min(renderer.max_author_length())
-                            + ::git::SHORT_SHA_LENGTH
-                            + MAX_RELATIVE_TIMESTAMP.len()
-                            + SPACING_WIDTH;
-
-                        ch_advance * max_char_count
-                    });
-
             let is_singleton = self.buffer_snapshot().is_singleton();
 
-            let left_padding = git_blame_entries_width.unwrap_or(Pixels::ZERO)
+            let left_padding = Pixels::ZERO
                 + if !is_singleton {
                     ch_width * 4.0
                 // runnables, breakpoints and bookmarks are shown in the same place
@@ -11156,7 +10958,6 @@ impl EditorSnapshot {
                 right_padding,
                 width: line_gutter_width + left_padding + right_padding,
                 margin: GutterDimensions::default_gutter_margin(font_id, font_size, cx),
-                git_blame_entries_width,
             }
         } else if self.offset_content {
             GutterDimensions::default_with_margin(font_id, font_size, cx)

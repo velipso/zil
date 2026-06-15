@@ -193,11 +193,6 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_show_git_diff_gutter(&mut self, show_git_diff_gutter: bool, cx: &mut Context<Self>) {
-        self.show_git_diff_gutter = Some(show_git_diff_gutter);
-        cx.notify();
-    }
-
     pub fn set_show_code_actions(&mut self, show_code_actions: bool, cx: &mut Context<Self>) {
         self.show_code_actions = Some(show_code_actions);
         cx.notify();
@@ -210,11 +205,6 @@ impl Editor {
 
     pub fn set_show_breakpoints(&mut self, show_breakpoints: bool, cx: &mut Context<Self>) {
         self.show_breakpoints = Some(show_breakpoints);
-        cx.notify();
-    }
-
-    pub fn set_show_diff_review_button(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_diff_review_button = show;
         cx.notify();
     }
 
@@ -239,7 +229,7 @@ impl Editor {
                 SoftWrap::Bounded(soft_wrap) => {
                     wrap_guides.push((soft_wrap as usize, true));
                 }
-                SoftWrap::GitDiff | SoftWrap::None | SoftWrap::EditorWidth => {}
+                SoftWrap::None | SoftWrap::EditorWidth => {}
             }
             wrap_guides.extend(settings.wrap_guides.iter().map(|guide| (*guide, false)))
         }
@@ -286,7 +276,6 @@ impl Editor {
             self.soft_wrap_mode_override.take();
         } else {
             let soft_wrap = match self.soft_wrap_mode(cx) {
-                SoftWrap::GitDiff => return,
                 SoftWrap::None => language_settings::SoftWrap::EditorWidth,
                 SoftWrap::EditorWidth | SoftWrap::Bounded(_) => language_settings::SoftWrap::None,
             };
@@ -345,33 +334,5 @@ impl Editor {
     ) {
         let is_relative = self.relative_line_numbers(cx);
         self.set_relative_line_number(Some(!is_relative.enabled()), cx)
-    }
-
-    pub(super) fn set_number_deleted_lines(&mut self, number: bool, cx: &mut Context<Self>) {
-        self.number_deleted_lines = number;
-        cx.notify();
-    }
-
-    pub fn set_delegate_open_excerpts(&mut self, delegate: bool) {
-        self.delegate_open_excerpts = delegate;
-    }
-
-    pub(super) fn set_delegate_expand_excerpts(&mut self, delegate: bool) {
-        self.delegate_expand_excerpts = delegate;
-    }
-
-    pub(super) fn set_delegate_stage_and_restore(&mut self, delegate: bool) {
-        self.delegate_stage_and_restore = delegate;
-    }
-
-    pub(super) fn set_on_local_selections_changed(
-        &mut self,
-        callback: Option<Box<dyn Fn(Point, &mut Window, &mut Context<Self>) + 'static>>,
-    ) {
-        self.on_local_selections_changed = callback;
-    }
-
-    pub(super) fn set_suppress_selection_callback(&mut self, suppress: bool) {
-        self.suppress_selection_callback = suppress;
     }
 }

@@ -247,14 +247,6 @@ pub(crate) struct Companion {
 }
 
 impl Companion {
-    pub(crate) fn new(rhs_display_map_id: EntityId) -> Self {
-        Self {
-            rhs_display_map_id,
-            rhs_custom_block_to_balancing_block: Default::default(),
-            lhs_custom_block_to_balancing_block: Default::default(),
-        }
-    }
-
     pub(crate) fn is_rhs(&self, display_map_id: EntityId) -> bool {
         self.rhs_display_map_id == display_map_id
     }
@@ -272,60 +264,32 @@ impl Companion {
 
     pub(crate) fn convert_rows_to_companion(
         &self,
-        display_map_id: EntityId,
-        companion_snapshot: &MultiBufferSnapshot,
-        our_snapshot: &MultiBufferSnapshot,
-        bounds: Range<MultiBufferPoint>,
+        _display_map_id: EntityId,
+        _companion_snapshot: &MultiBufferSnapshot,
+        _our_snapshot: &MultiBufferSnapshot,
+        _bounds: Range<MultiBufferPoint>,
     ) -> Vec<CompanionExcerptPatch> {
-        if self.is_rhs(display_map_id) {
-            crate::split::patches_for_rhs_range(companion_snapshot, our_snapshot, bounds)
-        } else {
-            crate::split::patches_for_lhs_range(companion_snapshot, our_snapshot, bounds)
-        }
+        Vec::new()
     }
 
     pub(crate) fn convert_point_from_companion(
         &self,
-        display_map_id: EntityId,
+        _display_map_id: EntityId,
         our_snapshot: &MultiBufferSnapshot,
-        companion_snapshot: &MultiBufferSnapshot,
-        point: MultiBufferPoint,
+        _companion_snapshot: &MultiBufferSnapshot,
+        _point: MultiBufferPoint,
     ) -> Range<MultiBufferPoint> {
-        let patches = if self.is_rhs(display_map_id) {
-            crate::split::patches_for_lhs_range(our_snapshot, companion_snapshot, point..point)
-        } else {
-            crate::split::patches_for_rhs_range(our_snapshot, companion_snapshot, point..point)
-        };
-
-        let Some(excerpt) = patches.into_iter().next() else {
-            if cfg!(any(test, debug_assertions)) {
-                assert!(
-                    our_snapshot.max_point() == Point::zero(),
-                    "`patches_for_*_in_range` is only allowed to return an empty vec if the multibuffer is empty"
-                );
-            }
-            return Point::zero()..our_snapshot.max_point();
-        };
-        excerpt.patch.edit_for_old_position(point).new
+        return Point::zero()..our_snapshot.max_point();
     }
 
     pub(crate) fn convert_point_to_companion(
         &self,
-        display_map_id: EntityId,
-        our_snapshot: &MultiBufferSnapshot,
+        _display_map_id: EntityId,
+        _our_snapshot: &MultiBufferSnapshot,
         companion_snapshot: &MultiBufferSnapshot,
-        point: MultiBufferPoint,
+        _point: MultiBufferPoint,
     ) -> Range<MultiBufferPoint> {
-        let patches = if self.is_rhs(display_map_id) {
-            crate::split::patches_for_rhs_range(companion_snapshot, our_snapshot, point..point)
-        } else {
-            crate::split::patches_for_lhs_range(companion_snapshot, our_snapshot, point..point)
-        };
-
-        let Some(excerpt) = patches.into_iter().next() else {
-            return Point::zero()..companion_snapshot.max_point();
-        };
-        excerpt.patch.edit_for_old_position(point).new
+        return Point::zero()..companion_snapshot.max_point();
     }
 }
 
@@ -409,144 +373,6 @@ impl DisplayMap {
             companion: None,
             lsp_folding_crease_ids: HashMap::default(),
         }
-    }
-
-    pub(crate) fn set_companion(
-        &mut self,
-        companion: Option<(Entity<DisplayMap>, Entity<Companion>)>,
-        cx: &mut Context<Self>,
-    ) {
-        let this = cx.weak_entity();
-        // Reverting to no companion, recompute the block map to clear spacers
-        // and balancing blocks.
-        let Some((companion_display_map, companion)) = companion else {
-            let Some((_, companion)) = self.companion.take() else {
-                return;
-            };
-            assert_eq!(self.entity_id, companion.read(cx).rhs_display_map_id);
-            let (snapshot, _edits) = self.sync_through_wrap(cx);
-            let edits = Patch::new(vec![text::Edit {
-                old: WrapRow(0)
-                    ..self.block_map.wrap_snapshot.borrow().max_point().row() + WrapRow(1),
-                new: WrapRow(0)..snapshot.max_point().row() + WrapRow(1),
-            }]);
-            self.block_map.deferred_edits.set(edits);
-            self.block_map.retain_blocks_raw(&mut |block| {
-                if companion
-                    .read(cx)
-                    .lhs_custom_block_to_balancing_block
-                    .borrow()
-                    .values()
-                    .any(|id| *id == block.id)
-                {
-                    return false;
-                }
-                true
-            });
-            return;
-        };
-        assert_eq!(self.entity_id, companion.read(cx).rhs_display_map_id);
-
-        // Note, throwing away the wrap edits because we defer spacer computation to the first render.
-        let snapshot = {
-            let edits = self.buffer_subscription.consume();
-            let snapshot = self.buffer.read(cx).snapshot(cx);
-            let tab_size = Self::tab_size(&self.buffer, cx);
-            let (snapshot, edits) = self.inlay_map.sync(snapshot, edits.into_inner());
-            let (mut writer, snapshot, edits) = self.fold_map.write(snapshot, edits);
-            let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-            let (_snapshot, _edits) = self
-                .wrap_map
-                .update(cx, |wrap_map, cx| wrap_map.sync(snapshot, edits, cx));
-
-            let (snapshot, edits) = writer.unfold_intersecting([Anchor::Min..Anchor::Max], true);
-            let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-            let (snapshot, _edits) = self
-                .wrap_map
-                .update(cx, |wrap_map, cx| wrap_map.sync(snapshot, edits, cx));
-
-            self.block_map.retain_blocks_raw(&mut |block| {
-                !matches!(block.placement, BlockPlacement::Replace(_))
-            });
-            snapshot
-        };
-
-        let (companion_wrap_snapshot, _companion_wrap_edits) =
-            companion_display_map.update(cx, |dm, cx| dm.sync_through_wrap(cx));
-
-        let edits = Patch::new(vec![text::Edit {
-            old: WrapRow(0)..self.block_map.wrap_snapshot.borrow().max_point().row() + WrapRow(1),
-            new: WrapRow(0)..snapshot.max_point().row() + WrapRow(1),
-        }]);
-        self.block_map.deferred_edits.set(edits);
-
-        let all_blocks: Vec<_> = self.block_map.blocks_raw().map(Clone::clone).collect();
-
-        companion_display_map.update(cx, |companion_display_map, cx| {
-            // Sync folded buffers from RHS to LHS. Also clean up stale
-            // entries: the block map doesn't remove buffers from
-            // `folded_buffers` when they leave the multibuffer, so we
-            // unfold any RHS buffers whose companion mapping is missing.
-            let rhs_snapshot = self.buffer.read(cx).snapshot(cx);
-            let mut buffers_to_unfold = Vec::new();
-            for my_buffer in self.folded_buffers() {
-                let their_buffer = rhs_snapshot
-                    .diff_for_buffer_id(*my_buffer)
-                    .map(|diff| diff.base_text().remote_id());
-
-                let Some(their_buffer) = their_buffer else {
-                    buffers_to_unfold.push(*my_buffer);
-                    continue;
-                };
-
-                companion_display_map
-                    .block_map
-                    .folded_buffers
-                    .insert(their_buffer);
-            }
-            for buffer_id in buffers_to_unfold {
-                self.block_map.folded_buffers.remove(&buffer_id);
-            }
-
-            for block in all_blocks {
-                let Some(their_block) = block_map::balancing_block(
-                    &block.properties(),
-                    snapshot.buffer(),
-                    companion_wrap_snapshot.buffer(),
-                    self.entity_id,
-                    companion.read(cx),
-                ) else {
-                    continue;
-                };
-                let their_id = companion_display_map
-                    .block_map
-                    .insert_block_raw(their_block, companion_wrap_snapshot.buffer());
-                companion.update(cx, |companion, _cx| {
-                    companion
-                        .custom_block_to_balancing_block(self.entity_id)
-                        .borrow_mut()
-                        .insert(block.id, their_id);
-                });
-            }
-            let companion_edits = Patch::new(vec![text::Edit {
-                old: WrapRow(0)
-                    ..companion_display_map
-                        .block_map
-                        .wrap_snapshot
-                        .borrow()
-                        .max_point()
-                        .row()
-                        + WrapRow(1),
-                new: WrapRow(0)..companion_wrap_snapshot.max_point().row() + WrapRow(1),
-            }]);
-            companion_display_map
-                .block_map
-                .deferred_edits
-                .set(companion_edits);
-            companion_display_map.companion = Some((this, companion.clone()));
-        });
-
-        self.companion = Some((companion_display_map.downgrade(), companion));
     }
 
     pub(crate) fn companion(&self) -> Option<&Entity<Companion>> {
