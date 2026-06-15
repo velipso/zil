@@ -15700,6 +15700,7 @@ dependencies = [
  "miniprofiler_ui",
  "node_runtime",
  "notifications",
+ "open_path_prompt",
  "outline",
  "parking_lot",
  "paths",

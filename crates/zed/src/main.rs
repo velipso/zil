@@ -636,6 +636,8 @@ fn main() {
         ui_prompt::init(cx);
 
         go_to_line::init(cx);
+        cx.observe_new(open_path_prompt::OpenPathPrompt::register).detach();
+        cx.observe_new(open_path_prompt::OpenPathPrompt::register_new_path).detach();
         tab_switcher::init(cx);
         outline::init(cx);
         project_symbols::init(cx);
