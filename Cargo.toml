@@ -31,7 +31,6 @@ members = [
     "crates/extension",
     "crates/extension_api",
     "crates/extension_host",
-    "crates/extensions_ui",
     "crates/feature_flags",
     "crates/feature_flags_macros",
     "crates/file_icons",
@@ -204,7 +203,6 @@ encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
 extension = { path = "crates/extension" }
 extension_host = { path = "crates/extension_host" }
-extensions_ui = { path = "crates/extensions_ui" }
 feature_flags = { path = "crates/feature_flags" }
 feature_flags_macros = { path = "crates/feature_flags_macros" }
 file_icons = { path = "crates/file_icons" }
