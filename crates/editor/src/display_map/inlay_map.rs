@@ -520,12 +520,12 @@ impl InlaySnapshot {
 
     #[ztracing::instrument(skip_all)]
     pub fn len(&self) -> InlayOffset {
-        InlayOffset(self.transforms.summary().output.len)
+        InlayOffset(self.buffer.len())
     }
 
     #[ztracing::instrument(skip_all)]
     pub fn max_point(&self) -> InlayPoint {
-        InlayPoint(self.transforms.summary().output.lines)
+        InlayPoint(self.buffer.max_point())
     }
 
     #[ztracing::instrument(skip_all, fields(point))]
@@ -547,57 +547,22 @@ impl InlaySnapshot {
     }
     #[ztracing::instrument(skip_all)]
     pub fn to_buffer_point(&self, point: InlayPoint) -> Point {
-        let (start, _, item) =
-            self.transforms
-                .find::<Dimensions<InlayPoint, Point>, _>((), &point, Bias::Right);
-        match item {
-            Some(Transform::Isomorphic(_)) => {
-                let overshoot = point.0 - start.0.0;
-                start.1 + overshoot
-            }
-            None => self.buffer.max_point(),
-        }
+        point.0
     }
+
     #[ztracing::instrument(skip_all)]
     pub fn to_buffer_offset(&self, offset: InlayOffset) -> MultiBufferOffset {
-        let (start, _, item) = self
-            .transforms
-            .find::<Dimensions<InlayOffset, MultiBufferOffset>, _>((), &offset, Bias::Right);
-        match item {
-            Some(Transform::Isomorphic(_)) => {
-                let overshoot = offset - start.0;
-                start.1 + overshoot
-            }
-            None => self.buffer.len(),
-        }
+        offset.0
     }
 
     #[ztracing::instrument(skip_all)]
     pub fn to_inlay_offset(&self, offset: MultiBufferOffset) -> InlayOffset {
-        let mut cursor = self
-            .transforms
-            .cursor::<Dimensions<MultiBufferOffset, InlayOffset>>(());
-        cursor.seek(&offset, Bias::Left);
-        loop {
-            match cursor.item() {
-                Some(Transform::Isomorphic(_)) => {
-                    if offset == cursor.end().0 {
-                        return cursor.end().1;
-                    } else {
-                        let overshoot = offset - cursor.start().0;
-                        return InlayOffset(cursor.start().1.0 + overshoot);
-                    }
-                }
-                None => {
-                    return self.len();
-                }
-            }
-        }
+        InlayOffset(offset)
     }
 
     #[ztracing::instrument(skip_all)]
     pub fn to_inlay_point(&self, point: Point) -> InlayPoint {
-        self.inlay_point_cursor().map(point, Bias::Left)
+        InlayPoint(point)
     }
 
     /// Converts a buffer offset range into one or more `InlayOffset` ranges that
@@ -608,40 +573,7 @@ impl InlaySnapshot {
         &self,
         range: Range<MultiBufferOffset>,
     ) -> impl Iterator<Item = Range<InlayOffset>> {
-        let mut cursor = self
-            .transforms
-            .cursor::<Dimensions<MultiBufferOffset, InlayOffset>>(());
-        cursor.seek(&range.start, Bias::Right);
-
-        std::iter::from_fn(move || {
-            loop {
-                match cursor.item()? {
-                    Transform::Isomorphic(_) => {
-                        let seg_buffer_start = cursor.start().0;
-                        let seg_buffer_end = cursor.end().0;
-                        let seg_inlay_start = cursor.start().1;
-
-                        let overlap_start = cmp::max(range.start, seg_buffer_start);
-                        let overlap_end = cmp::min(range.end, seg_buffer_end);
-
-                        let past_end = seg_buffer_end >= range.end;
-                        cursor.next();
-
-                        if overlap_start < overlap_end {
-                            let inlay_start =
-                                InlayOffset(seg_inlay_start.0 + (overlap_start - seg_buffer_start));
-                            let inlay_end =
-                                InlayOffset(seg_inlay_start.0 + (overlap_end - seg_buffer_start));
-                            return Some(inlay_start..inlay_end);
-                        }
-
-                        if past_end {
-                            return None;
-                        }
-                    }
-                }
-            }
-        })
+        std::iter::once(InlayOffset(range.start)..InlayOffset(range.end))
     }
 
     #[ztracing::instrument(skip_all)]
@@ -697,50 +629,12 @@ impl InlaySnapshot {
 
     #[ztracing::instrument(skip_all)]
     pub fn text_summary(&self) -> MBTextSummary {
-        self.transforms.summary().output
+        self.buffer.text_summary()
     }
 
     #[ztracing::instrument(skip_all)]
     pub fn text_summary_for_range(&self, range: Range<InlayOffset>) -> MBTextSummary {
-        let mut summary = MBTextSummary::default();
-
-        let mut cursor = self
-            .transforms
-            .cursor::<Dimensions<InlayOffset, MultiBufferOffset>>(());
-        cursor.seek(&range.start, Bias::Right);
-
-        let overshoot = range.start.0 - cursor.start().0.0;
-        match cursor.item() {
-            Some(Transform::Isomorphic(_)) => {
-                let buffer_start = cursor.start().1;
-                let suffix_start = buffer_start + overshoot;
-                let suffix_end =
-                    buffer_start + (cmp::min(cursor.end().0, range.end).0 - cursor.start().0.0);
-                summary = self.buffer.text_summary_for_range(suffix_start..suffix_end);
-                cursor.next();
-            }
-            None => {}
-        }
-
-        if range.end > cursor.start().0 {
-            summary += cursor
-                .summary::<_, TransformSummary>(&range.end, Bias::Right)
-                .output;
-
-            let overshoot = range.end.0 - cursor.start().0.0;
-            match cursor.item() {
-                Some(Transform::Isomorphic(_)) => {
-                    let prefix_start = cursor.start().1;
-                    let prefix_end = prefix_start + overshoot;
-                    summary += self
-                        .buffer
-                        .text_summary_for_range::<MBTextSummary, _>(prefix_start..prefix_end);
-                }
-                None => {}
-            }
-        }
-
-        summary
+        self.buffer.text_summary_for_range(range.start.0..range.end.0)
     }
 
     #[ztracing::instrument(skip_all)]
