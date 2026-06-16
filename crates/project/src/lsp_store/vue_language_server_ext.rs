@@ -22,7 +22,6 @@ impl lsp::notification::Notification for TypescriptServerResponse {
 }
 
 const VUE_SERVER_NAME: LanguageServerName = LanguageServerName::new_static("vue-language-server");
-const VTSLS: LanguageServerName = LanguageServerName::new_static("vtsls");
 const TS_LS: LanguageServerName = LanguageServerName::new_static("typescript-language-server");
 
 pub fn register_requests(lsp_store: WeakEntity<LspStore>, language_server: &LanguageServer) {
@@ -48,7 +47,7 @@ pub fn register_requests(lsp_store: WeakEntity<LspStore>, language_server: &Lang
                         .as_local()
                         .and_then(|local| {
                             local.language_server_ids.iter().find_map(|(seed, v)| {
-                                [VTSLS, TS_LS].contains(&seed.name).then_some(v.id)
+                                [TS_LS].contains(&seed.name).then_some(v.id)
                             })
                         })
                         .context("Could not find language server")?;
