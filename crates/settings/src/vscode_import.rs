@@ -274,7 +274,6 @@ impl VsCodeSettings {
             hover_popover_sticky: self.read_bool("editor.hover.sticky"),
             hover_popover_hiding_delay: self.read_u64("editor.hover.hidingDelay").map(Into::into),
             lsp_document_colors: None,
-            lsp_document_links: self.read_bool("editor.links"),
             lsp_highlight_debounce: None,
             middle_click_paste: None,
             minimap: self.minimap_content(),

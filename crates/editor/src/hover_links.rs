@@ -413,34 +413,6 @@ pub fn show_link_definition(
 
     hovered_link_state.task = Some(cx.spawn_in(window, async move |this, cx| {
         async move {
-            // LSP document links take priority: the server explicitly
-            // declares which ranges are clickable, so they are more
-            // accurate than the heuristic-based URL/file detection.
-            //
-            // Resolution is deduplicated by `LspStore`; awaiting here only
-            // blocks until either the cached resolved entry is returned or
-            // the in-flight `Shared` task completes.
-            let resolved_document_links = this
-                .update(cx, |editor, cx| {
-                    editor.document_links_at(buffer.clone(), anchor, cx)
-                })
-                .ok()
-                .flatten();
-            let resolved_document_links = match resolved_document_links {
-                Some(task) => task.await,
-                None => Vec::new(),
-            };
-            let snapshot = this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
-            let detected_document_link =
-                resolved_document_links
-                    .into_iter()
-                    .find_map(|(server_id, link)| {
-                        let multi_buffer_range =
-                            snapshot.buffer_anchor_range_to_anchor_range(link.range.clone())?;
-                        Some((link.range, multi_buffer_range, link.target, server_id))
-                    });
-            drop(snapshot);
-
             let result = match &trigger_point {
                 TriggerPoint::Text(_) => {
                     let mut links = Vec::new();
@@ -450,12 +422,7 @@ pub fn show_link_definition(
                     // detection at the same position: the server tells us the
                     // exact range and target, while `find_url`/`find_file` are
                     // best-effort text matches.
-                    if let Some((_, multi_buffer_range, Some(target), server_id)) =
-                        detected_document_link.clone()
-                    {
-                        symbol_range = Some(RangeInEditor::Text(multi_buffer_range));
-                        links.push(document_link_target_to_hover_link(&target, server_id));
-                    } else if let Some((url_range, url)) = find_url(&buffer, anchor, cx) {
+                    if let Some((url_range, url)) = find_url(&buffer, anchor, cx) {
                         let snapshot =
                             this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
                         if let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(url_range)
@@ -525,18 +492,7 @@ pub fn show_link_definition(
                 hovered_link_state.preferred_kind = preferred_kind;
                 hovered_link_state.symbol_range = result
                     .as_ref()
-                    .and_then(|(symbol_range, _)| symbol_range.clone())
-                    .or_else(|| {
-                        // Even if we have no click target yet (e.g. an
-                        // unresolved document link), record the link's range
-                        // so subsequent mouse moves on the same link
-                        // short-circuit in `show_link_definition`.
-                        detected_document_link
-                            .as_ref()
-                            .map(|(_, multi_buffer_range, _, _)| {
-                                RangeInEditor::Text(multi_buffer_range.clone())
-                            })
-                    });
+                    .and_then(|(symbol_range, _)| symbol_range.clone());
 
                 if let Some((symbol_range, definitions)) = result {
                     hovered_link_state.links = definitions;
@@ -580,22 +536,6 @@ pub fn show_link_definition(
                             RangeInEditor::Inlay(_) => {},
                         }
                     }
-                } else if let Some((_, multi_buffer_range, _, _)) = detected_document_link.as_ref()
-                {
-                    let style = HighlightStyle {
-                        underline: Some(UnderlineStyle {
-                            thickness: px(1.),
-                            ..UnderlineStyle::default()
-                        }),
-                        color: Some(cx.theme().colors().link_text_hover),
-                        ..HighlightStyle::default()
-                    };
-                    editor.highlight_text(
-                        HighlightKey::HoveredLinkState,
-                        vec![multi_buffer_range.clone()],
-                        style,
-                        cx,
-                    );
                 } else {
                     editor.hide_hovered_link(cx);
                 }

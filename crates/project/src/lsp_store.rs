@@ -11,7 +11,6 @@
 //! Most of the interesting work happens at the local layer, as bulk of the complexity is with managing the lifecycle of language servers. The actual implementation of the LSP protocol is handled by [`lsp`] crate.
 pub mod clangd_ext;
 mod document_colors;
-mod document_links;
 mod document_symbols;
 mod folding_ranges;
 mod inlay_hints;
@@ -23,7 +22,6 @@ mod semantic_tokens;
 pub mod vue_language_server_ext;
 
 use self::document_colors::DocumentColorData;
-use self::document_links::DocumentLinksData;
 use self::document_symbols::DocumentSymbolsData;
 use self::inlay_hints::BufferInlayHints;
 use crate::{
@@ -141,10 +139,6 @@ use util::{
 };
 
 pub use document_colors::DocumentColors;
-pub use document_links::{
-    BufferDocumentLinks, DocumentLinkId, DocumentLinkResolveTask, LspDocumentLink,
-    ResolvedDocumentLink,
-};
 pub use folding_ranges::LspFoldingRange;
 pub use fs::*;
 pub use language::Location;
@@ -3279,7 +3273,6 @@ pub struct BufferLspData {
     document_colors: Option<DocumentColorData>,
     semantic_tokens: Option<SemanticTokensData>,
     folding_ranges: Option<FoldingRangeData>,
-    document_links: Option<DocumentLinksData>,
     document_symbols: Option<DocumentSymbolsData>,
     inlay_hints: BufferInlayHints,
     lsp_requests: HashMap<LspKey, HashMap<LspRequestId, Task<()>>>,
@@ -3299,7 +3292,6 @@ impl BufferLspData {
             document_colors: None,
             semantic_tokens: None,
             folding_ranges: None,
-            document_links: None,
             document_symbols: None,
             inlay_hints: BufferInlayHints::new(buffer, cx),
             lsp_requests: HashMap::default(),
@@ -3320,10 +3312,6 @@ impl BufferLspData {
 
         if let Some(folding_ranges) = &mut self.folding_ranges {
             folding_ranges.ranges.remove(&for_server);
-        }
-
-        if let Some(document_links) = &mut self.document_links {
-            document_links.remove_server_data(for_server);
         }
 
         if let Some(document_symbols) = &mut self.document_symbols {
@@ -3440,7 +3428,6 @@ impl LspStore {
         client.add_entity_request_handler(Self::handle_format_buffers);
         client.add_entity_request_handler(Self::handle_get_project_symbols);
         client.add_entity_request_handler(Self::handle_resolve_inlay_hint);
-        client.add_entity_request_handler(Self::handle_resolve_document_link);
         client.add_entity_request_handler(Self::handle_get_color_presentation);
         client.add_entity_request_handler(Self::handle_open_buffer_for_symbol);
         client.add_entity_request_handler(Self::handle_refresh_inlay_hints);
@@ -7324,36 +7311,6 @@ impl LspStore {
                 )
                 .await?;
             }
-            Request::GetDocumentLinks(get_document_links) => {
-                let (buffer_version, buffer) = Self::wait_for_buffer_version::<GetDocumentLinks>(
-                    &lsp_store,
-                    &get_document_links,
-                    &mut cx,
-                )
-                .await?;
-                lsp_store.update(&mut cx, |lsp_store, cx| {
-                    let document_links_task = lsp_store.fetch_document_links(&buffer, cx);
-                    let fetch_task = cx.background_spawn(async move {
-                        document_links_task
-                            .await
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|(server_id, links)| {
-                                (server_id, links.into_values().collect::<Vec<_>>())
-                            })
-                            .collect()
-                    });
-                    lsp_store.serve_lsp_query::<GetDocumentLinks>(
-                        server_id,
-                        sender_id,
-                        lsp_request_id,
-                        &buffer,
-                        buffer_version,
-                        fetch_task,
-                        cx,
-                    );
-                });
-            }
             Request::GetHover(get_hover) => {
                 let position = get_hover.position.clone().and_then(deserialize_anchor);
                 Self::query_lsp_locally::<GetHover>(
@@ -10561,18 +10518,6 @@ impl LspStore {
                     });
                     notify_server_capabilities_updated(&server, cx);
                 }
-                "textDocument/documentLink" => {
-                    if let Some(caps) = reg
-                        .register_options
-                        .map(serde_json::from_value)
-                        .transpose()?
-                    {
-                        server.update_capabilities(|capabilities| {
-                            capabilities.document_link_provider = Some(caps);
-                        });
-                        notify_server_capabilities_updated(&server, cx);
-                    }
-                }
                 _ => log::warn!("unhandled capability registration: {reg:?}"),
             }
         }
@@ -10755,12 +10700,6 @@ impl LspStore {
                 "textDocument/foldingRange" => {
                     server.update_capabilities(|capabilities| {
                         capabilities.folding_range_provider = None;
-                    });
-                    notify_server_capabilities_updated(&server, cx);
-                }
-                "textDocument/documentLink" => {
-                    server.update_capabilities(|capabilities| {
-                        capabilities.document_link_provider = None;
                     });
                     notify_server_capabilities_updated(&server, cx);
                 }

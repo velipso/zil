@@ -56,7 +56,6 @@ pub struct EditorSettings {
     pub diagnostics_max_severity: Option<DiagnosticSeverity>,
     pub drag_and_drop_selection: DragAndDropSelection,
     pub lsp_document_colors: DocumentColorsRenderMode,
-    pub lsp_document_links: bool,
     pub minimum_contrast_for_highlights: f32,
 }
 
@@ -272,7 +271,6 @@ impl Settings for EditorSettings {
                 delay: drag_and_drop_selection.delay.unwrap(),
             },
             lsp_document_colors: editor.lsp_document_colors.unwrap(),
-            lsp_document_links: editor.lsp_document_links.unwrap(),
             minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,
         }
     }
