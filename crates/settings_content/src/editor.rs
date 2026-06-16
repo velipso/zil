@@ -176,19 +176,6 @@ pub struct EditorSettingsContent {
     #[schemars(range(min = 0, max = 106))]
     pub minimum_contrast_for_highlights: Option<MinimumContrast>,
 
-    /// Whether to follow-up empty go to definition responses from the language server or not.
-    /// `FindAllReferences` allows to look up references of the same symbol instead.
-    /// `None` disables the fallback.
-    ///
-    /// Default: FindAllReferences
-    pub go_to_definition_fallback: Option<GoToDefinitionFallback>,
-
-    /// How to scroll the target into view when navigating to a definition or reference
-    /// (e.g. Go to Definition, Go to Type Definition, Find All References).
-    ///
-    /// Default: center
-    pub go_to_definition_scroll_strategy: Option<GoToDefinitionScrollStrategy>,
-
     /// Which level to use to filter out diagnostics displayed in the editor.
     ///
     /// Affects the editor rendering only, and does not interrupt
@@ -686,61 +673,6 @@ pub enum CursorShape {
     Underline,
     /// A box drawn around the following character
     Hollow,
-}
-
-/// What to do when go to definition yields no results.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum GoToDefinitionFallback {
-    /// Disables the fallback.
-    None,
-    /// Looks up references of the same symbol instead.
-    #[default]
-    FindAllReferences,
-}
-
-/// How to scroll the target into view when navigating to a definition or reference.
-///
-/// Default: center
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum GoToDefinitionScrollStrategy {
-    /// Vertically center the target in the viewport.
-    #[default]
-    Center,
-    /// Scroll the minimum amount needed to make the target visible.
-    Minimum,
-    /// Scroll so the target appears near the top of the viewport.
-    Top,
-    /// Preserve the cursor's vertical position within the viewport, falling
-    /// back to centering when the cursor is offscreen.
-    Preserve,
 }
 
 /// Default options for buffer and project search items.

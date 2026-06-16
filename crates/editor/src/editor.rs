@@ -96,7 +96,7 @@ use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
 use display_map::*;
 use document_colors::LspColorData;
-use editor_settings::{GoToDefinitionFallback, Minimap as MinimapSettings};
+use editor_settings::{Minimap as MinimapSettings};
 use element::{LineWithInvisibles, PositionMap};
 use futures::{
     FutureExt,
@@ -140,7 +140,7 @@ use persistence::EditorDb;
 use project::{
     BreakpointWithPosition,
     DocumentHighlight, InlayHint, InvalidationStrategy,
-    Location, LocationLink, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
+    Location, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
     ProjectTransaction,
     bookmark_store::BookmarkStore,
     debugger::{
@@ -887,7 +887,6 @@ pub struct Editor {
     mouse_context_menu: Option<MouseContextMenu>,
     signature_help_state: SignatureHelpState,
     auto_signature_help: Option<bool>,
-    find_all_references_task_sources: Vec<Anchor>,
     quick_selection_highlight_task: Option<(Range<Anchor>, Task<()>)>,
     debounced_selection_highlight_task: Option<(Range<Anchor>, Task<()>)>,
     debounced_selection_highlight_complete: bool,
@@ -2016,7 +2015,6 @@ impl Editor {
             mouse_context_menu: None,
             signature_help_state: SignatureHelpState::default(),
             auto_signature_help: None,
-            find_all_references_task_sources: Vec::new(),
             next_inlay_id: 0,
             quick_selection_highlight_task: None,
             debounced_selection_highlight_task: None,
@@ -9838,14 +9836,6 @@ pub trait SemanticsProvider {
         cx: &mut App,
     ) -> Option<Task<Result<Vec<DocumentHighlight>>>>;
 
-    fn definitions(
-        &self,
-        buffer: &Entity<Buffer>,
-        position: text::Anchor,
-        kind: GotoDefinitionKind,
-        cx: &mut App,
-    ) -> Option<Task<Result<Option<Vec<LocationLink>>>>>;
-
     fn range_for_rename(
         &self,
         buffer: &Entity<Buffer>,
@@ -9881,22 +9871,6 @@ impl SemanticsProvider for WeakEntity<Project> {
     ) -> Option<Task<Result<Vec<DocumentHighlight>>>> {
         self.update(cx, |project, cx| {
             project.document_highlights(buffer, position, cx)
-        })
-        .ok()
-    }
-
-    fn definitions(
-        &self,
-        buffer: &Entity<Buffer>,
-        position: text::Anchor,
-        kind: GotoDefinitionKind,
-        cx: &mut App,
-    ) -> Option<Task<Result<Option<Vec<LocationLink>>>>> {
-        self.update(cx, |project, cx| match kind {
-            GotoDefinitionKind::Symbol => project.definitions(buffer, position, cx),
-            GotoDefinitionKind::Declaration => project.declarations(buffer, position, cx),
-            GotoDefinitionKind::Type => project.type_definitions(buffer, position, cx),
-            GotoDefinitionKind::Implementation => project.implementations(buffer, position, cx),
         })
         .ok()
     }

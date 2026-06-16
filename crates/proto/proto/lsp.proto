@@ -3,62 +3,6 @@ package zed.messages;
 
 import "buffer.proto";
 
-message GetDefinition {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-  bool workspace_only = 5;
-}
-
-message GetDefinitionResponse {
-  repeated LocationLink links = 1;
-}
-
-message GetDeclaration {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-}
-
-message GetDeclarationResponse {
-  repeated LocationLink links = 1;
-}
-
-message GetTypeDefinition {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-  bool workspace_only = 5;
-}
-
-message GetTypeDefinitionResponse {
-  repeated LocationLink links = 1;
-}
-message GetImplementation {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-}
-
-message GetImplementationResponse {
-  repeated LocationLink links = 1;
-}
-
-message GetReferences {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-}
-
-message GetReferencesResponse {
-  repeated Location locations = 1;
-}
-
 message GetDocumentHighlights {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -694,15 +638,10 @@ message LspQuery {
   uint64 lsp_request_id = 2;
   optional uint64 server_id = 15;
   oneof request {
-    GetReferences get_references = 3;
     GetDocumentColor get_document_color = 4;
     GetHover get_hover = 5;
     GetSignatureHelp get_signature_help = 7;
     GetDocumentDiagnostics get_document_diagnostics = 9;
-    GetDefinition get_definition = 10;
-    GetDeclaration get_declaration = 11;
-    GetTypeDefinition get_type_definition = 12;
-    GetImplementation get_implementation = 13;
     InlayHints inlay_hints = 14;
     SemanticTokens semantic_tokens = 16;
     GetFoldingRanges get_folding_ranges = 17;
@@ -722,11 +661,6 @@ message LspResponse {
     GetSignatureHelpResponse get_signature_help_response = 3;
     GetDocumentDiagnosticsResponse get_document_diagnostics_response = 5;
     GetDocumentColorResponse get_document_color_response = 6;
-    GetDefinitionResponse get_definition_response = 8;
-    GetDeclarationResponse get_declaration_response = 9;
-    GetTypeDefinitionResponse get_type_definition_response = 10;
-    GetImplementationResponse get_implementation_response = 11;
-    GetReferencesResponse get_references_response = 12;
     InlayHintsResponse inlay_hints_response = 13;
     SemanticTokensResponse semantic_tokens_response = 14;
     GetFoldingRangesResponse get_folding_ranges_response = 15;

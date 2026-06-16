@@ -8490,7 +8490,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
 /// LanguageSettings items that should be included in the "Languages & Tools" page
 /// not the "Editor" page
 fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
-    fn lsp_section() -> [SettingsPageItem; 9] {
+    fn lsp_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader("LSP"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -8556,39 +8556,6 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
                 }),
                 metadata: None,
                 files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Go To Definition Fallback",
-                description: "Whether to follow-up empty Go to definition responses from the language server.",
-                field: Box::new(SettingField {
-                    json_path: Some("go_to_definition_fallback"),
-                    pick: |settings_content| {
-                        settings_content.editor.go_to_definition_fallback.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.go_to_definition_fallback = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Go To Definition Scroll Strategy",
-                description: "How to scroll the target into view when navigating to a definition or reference.",
-                field: Box::new(SettingField {
-                    json_path: Some("go_to_definition_scroll_strategy"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .go_to_definition_scroll_strategy
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.go_to_definition_scroll_strategy = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Semantic Tokens",

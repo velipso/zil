@@ -57,15 +57,6 @@ message Envelope {
     UpdateProjectCollaborator update_project_collaborator = 30;
     RemoveProjectCollaborator remove_project_collaborator = 31;
 
-    GetDefinition get_definition = 32;
-    GetDefinitionResponse get_definition_response = 33;
-    GetDeclaration get_declaration = 237;
-    GetDeclarationResponse get_declaration_response = 238;
-    GetTypeDefinition get_type_definition = 34;
-    GetTypeDefinitionResponse get_type_definition_response = 35;
-
-    GetReferences get_references = 36;
-    GetReferencesResponse get_references_response = 37;
     GetDocumentHighlights get_document_highlights = 38;
     GetDocumentHighlightsResponse get_document_highlights_response = 39;
     GetProjectSymbols get_project_symbols = 40;
@@ -185,9 +176,6 @@ message Envelope {
     SetRoomParticipantRole set_room_participant_role = 156;
 
     UpdateUserChannels update_user_channels = 157;
-
-    GetImplementation get_implementation = 162;
-    GetImplementationResponse get_implementation_response = 163;
 
     UpdateChannelMessage update_channel_message = 170;
     ChannelMessageUpdate channel_message_update = 171;

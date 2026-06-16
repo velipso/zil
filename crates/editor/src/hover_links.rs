@@ -1,8 +1,8 @@
 use crate::{
-    Anchor, Editor, EditorSettings, EditorSnapshot, FindAllReferences, GoToDefinition,
-    GoToDefinitionSplit, GoToTypeDefinition, GoToTypeDefinitionSplit, GotoDefinitionKind,
+    Anchor, Editor, EditorSnapshot,
+    GotoDefinitionKind,
     HighlightKey, Navigated, PointForPosition, SelectPhase,
-    editor_settings::GoToDefinitionFallback, scroll::ScrollAmount,
+    scroll::ScrollAmount,
 };
 use gpui::{
     App, AsyncWindowContext, Context, Entity, HighlightStyle, Modifiers, Pixels, Task,
@@ -13,7 +13,6 @@ use linkify::{LinkFinder, LinkKind};
 use lsp::LanguageServerId;
 use project::{InlayId, LocationLink, Project, ResolvedPath};
 use regex::Regex;
-use settings::Settings;
 use std::{ops::Range, str::FromStr as _, sync::LazyLock};
 use text::OffsetRangeExt;
 use theme::ActiveTheme as _;
@@ -215,25 +214,8 @@ impl Editor {
         cx: &mut Context<Editor>,
     ) {
         let reveal_task = self.cmd_click_reveal_task(point, modifiers, window, cx);
-        cx.spawn_in(window, async move |editor, cx| {
-            let definition_revealed = reveal_task.await.log_err().unwrap_or(Navigated::No);
-            let find_references = editor
-                .update_in(cx, |editor, window, cx| {
-                    if definition_revealed == Navigated::Yes {
-                        return None;
-                    }
-                    match EditorSettings::get_global(cx).go_to_definition_fallback {
-                        GoToDefinitionFallback::None => None,
-                        GoToDefinitionFallback::FindAllReferences => {
-                            editor.find_all_references(&FindAllReferences::default(), window, cx)
-                        }
-                    }
-                })
-                .ok()
-                .flatten();
-            if let Some(find_references) = find_references {
-                find_references.await.log_err();
-            }
+        cx.spawn_in(window, async move |_editor, _cx| {
+            reveal_task.await.log_err();
         })
         .detach();
     }
@@ -312,33 +294,7 @@ impl Editor {
             }
         }
 
-        // We don't have the correct kind of link cached, set the selection on
-        // click and immediately trigger GoToDefinition.
-        self.select(
-            SelectPhase::Begin {
-                position: point.next_valid,
-                add: false,
-                click_count: 1,
-            },
-            window,
-            cx,
-        );
-
-        let navigate_task = if point.as_valid().is_some() {
-            let split = Self::is_alt_pressed(&modifiers, cx);
-            match (modifiers.shift, split) {
-                (true, true) => {
-                    self.go_to_type_definition_split(&GoToTypeDefinitionSplit, window, cx)
-                }
-                (true, false) => self.go_to_type_definition(&GoToTypeDefinition, window, cx),
-                (false, true) => self.go_to_definition_split(&GoToDefinitionSplit, window, cx),
-                (false, false) => self.go_to_definition(&GoToDefinition, window, cx),
-            }
-        } else {
-            Task::ready(Ok(Navigated::No))
-        };
-        self.select(SelectPhase::End, window, cx);
-        navigate_task
+        Task::ready(Ok(Navigated::No))
     }
 }
 
@@ -404,7 +360,6 @@ pub fn show_link_definition(
         editor.hide_hovered_link(cx)
     }
     let project = editor.project.clone();
-    let provider = editor.semantics_provider.clone();
 
     // Record the requested position so a mouse move on the same point short-circuits
     // instead of re-querying, even when the server returns no `originSelectionRange`
@@ -441,33 +396,6 @@ pub fn show_link_definition(
                             symbol_range = Some(RangeInEditor::Text(range));
                         }
                         links.push(HoverLink::File(file_target));
-                    }
-
-                    // Always also collect LSP definitions so that cmd-click
-                    // reveals every applicable target (e.g. a position that
-                    // carries both a document link and a definition).
-                    if let Some(provider) = provider {
-                        let task = cx.update(|_, cx| {
-                            provider.definitions(&buffer, anchor, preferred_kind, cx)
-                        })?;
-                        if let Some(task) = task
-                            && let Some(definition_result) = task.await.ok().flatten()
-                        {
-                            if symbol_range.is_none() {
-                                let snapshot = this.read_with(cx, |editor, cx| {
-                                    editor.buffer.read(cx).snapshot(cx)
-                                })?;
-                                symbol_range = definition_result.iter().find_map(|link| {
-                                    link.origin.as_ref().and_then(|origin| {
-                                        let range = snapshot.buffer_anchor_range_to_anchor_range(
-                                            origin.range.clone(),
-                                        )?;
-                                        Some(RangeInEditor::Text(range))
-                                    })
-                                });
-                            }
-                            links.extend(definition_result.into_iter().map(HoverLink::Text));
-                        }
                     }
 
                     if links.is_empty() {

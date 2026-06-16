@@ -6,7 +6,7 @@ use project::project_settings::DiagnosticSeverity;
 pub use settings::{
     CurrentLineHighlight, DelayMs,
     DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
-    GoToDefinitionFallback, GoToDefinitionScrollStrategy, MinimapThumb, MinimapThumbBorder,
+    MinimapThumb, MinimapThumbBorder,
     MultiCursorModifier, ScrollBeyondLastLine, ScrollbarDiagnostics, SeedQuerySetting, ShowMinimap,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
@@ -51,8 +51,6 @@ pub struct EditorSettings {
     pub search: SearchSettings,
     pub auto_signature_help: bool,
     pub show_signature_help_after_edits: bool,
-    pub go_to_definition_fallback: GoToDefinitionFallback,
-    pub go_to_definition_scroll_strategy: GoToDefinitionScrollStrategy,
     pub diagnostics_max_severity: Option<DiagnosticSeverity>,
     pub drag_and_drop_selection: DragAndDropSelection,
     pub lsp_document_colors: DocumentColorsRenderMode,
@@ -263,8 +261,6 @@ impl Settings for EditorSettings {
             },
             auto_signature_help: editor.auto_signature_help.unwrap(),
             show_signature_help_after_edits: editor.show_signature_help_after_edits.unwrap(),
-            go_to_definition_fallback: editor.go_to_definition_fallback.unwrap(),
-            go_to_definition_scroll_strategy: editor.go_to_definition_scroll_strategy.unwrap(),
             diagnostics_max_severity: editor.diagnostics_max_severity.map(Into::into),
             drag_and_drop_selection: DragAndDropSelection {
                 enabled: drag_and_drop_selection.enabled.unwrap(),

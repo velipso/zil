@@ -372,9 +372,6 @@ impl AnyProtoClient {
 
                         let server_id = response.server_id;
                         let response = match response.response? {
-                            Response::GetReferencesResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
                             Response::GetDocumentColorResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }
@@ -385,18 +382,6 @@ impl AnyProtoClient {
                                 to_any_envelope(&envelope, response)
                             }
                             Response::GetDocumentDiagnosticsResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
-                            Response::GetDefinitionResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
-                            Response::GetDeclarationResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
-                            Response::GetTypeDefinitionResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
-                            Response::GetImplementationResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }
                             Response::InlayHintsResponse(response) => {

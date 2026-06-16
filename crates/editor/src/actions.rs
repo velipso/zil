@@ -521,22 +521,10 @@ actions!(
         /// edits outside the selected ranges are discarded. External command formatters do not
         /// support range formatting and are skipped.
         FormatSelections,
-        /// Goes to the declaration of the symbol at cursor.
-        GoToDeclaration,
-        /// Goes to declaration in a split pane.
-        GoToDeclarationSplit,
-        /// Goes to the definition of the symbol at cursor.
-        GoToDefinition,
-        /// Goes to definition in a split pane.
-        GoToDefinitionSplit,
         /// Goes to the next diff hunk.
         GoToHunk,
         /// Goes to the previous diff hunk.
         GoToPreviousHunk,
-        /// Goes to the implementation of the symbol at cursor.
-        GoToImplementation,
-        /// Goes to implementation in a split pane.
-        GoToImplementationSplit,
         /// Goes to the next bookmark in the file.
         GoToNextBookmark,
         /// Goes to the next change in the file.
@@ -555,10 +543,6 @@ actions!(
         GoToNextReference,
         /// Goes to the previous reference to the symbol under the cursor.
         GoToPreviousReference,
-        /// Goes to the type definition of the symbol at cursor.
-        GoToTypeDefinition,
-        /// Goes to type definition in a split pane.
-        GoToTypeDefinitionSplit,
         /// Goes to the next document highlight.
         GoToNextDocumentHighlight,
         /// Goes to the previous document highlight.
@@ -864,23 +848,6 @@ actions!(
         ToggleBreadcrumb,
     ]
 );
-
-/// Finds all references to the symbol at cursor.
-#[derive(PartialEq, Clone, Deserialize, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct FindAllReferences {
-    #[serde(default = "default_true")]
-    pub always_open_multibuffer: bool,
-}
-
-impl Default for FindAllReferences {
-    fn default() -> Self {
-        Self {
-            always_open_multibuffer: true,
-        }
-    }
-}
 
 /// Edits a stored review comment inline.
 #[derive(PartialEq, Clone, Deserialize, JsonSchema, Action)]

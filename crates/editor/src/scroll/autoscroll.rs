@@ -2,7 +2,6 @@ use crate::{
     DisplayPoint, DisplayRow, Editor, EditorMode, EditorSettings, LineWithInvisibles, RowExt,
     SelectionEffects,
     display_map::{DisplaySnapshot, ToDisplayPoint},
-    editor_settings::GoToDefinitionScrollStrategy,
     scroll::{ScrollOffset, WasScrolled},
 };
 use gpui::{App, Bounds, Context, Pixels, Window};
@@ -36,15 +35,9 @@ impl Autoscroll {
 
     /// Returns the autoscroll strategy configured for navigation to definitions
     /// and references, based on `go_to_definition_scroll_strategy`.
-    pub fn for_go_to_definition(offset: Option<ScrollOffset>, cx: &App) -> Self {
-        match EditorSettings::get_global(cx).go_to_definition_scroll_strategy {
-            GoToDefinitionScrollStrategy::Center => Self::center(),
-            GoToDefinitionScrollStrategy::Minimum => Self::fit(),
-            GoToDefinitionScrollStrategy::Top => Self::focused(),
-            GoToDefinitionScrollStrategy::Preserve => {
-                offset.map(Self::top_relative).unwrap_or_else(Self::center)
-            }
-        }
+    pub fn for_go_to_definition(_offset: Option<ScrollOffset>, _cx: &App) -> Self {
+        // VELIPSO: remove? make a setting?
+        Self::center()
     }
 
     /// scrolls so the newest cursor is near the top
