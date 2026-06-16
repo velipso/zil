@@ -577,12 +577,7 @@ pub fn show_link_definition(
                                 style,
                                 cx,
                             ),
-                            RangeInEditor::Inlay(highlight) => editor.highlight_inlays(
-                                HighlightKey::HoveredLinkState,
-                                vec![highlight],
-                                style,
-                                cx,
-                            ),
+                            RangeInEditor::Inlay(_) => {},
                         }
                     }
                 } else if let Some((_, multi_buffer_range, _, _)) = detected_document_link.as_ref()

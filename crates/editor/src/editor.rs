@@ -8366,8 +8366,6 @@ impl Editor {
         };
 
         if !self.inline_value_cache.enabled {
-            let inlays = std::mem::take(&mut self.inline_value_cache.inlays);
-            self.splice_inlays(&inlays, Vec::new(), cx);
             return;
         }
 
@@ -8437,8 +8435,6 @@ impl Editor {
 
                     let mut inlay_ids = new_inlays.iter().map(|inlay| inlay.id).collect();
                     std::mem::swap(&mut editor.inline_value_cache.inlays, &mut inlay_ids);
-
-                    editor.splice_inlays(&inlay_ids, new_inlays, cx);
                 })
                 .ok()?;
             Some(())
@@ -8521,7 +8517,7 @@ impl Editor {
                     inlay_hints.remove_inlay_chunk_data(removed_buffer_ids);
                 }
                 self.refresh_inlay_hints(
-                    InlayHintRefreshReason::BuffersRemoved(removed_buffer_ids.clone()),
+                    InlayHintRefreshReason::BuffersRemoved,
                     cx,
                 );
                 for buffer_id in removed_buffer_ids {
@@ -8734,12 +8730,9 @@ impl Editor {
                 self.refresh_document_symbols(None, cx);
             }
 
-            if let Some(inlay_splice) = self.colors.as_mut().and_then(|colors| {
+            if let Some(_) = self.colors.as_mut().and_then(|colors| {
                 colors.render_mode_updated(EditorSettings::get_global(cx).lsp_document_colors)
             }) {
-                if !inlay_splice.is_empty() {
-                    self.splice_inlays(&inlay_splice.to_remove, inlay_splice.to_insert, cx);
-                }
                 self.refresh_document_colors(None, window, cx);
             }
 
@@ -8755,11 +8748,7 @@ impl Editor {
             }
 
             self.refresh_inlay_hints(
-                InlayHintRefreshReason::SettingsChange(inlay_hint_settings(
-                    self.selections.newest_anchor().head(),
-                    &self.buffer.read(cx).snapshot(cx),
-                    cx,
-                )),
+                InlayHintRefreshReason::SettingsChange,
                 cx,
             );
 

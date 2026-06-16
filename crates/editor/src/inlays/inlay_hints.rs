@@ -1,14 +1,11 @@
 use std::{
-    collections::hash_map,
-    ops::{ControlFlow, Range},
+    ops::{Range},
     time::Duration,
 };
 
 use clock::Global;
 use collections::{HashMap, HashSet};
-use futures::future::join_all;
 use gpui::{App, Entity, Pixels, Task};
-use itertools::Itertools;
 use language::{
     BufferRow,
     language_settings::{InlayHintKind, InlayHintSettings},
@@ -30,7 +27,6 @@ use crate::{
     display_map::{DisplayMap, InlayOffset},
     hover_links::{InlayHighlight, TriggerPoint, show_link_definition},
     hover_popover::{self, InlayHover},
-    inlays::InlaySplice,
 };
 
 pub fn inlay_hint_settings(
@@ -45,8 +41,6 @@ pub fn inlay_hint_settings(
 pub struct LspInlayHintData {
     enabled: bool,
     modifiers_override: bool,
-    enabled_in_settings: bool,
-    allowed_hint_kinds: HashSet<Option<InlayHintKind>>,
     invalidate_debounce: Option<Duration>,
     append_debounce: Option<Duration>,
     hint_refresh_tasks: HashMap<BufferId, Vec<Task<()>>>,
@@ -60,14 +54,12 @@ impl LspInlayHintData {
         Self {
             modifiers_override: false,
             enabled: settings.enabled,
-            enabled_in_settings: settings.enabled,
             hint_refresh_tasks: HashMap::default(),
             added_hints: HashMap::default(),
             hint_chunk_fetching: HashMap::default(),
             invalidate_hints_for_buffers: HashSet::default(),
             invalidate_debounce: debounce_value(settings.edit_debounce_ms),
             append_debounce: debounce_value(settings.scroll_debounce_ms),
-            allowed_hint_kinds: settings.enabled_inlay_hint_kinds(),
         }
     }
 
@@ -125,96 +117,6 @@ impl LspInlayHintData {
         }
     }
 
-    /// Checks inlay hint settings for enabled hint kinds and general enabled state.
-    /// Generates corresponding inlay_map splice updates on settings changes.
-    /// Does not update inlay hint cache state on disabling or inlay hint kinds change: only reenabling forces new LSP queries.
-    fn update_settings(
-        &mut self,
-        new_hint_settings: InlayHintSettings,
-        visible_hints: impl IntoIterator<Item = Inlay>,
-    ) -> ControlFlow<Option<InlaySplice>, Option<InlaySplice>> {
-        let old_enabled = self.enabled;
-        // If the setting for inlay hints has changed, update `enabled`. This condition avoids inlay
-        // hint visibility changes when other settings change (such as theme).
-        //
-        // Another option might be to store whether the user has manually toggled inlay hint
-        // visibility, and prefer this. This could lead to confusion as it means inlay hint
-        // visibility would not change when updating the setting if they were ever toggled.
-        if new_hint_settings.enabled != self.enabled_in_settings {
-            self.enabled = new_hint_settings.enabled;
-            self.enabled_in_settings = new_hint_settings.enabled;
-            self.modifiers_override = false;
-        };
-        self.invalidate_debounce = debounce_value(new_hint_settings.edit_debounce_ms);
-        self.append_debounce = debounce_value(new_hint_settings.scroll_debounce_ms);
-        let new_allowed_hint_kinds = new_hint_settings.enabled_inlay_hint_kinds();
-        match (old_enabled, self.enabled) {
-            (false, false) => {
-                self.allowed_hint_kinds = new_allowed_hint_kinds;
-                ControlFlow::Break(None)
-            }
-            (true, true) => {
-                if new_allowed_hint_kinds == self.allowed_hint_kinds {
-                    ControlFlow::Break(None)
-                } else {
-                    self.allowed_hint_kinds = new_allowed_hint_kinds;
-                    ControlFlow::Continue(
-                        Some(InlaySplice {
-                            to_remove: visible_hints
-                                .into_iter()
-                                .filter_map(|inlay| {
-                                    let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                    if !self.allowed_hint_kinds.contains(&inlay_kind) {
-                                        Some(inlay.id)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect(),
-                            to_insert: Vec::new(),
-                        })
-                        .filter(|splice| !splice.is_empty()),
-                    )
-                }
-            }
-            (true, false) => {
-                self.modifiers_override = false;
-                self.allowed_hint_kinds = new_allowed_hint_kinds;
-                let mut visible_hints = visible_hints.into_iter().peekable();
-                if visible_hints.peek().is_none() {
-                    ControlFlow::Break(None)
-                } else {
-                    self.clear();
-                    ControlFlow::Break(Some(InlaySplice {
-                        to_remove: visible_hints.map(|inlay| inlay.id).collect(),
-                        to_insert: Vec::new(),
-                    }))
-                }
-            }
-            (false, true) => {
-                self.modifiers_override = false;
-                self.allowed_hint_kinds = new_allowed_hint_kinds;
-                ControlFlow::Continue(
-                    Some(InlaySplice {
-                        to_remove: visible_hints
-                            .into_iter()
-                            .filter_map(|inlay| {
-                                let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                if !self.allowed_hint_kinds.contains(&inlay_kind) {
-                                    Some(inlay.id)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect(),
-                        to_insert: Vec::new(),
-                    })
-                    .filter(|splice| !splice.is_empty()),
-                )
-            }
-        }
-    }
-
     pub(crate) fn remove_inlay_chunk_data<'a>(
         &'a mut self,
         removed_buffer_ids: impl IntoIterator<Item = &'a BufferId> + 'a,
@@ -230,7 +132,7 @@ impl LspInlayHintData {
 pub enum InlayHintRefreshReason {
     ModifiersChanged(bool),
     Toggle(bool),
-    SettingsChange(InlayHintSettings),
+    SettingsChange,
     NewLinesShown,
     BufferEdited(BufferId),
     ServerRemoved,
@@ -238,7 +140,7 @@ pub enum InlayHintRefreshReason {
         server_id: LanguageServerId,
         request_id: Option<usize>,
     },
-    BuffersRemoved(Vec<BufferId>),
+    BuffersRemoved,
 }
 
 impl Editor {
@@ -302,9 +204,9 @@ impl Editor {
         };
 
         let debounce = match &reason {
-            InlayHintRefreshReason::SettingsChange(_)
+            InlayHintRefreshReason::SettingsChange
             | InlayHintRefreshReason::Toggle(_)
-            | InlayHintRefreshReason::BuffersRemoved(_)
+            | InlayHintRefreshReason::BuffersRemoved
             | InlayHintRefreshReason::ModifiersChanged(_) => None,
             _may_need_lsp_call => self.inlay_hints.as_ref().and_then(|inlay_hints| {
                 if invalidate_cache.should_invalidate() {
@@ -322,11 +224,11 @@ impl Editor {
         let ignore_previous_fetches = match reason {
             InlayHintRefreshReason::ModifiersChanged(_)
             | InlayHintRefreshReason::Toggle(_)
-            | InlayHintRefreshReason::SettingsChange(_)
+            | InlayHintRefreshReason::SettingsChange
             | InlayHintRefreshReason::ServerRemoved => true,
             InlayHintRefreshReason::NewLinesShown
             | InlayHintRefreshReason::RefreshRequested { .. }
-            | InlayHintRefreshReason::BuffersRemoved(_) => false,
+            | InlayHintRefreshReason::BuffersRemoved => false,
             InlayHintRefreshReason::BufferEdited(buffer_id) => {
                 let Some(affected_language) = self
                     .buffer()
@@ -455,11 +357,8 @@ impl Editor {
         }
     }
 
-    pub fn clear_inlay_hints(&mut self, cx: &mut Context<Self>) {
-        let to_remove = Self::visible_inlay_hints(self.display_map.read(cx))
-            .map(|inlay| inlay.id)
-            .collect::<Vec<_>>();
-        self.splice_inlays(&to_remove, Vec::new(), cx);
+    pub fn clear_inlay_hints(&mut self, _cx: &mut Context<Self>) {
+        // do nothing
     }
 
     fn refresh_editor_data(
@@ -497,45 +396,10 @@ impl Editor {
                     return None;
                 }
             }
-            InlayHintRefreshReason::SettingsChange(new_settings) => {
-                let visible_inlay_hints =
-                    Self::visible_inlay_hints(self.display_map.read(cx)).collect::<Vec<_>>();
-                match inlay_hints.update_settings(*new_settings, visible_inlay_hints) {
-                    ControlFlow::Break(Some(InlaySplice {
-                        to_remove,
-                        to_insert,
-                    })) => {
-                        self.splice_inlays(&to_remove, to_insert, cx);
-                        return None;
-                    }
-                    ControlFlow::Break(None) => return None,
-                    ControlFlow::Continue(splice) => {
-                        if let Some(InlaySplice {
-                            to_remove,
-                            to_insert,
-                        }) = splice
-                        {
-                            self.splice_inlays(&to_remove, to_insert, cx);
-                        }
-                        InvalidationStrategy::None
-                    }
-                }
+            InlayHintRefreshReason::SettingsChange => {
+                return None
             }
-            InlayHintRefreshReason::BuffersRemoved(buffers_removed) => {
-                let to_remove = self
-                    .display_map
-                    .read(cx)
-                    .current_inlays()
-                    .filter_map(|inlay| {
-                        let anchor = inlay.position.raw_text_anchor()?;
-                        if buffers_removed.contains(&anchor.buffer_id) {
-                            Some(inlay.id)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                self.splice_inlays(&to_remove, Vec::new(), cx);
+            InlayHintRefreshReason::BuffersRemoved => {
                 return None;
             }
             InlayHintRefreshReason::ServerRemoved => InvalidationStrategy::BufferEdited,
@@ -784,154 +648,6 @@ impl Editor {
         }
         hint_tasks
     }
-
-    fn apply_fetched_hints(
-        &mut self,
-        buffer_id: BufferId,
-        query_version: Global,
-        invalidate_cache: InvalidationStrategy,
-        new_hints: Vec<(Range<BufferRow>, anyhow::Result<CacheInlayHints>)>,
-        cx: &mut Context<Self>,
-    ) {
-        let multi_buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let visible_inlay_hint_ids = Self::visible_inlay_hints(self.display_map.read(cx))
-            .filter(|inlay| {
-                multi_buffer_snapshot
-                    .anchor_to_buffer_anchor(inlay.position)
-                    .map(|(anchor, _)| anchor.buffer_id)
-                    == Some(buffer_id)
-            })
-            .map(|inlay| inlay.id)
-            .collect::<Vec<_>>();
-        let Some(inlay_hints) = &mut self.inlay_hints else {
-            return;
-        };
-        let Some(buffer_snapshot) = self
-            .buffer
-            .read(cx)
-            .buffer(buffer_id)
-            .map(|buffer| buffer.read(cx).snapshot())
-        else {
-            return;
-        };
-
-        let mut hints_to_remove = Vec::new();
-
-        // If we've received hints from the cache, it means `invalidate_cache` had invalidated whatever possible there,
-        // and most probably there are no more hints with IDs from `visible_inlay_hint_ids` in the cache.
-        // So, if we hover such hints, no resolve will happen.
-        //
-        // Another issue is in the fact that changing one buffer may lead to other buffers' hints changing, so more cache entries may be removed.
-        // Hence, clear all excerpts' hints in the multi buffer: later, the invalidated ones will re-trigger the LSP query, the rest will be restored
-        // from the cache.
-        if invalidate_cache.should_invalidate() {
-            hints_to_remove.extend(visible_inlay_hint_ids);
-
-            // When invalidating, this task removes ALL visible hints for the buffer
-            // but only adds back hints for its own chunk ranges. Chunks fetched by
-            // other concurrent tasks (e.g., a scroll task that completed before this
-            // edit task) would have their hints removed but remain marked as "already
-            // fetched" in hint_chunk_fetching, preventing re-fetch on the next
-            // NewLinesShown. Fix: retain only chunks that this task has results for.
-            let task_chunk_ranges: HashSet<&Range<BufferRow>> =
-                new_hints.iter().map(|(range, _)| range).collect();
-            if let Some((_, fetched_chunks)) = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id) {
-                fetched_chunks.retain(|chunk| task_chunk_ranges.contains(chunk));
-            }
-        }
-
-        let mut inserted_hint_text = HashMap::default();
-        let new_hints = new_hints
-            .into_iter()
-            .filter_map(|(chunk_range, hints_result)| {
-                let chunks_fetched = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id);
-                match hints_result {
-                    Ok(new_hints) => {
-                        if new_hints.is_empty() {
-                            if let Some((_, chunks_fetched)) = chunks_fetched {
-                                chunks_fetched.remove(&chunk_range);
-                            }
-                        }
-                        Some(new_hints)
-                    }
-                    Err(e) => {
-                        log::error!(
-                            "Failed to query inlays for buffer row range {chunk_range:?}, {e:#}"
-                        );
-                        if let Some((for_version, chunks_fetched)) = chunks_fetched {
-                            if for_version == &query_version {
-                                chunks_fetched.remove(&chunk_range);
-                            }
-                        }
-                        None
-                    }
-                }
-            })
-            .flat_map(|new_hints| {
-                let mut hints_deduplicated = Vec::new();
-
-                if new_hints.len() > 1 {
-                    for (server_id, new_hints) in new_hints {
-                        for (new_id, new_hint) in new_hints {
-                            let hints_text_for_position = inserted_hint_text
-                                .entry(new_hint.position)
-                                .or_insert_with(HashMap::default);
-                            let insert =
-                                match hints_text_for_position.entry(new_hint.text().to_string()) {
-                                    hash_map::Entry::Occupied(o) => o.get() == &server_id,
-                                    hash_map::Entry::Vacant(v) => {
-                                        v.insert(server_id);
-                                        true
-                                    }
-                                };
-
-                            if insert {
-                                hints_deduplicated.push((new_id, new_hint));
-                            }
-                        }
-                    }
-                } else {
-                    hints_deduplicated.extend(new_hints.into_values().flatten());
-                }
-
-                hints_deduplicated
-            })
-            .filter(|(hint_id, lsp_hint)| {
-                inlay_hints.allowed_hint_kinds.contains(&lsp_hint.kind)
-                    && inlay_hints
-                        .added_hints
-                        .insert(*hint_id, lsp_hint.kind)
-                        .is_none()
-            })
-            .sorted_by(|(_, a), (_, b)| a.position.cmp(&b.position, &buffer_snapshot))
-            .collect::<Vec<_>>();
-
-        let hints_to_insert = multi_buffer_snapshot
-            .text_anchors_to_visible_anchors(
-                new_hints.iter().map(|(_, lsp_hint)| lsp_hint.position),
-            )
-            .into_iter()
-            .zip(&new_hints)
-            .filter_map(|(position, (hint_id, hint))| Some(Inlay::hint(*hint_id, position?, &hint)))
-            .collect();
-        let invalidate_hints_for_buffers =
-            std::mem::take(&mut inlay_hints.invalidate_hints_for_buffers);
-        if !invalidate_hints_for_buffers.is_empty() {
-            hints_to_remove.extend(
-                Self::visible_inlay_hints(self.display_map.read(cx))
-                    .filter(|inlay| {
-                        multi_buffer_snapshot
-                            .anchor_to_buffer_anchor(inlay.position)
-                            .is_none_or(|(anchor, _)| {
-                                invalidate_hints_for_buffers.contains(&anchor.buffer_id)
-                            })
-                    })
-                    .map(|inlay| inlay.id),
-            );
-        }
-
-        self.splice_inlays(&hints_to_remove, hints_to_insert, cx);
-    }
 }
 
 #[derive(Debug)]
@@ -955,7 +671,6 @@ fn spawn_editor_hints_refresh(
             cx.background_executor().timer(debounce).await;
         }
 
-        let query_version = buffer_excerpts.buffer_version.clone();
         let Some(hint_tasks) = editor
             .update(cx, |editor, cx| {
                 editor.inlay_hints_for_buffer(invalidate_cache, buffer_excerpts, known_chunks, cx)
@@ -981,18 +696,6 @@ fn spawn_editor_hints_refresh(
                 .ok();
             return;
         }
-        let new_hints = join_all(hint_tasks).await;
-        editor
-            .update(cx, |editor, cx| {
-                editor.apply_fetched_hints(
-                    buffer_id,
-                    query_version,
-                    invalidate_cache,
-                    new_hints,
-                    cx,
-                );
-            })
-            .ok();
     })
 }
 
@@ -1026,119 +729,6 @@ pub mod tests {
     use ui::App;
     use util::path;
     use util::paths::natural_sort;
-
-    #[gpui::test]
-    async fn test_basic_cache_update_with_duplicate_hints(cx: &mut gpui::TestAppContext) {
-        let allowed_hint_kinds = HashSet::from_iter([None, Some(InlayHintKind::Type)]);
-        init_test(cx, &|settings| {
-            settings.defaults.inlay_hints = Some(InlayHintSettingsContent {
-                show_value_hints: Some(true),
-                enabled: Some(true),
-                edit_debounce_ms: Some(0),
-                scroll_debounce_ms: Some(0),
-                show_type_hints: Some(allowed_hint_kinds.contains(&Some(InlayHintKind::Type))),
-                show_parameter_hints: Some(
-                    allowed_hint_kinds.contains(&Some(InlayHintKind::Parameter)),
-                ),
-                show_other_hints: Some(allowed_hint_kinds.contains(&None)),
-                show_background: Some(false),
-                toggle_on_modifiers_press: None,
-            })
-        });
-        let (_, editor, fake_server) = prepare_test_objects(cx, |fake_server, file_with_hints| {
-            let lsp_request_count = Arc::new(AtomicU32::new(0));
-            fake_server.set_request_handler::<lsp::request::InlayHintRequest, _, _>(
-                move |params, _| {
-                    let task_lsp_request_count = Arc::clone(&lsp_request_count);
-                    async move {
-                        let i = task_lsp_request_count.fetch_add(1, Ordering::Release) + 1;
-                        assert_eq!(
-                            params.text_document.uri,
-                            lsp::Uri::from_file_path(file_with_hints).unwrap(),
-                        );
-                        Ok(Some(vec![lsp::InlayHint {
-                            position: lsp::Position::new(0, i),
-                            label: lsp::InlayHintLabel::String(i.to_string()),
-                            kind: None,
-                            text_edits: None,
-                            tooltip: None,
-                            padding_left: None,
-                            padding_right: None,
-                            data: None,
-                        }]))
-                    }
-                },
-            );
-        })
-        .await;
-        cx.executor().run_until_parked();
-
-        editor
-            .update(cx, |editor, _window, cx| {
-                let expected_hints = vec!["1".to_string()];
-                assert_eq!(
-                    expected_hints,
-                    cached_hint_labels(editor, cx),
-                    "Should get its first hints when opening the editor"
-                );
-                assert_eq!(expected_hints, visible_hint_labels(editor, cx));
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    allowed_hint_kinds,
-                    "Cache should use editor settings to get the allowed hint kinds"
-                );
-            })
-            .unwrap();
-
-        editor
-            .update(cx, |editor, window, cx| {
-                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-                    s.select_ranges([MultiBufferOffset(13)..MultiBufferOffset(13)])
-                });
-                editor.handle_input("some change", window, cx);
-            })
-            .unwrap();
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _window, cx| {
-                let expected_hints = vec!["2".to_string()];
-                assert_eq!(
-                    expected_hints,
-                    cached_hint_labels(editor, cx),
-                    "Should get new hints after an edit"
-                );
-                assert_eq!(expected_hints, visible_hint_labels(editor, cx));
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    allowed_hint_kinds,
-                    "Cache should use editor settings to get the allowed hint kinds"
-                );
-            })
-            .unwrap();
-
-        fake_server
-            .request::<lsp::request::InlayHintRefreshRequest>((), DEFAULT_LSP_REQUEST_TIMEOUT)
-            .await
-            .into_response()
-            .expect("inlay refresh request failed");
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _window, cx| {
-                let expected_hints = vec!["3".to_string()];
-                assert_eq!(
-                    expected_hints,
-                    cached_hint_labels(editor, cx),
-                    "Should get new hints after hint refresh/ request"
-                );
-                assert_eq!(expected_hints, visible_hint_labels(editor, cx));
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    allowed_hint_kinds,
-                    "Cache should use editor settings to get the allowed hint kinds"
-                );
-            })
-            .unwrap();
-    }
 
     #[gpui::test]
     async fn test_racy_cache_updates(cx: &mut gpui::TestAppContext) {
@@ -1576,368 +1166,6 @@ pub mod tests {
                     "Markdown editor should also change independently"
                 );
                 assert_eq!(expected_hints, visible_hint_labels(editor, cx));
-            })
-            .unwrap();
-    }
-
-    #[gpui::test]
-    async fn test_hint_setting_changes(cx: &mut gpui::TestAppContext) {
-        let allowed_hint_kinds = HashSet::from_iter([None, Some(InlayHintKind::Type)]);
-        init_test(cx, &|settings| {
-            settings.defaults.inlay_hints = Some(InlayHintSettingsContent {
-                show_value_hints: Some(true),
-                enabled: Some(true),
-                edit_debounce_ms: Some(0),
-                scroll_debounce_ms: Some(0),
-                show_type_hints: Some(allowed_hint_kinds.contains(&Some(InlayHintKind::Type))),
-                show_parameter_hints: Some(
-                    allowed_hint_kinds.contains(&Some(InlayHintKind::Parameter)),
-                ),
-                show_other_hints: Some(allowed_hint_kinds.contains(&None)),
-                show_background: Some(false),
-                toggle_on_modifiers_press: None,
-            })
-        });
-
-        let lsp_request_count = Arc::new(AtomicUsize::new(0));
-        let (_, editor, fake_server) = prepare_test_objects(cx, {
-            let lsp_request_count = lsp_request_count.clone();
-            move |fake_server, file_with_hints| {
-                let lsp_request_count = lsp_request_count.clone();
-                fake_server.set_request_handler::<lsp::request::InlayHintRequest, _, _>(
-                    move |params, _| {
-                        lsp_request_count.fetch_add(1, Ordering::Release);
-                        async move {
-                            assert_eq!(
-                                params.text_document.uri,
-                                lsp::Uri::from_file_path(file_with_hints).unwrap(),
-                            );
-                            Ok(Some(vec![
-                                lsp::InlayHint {
-                                    position: lsp::Position::new(0, 1),
-                                    label: lsp::InlayHintLabel::String("type hint".to_string()),
-                                    kind: Some(lsp::InlayHintKind::TYPE),
-                                    text_edits: None,
-                                    tooltip: None,
-                                    padding_left: None,
-                                    padding_right: None,
-                                    data: None,
-                                },
-                                lsp::InlayHint {
-                                    position: lsp::Position::new(0, 2),
-                                    label: lsp::InlayHintLabel::String(
-                                        "parameter hint".to_string(),
-                                    ),
-                                    kind: Some(lsp::InlayHintKind::PARAMETER),
-                                    text_edits: None,
-                                    tooltip: None,
-                                    padding_left: None,
-                                    padding_right: None,
-                                    data: None,
-                                },
-                                lsp::InlayHint {
-                                    position: lsp::Position::new(0, 3),
-                                    label: lsp::InlayHintLabel::String("other hint".to_string()),
-                                    kind: None,
-                                    text_edits: None,
-                                    tooltip: None,
-                                    padding_left: None,
-                                    padding_right: None,
-                                    data: None,
-                                },
-                            ]))
-                        }
-                    },
-                );
-            }
-        })
-        .await;
-        cx.executor().run_until_parked();
-
-        editor
-            .update(cx, |editor, _, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    1,
-                    "Should query new hints once"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx),
-                    "Should get its first hints when opening the editor"
-                );
-                assert_eq!(
-                    vec!["type hint".to_string(), "other hint".to_string()],
-                    visible_hint_labels(editor, cx)
-                );
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    allowed_hint_kinds,
-                    "Cache should use editor settings to get the allowed hint kinds"
-                );
-            })
-            .unwrap();
-
-        fake_server
-            .request::<lsp::request::InlayHintRefreshRequest>((), DEFAULT_LSP_REQUEST_TIMEOUT)
-            .await
-            .into_response()
-            .expect("inlay refresh request failed");
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    2,
-                    "Should load new hints twice"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx),
-                    "Cached hints should not change due to allowed hint kinds settings update"
-                );
-                assert_eq!(
-                    vec!["type hint".to_string(), "other hint".to_string()],
-                    visible_hint_labels(editor, cx)
-                );
-            })
-            .unwrap();
-
-        for (new_allowed_hint_kinds, expected_visible_hints) in [
-            (HashSet::from_iter([None]), vec!["other hint".to_string()]),
-            (
-                HashSet::from_iter([Some(InlayHintKind::Type)]),
-                vec!["type hint".to_string()],
-            ),
-            (
-                HashSet::from_iter([Some(InlayHintKind::Parameter)]),
-                vec!["parameter hint".to_string()],
-            ),
-            (
-                HashSet::from_iter([None, Some(InlayHintKind::Type)]),
-                vec!["type hint".to_string(), "other hint".to_string()],
-            ),
-            (
-                HashSet::from_iter([None, Some(InlayHintKind::Parameter)]),
-                vec!["parameter hint".to_string(), "other hint".to_string()],
-            ),
-            (
-                HashSet::from_iter([Some(InlayHintKind::Type), Some(InlayHintKind::Parameter)]),
-                vec!["type hint".to_string(), "parameter hint".to_string()],
-            ),
-            (
-                HashSet::from_iter([
-                    None,
-                    Some(InlayHintKind::Type),
-                    Some(InlayHintKind::Parameter),
-                ]),
-                vec![
-                    "type hint".to_string(),
-                    "parameter hint".to_string(),
-                    "other hint".to_string(),
-                ],
-            ),
-        ] {
-            update_test_language_settings(cx, &|settings| {
-                settings.defaults.inlay_hints = Some(InlayHintSettingsContent {
-                    show_value_hints: Some(true),
-                    enabled: Some(true),
-                    edit_debounce_ms: Some(0),
-                    scroll_debounce_ms: Some(0),
-                    show_type_hints: Some(
-                        new_allowed_hint_kinds.contains(&Some(InlayHintKind::Type)),
-                    ),
-                    show_parameter_hints: Some(
-                        new_allowed_hint_kinds.contains(&Some(InlayHintKind::Parameter)),
-                    ),
-                    show_other_hints: Some(new_allowed_hint_kinds.contains(&None)),
-                    show_background: Some(false),
-                    toggle_on_modifiers_press: None,
-                })
-            });
-            cx.executor().run_until_parked();
-            editor.update(cx, |editor, _, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    2,
-                    "Should not load new hints on allowed hint kinds change for hint kinds {new_allowed_hint_kinds:?}"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx),
-                    "Should get its cached hints unchanged after the settings change for hint kinds {new_allowed_hint_kinds:?}"
-                );
-                assert_eq!(
-                    expected_visible_hints,
-                    visible_hint_labels(editor, cx),
-                    "Should get its visible hints filtered after the settings change for hint kinds {new_allowed_hint_kinds:?}"
-                );
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    new_allowed_hint_kinds,
-                    "Cache should use editor settings to get the allowed hint kinds for hint kinds {new_allowed_hint_kinds:?}"
-                );
-            }).unwrap();
-        }
-
-        let another_allowed_hint_kinds = HashSet::from_iter([Some(InlayHintKind::Type)]);
-        update_test_language_settings(cx, &|settings| {
-            settings.defaults.inlay_hints = Some(InlayHintSettingsContent {
-                show_value_hints: Some(true),
-                enabled: Some(false),
-                edit_debounce_ms: Some(0),
-                scroll_debounce_ms: Some(0),
-                show_type_hints: Some(
-                    another_allowed_hint_kinds.contains(&Some(InlayHintKind::Type)),
-                ),
-                show_parameter_hints: Some(
-                    another_allowed_hint_kinds.contains(&Some(InlayHintKind::Parameter)),
-                ),
-                show_other_hints: Some(another_allowed_hint_kinds.contains(&None)),
-                show_background: Some(false),
-                toggle_on_modifiers_press: None,
-            })
-        });
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    2,
-                    "Should not load new hints when hints got disabled"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx),
-                    "Should not clear the cache when hints got disabled"
-                );
-                assert_eq!(
-                    Vec::<String>::new(),
-                    visible_hint_labels(editor, cx),
-                    "Should clear visible hints when hints got disabled"
-                );
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    another_allowed_hint_kinds,
-                    "Should update its allowed hint kinds even when hints got disabled"
-                );
-            })
-            .unwrap();
-
-        fake_server
-            .request::<lsp::request::InlayHintRefreshRequest>((), DEFAULT_LSP_REQUEST_TIMEOUT)
-            .await
-            .into_response()
-            .expect("inlay refresh request failed");
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _window, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    2,
-                    "Should not load new hints when they got disabled"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx)
-                );
-                assert_eq!(Vec::<String>::new(), visible_hint_labels(editor, cx));
-            })
-            .unwrap();
-
-        let final_allowed_hint_kinds = HashSet::from_iter([Some(InlayHintKind::Parameter)]);
-        update_test_language_settings(cx, &|settings| {
-            settings.defaults.inlay_hints = Some(InlayHintSettingsContent {
-                show_value_hints: Some(true),
-                enabled: Some(true),
-                edit_debounce_ms: Some(0),
-                scroll_debounce_ms: Some(0),
-                show_type_hints: Some(
-                    final_allowed_hint_kinds.contains(&Some(InlayHintKind::Type)),
-                ),
-                show_parameter_hints: Some(
-                    final_allowed_hint_kinds.contains(&Some(InlayHintKind::Parameter)),
-                ),
-                show_other_hints: Some(final_allowed_hint_kinds.contains(&None)),
-                show_background: Some(false),
-                toggle_on_modifiers_press: None,
-            })
-        });
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    2,
-                    "Should not query for new hints when they got re-enabled, as the file version did not change"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx),
-                    "Should get its cached hints fully repopulated after the hints got re-enabled"
-                );
-                assert_eq!(
-                    vec!["parameter hint".to_string()],
-                    visible_hint_labels(editor, cx),
-                    "Should get its visible hints repopulated and filtered after the h"
-                );
-                assert_eq!(
-                    allowed_hint_kinds_for_editor(editor),
-                    final_allowed_hint_kinds,
-                    "Cache should update editor settings when hints got re-enabled"
-                );
-            })
-            .unwrap();
-
-        fake_server
-            .request::<lsp::request::InlayHintRefreshRequest>((), DEFAULT_LSP_REQUEST_TIMEOUT)
-            .await
-            .into_response()
-            .expect("inlay refresh request failed");
-        cx.executor().run_until_parked();
-        editor
-            .update(cx, |editor, _, cx| {
-                assert_eq!(
-                    lsp_request_count.load(Ordering::Relaxed),
-                    3,
-                    "Should query for new hints again"
-                );
-                assert_eq!(
-                    vec![
-                        "type hint".to_string(),
-                        "parameter hint".to_string(),
-                        "other hint".to_string(),
-                    ],
-                    cached_hint_labels(editor, cx),
-                );
-                assert_eq!(
-                    vec!["parameter hint".to_string()],
-                    visible_hint_labels(editor, cx),
-                );
             })
             .unwrap();
     }
@@ -4905,14 +4133,5 @@ let c = 3;"#
         Editor::visible_inlay_hints(editor.display_map.read(cx))
             .map(|hint| hint.text().to_string())
             .collect()
-    }
-
-    fn allowed_hint_kinds_for_editor(editor: &Editor) -> HashSet<Option<InlayHintKind>> {
-        editor
-            .inlay_hints
-            .as_ref()
-            .unwrap()
-            .allowed_hint_kinds
-            .clone()
     }
 }

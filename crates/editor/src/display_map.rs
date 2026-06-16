@@ -107,11 +107,11 @@ use multi_buffer::{
     MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot, RowInfo, ToOffset, ToPoint,
 };
 use project::project_settings::DiagnosticSeverity;
-use project::{InlayId, lsp_store::LspFoldingRange, lsp_store::TokenType};
+use project::{lsp_store::LspFoldingRange, lsp_store::TokenType};
 use serde::Deserialize;
 use settings::Settings;
 use smallvec::SmallVec;
-use sum_tree::{Bias, TreeMap};
+use sum_tree::{Bias};
 use text::{BufferId, LineIndent, Patch};
 use theme::StatusColors;
 use ui::{SharedString, px};
@@ -131,7 +131,7 @@ use std::{
 };
 
 use crate::{
-    EditorStyle, RowExt, hover_links::InlayHighlight, inlays::Inlay, movement::TextLayoutDetails,
+    EditorStyle, RowExt, inlays::Inlay, movement::TextLayoutDetails,
 };
 use block_map::{BlockRow, BlockSnapshot};
 use fold_map::FoldSnapshot;
@@ -195,7 +195,6 @@ pub trait ToDisplayPoint {
 type TextHighlights = Arc<HashMap<HighlightKey, Arc<(HighlightStyle, Vec<Range<Anchor>>)>>>;
 type SemanticTokensHighlights =
     Arc<HashMap<BufferId, (Arc<[SemanticTokenHighlight]>, Arc<HighlightStyleInterner>)>>;
-type InlayHighlights = TreeMap<HighlightKey, TreeMap<InlayId, (HighlightStyle, InlayHighlight)>>;
 
 #[derive(Debug)]
 pub struct CompanionExcerptPatch {
@@ -226,8 +225,6 @@ pub struct DisplayMap {
     block_map: BlockMap,
     /// Regions of text that should be highlighted.
     text_highlights: TextHighlights,
-    /// Regions of inlays that should be highlighted.
-    inlay_highlights: InlayHighlights,
     /// The semantic tokens from the language server.
     pub semantic_token_highlights: SemanticTokensHighlights,
     /// A container for explicitly foldable ranges, which supersede indentation based fold range suggestions.
@@ -366,7 +363,6 @@ impl DisplayMap {
             fold_placeholder,
             diagnostics_max_severity,
             text_highlights: Default::default(),
-            inlay_highlights: Default::default(),
             semantic_token_highlights: Default::default(),
             clip_at_line_ends: false,
             masked: false,
@@ -482,7 +478,6 @@ impl DisplayMap {
             diagnostics_max_severity: self.diagnostics_max_severity,
             crease_snapshot: self.crease_map.snapshot(),
             text_highlights: self.text_highlights.clone(),
-            inlay_highlights: self.inlay_highlights.clone(),
             semantic_token_highlights: self.semantic_token_highlights.clone(),
             clip_at_line_ends: self.clip_at_line_ends,
             masked: self.masked,
@@ -506,7 +501,6 @@ impl DisplayMap {
             diagnostics_max_severity: self.diagnostics_max_severity,
             crease_snapshot: self.crease_map.snapshot(),
             text_highlights: self.text_highlights.clone(),
-            inlay_highlights: self.inlay_highlights.clone(),
             semantic_token_highlights: self.semantic_token_highlights.clone(),
             clip_at_line_ends: self.clip_at_line_ends,
             masked: self.masked,
@@ -996,26 +990,6 @@ impl DisplayMap {
     }
 
     #[instrument(skip_all)]
-    pub(crate) fn highlight_inlays(
-        &mut self,
-        key: HighlightKey,
-        highlights: Vec<InlayHighlight>,
-        style: HighlightStyle,
-    ) {
-        for highlight in highlights {
-            let update = self.inlay_highlights.update(&key, |highlights| {
-                highlights.insert(highlight.inlay, (style, highlight.clone()))
-            });
-            if update.is_none() {
-                self.inlay_highlights.insert(
-                    key,
-                    TreeMap::from_ordered_entries([(highlight.inlay, (style, highlight))]),
-                );
-            }
-        }
-    }
-
-    #[instrument(skip_all)]
     pub fn text_highlights(&self, key: HighlightKey) -> Option<(HighlightStyle, &[Range<Anchor>])> {
         let highlights = self.text_highlights.get(&key)?;
         Some((highlights.0, &highlights.1))
@@ -1039,21 +1013,14 @@ impl DisplayMap {
     }
 
     pub fn clear_highlights(&mut self, key: HighlightKey) -> bool {
-        let mut cleared = Arc::make_mut(&mut self.text_highlights)
+        Arc::make_mut(&mut self.text_highlights)
             .remove(&key)
-            .is_some();
-        cleared |= self.inlay_highlights.remove(&key).is_some();
-        cleared
+            .is_some()
     }
 
     pub fn clear_highlights_with(&mut self, f: &mut dyn FnMut(&HighlightKey) -> bool) -> bool {
         let mut cleared = false;
         Arc::make_mut(&mut self.text_highlights).retain(|k, _| {
-            let b = !f(k);
-            cleared |= b;
-            b
-        });
-        self.inlay_highlights.retain(|k, _| {
             let b = !f(k);
             cleared |= b;
             b
@@ -1107,85 +1074,6 @@ impl DisplayMap {
     }
 
     #[instrument(skip_all)]
-    pub(crate) fn splice_inlays(
-        &mut self,
-        to_remove: &[InlayId],
-        to_insert: Vec<Inlay>,
-        cx: &mut Context<Self>,
-    ) {
-        if to_remove.is_empty() && to_insert.is_empty() {
-            return;
-        }
-        let buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let edits = self.buffer_subscription.consume().into_inner();
-        let tab_size = Self::tab_size(&self.buffer, cx);
-
-        let companion_wrap_data = self.companion.as_ref().and_then(|(companion_dm, _)| {
-            companion_dm
-                .update(cx, |dm, cx| dm.sync_through_wrap(cx))
-                .ok()
-        });
-
-        let (snapshot, edits) = self.inlay_map.sync(buffer_snapshot, edits);
-        let (snapshot, edits) = self.fold_map.read(snapshot, edits);
-        let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
-
-        {
-            let companion_ref = self.companion.as_ref().map(|(_, c)| c.read(cx));
-            let companion_view = companion_wrap_data.as_ref().zip(companion_ref).map(
-                |((snapshot, edits), companion)| {
-                    CompanionView::new(self.entity_id, snapshot, edits, companion)
-                },
-            );
-            self.block_map.read(snapshot, edits, companion_view);
-        }
-
-        let (snapshot, edits) = self.inlay_map.splice(to_remove, to_insert);
-        let (snapshot, edits) = self.fold_map.read(snapshot, edits);
-        let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (self_new_wrap_snapshot, self_new_wrap_edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
-
-        let (self_wrap_snapshot, self_wrap_edits) =
-            (self_new_wrap_snapshot.clone(), self_new_wrap_edits.clone());
-
-        {
-            let companion_ref = self.companion.as_ref().map(|(_, c)| c.read(cx));
-            let companion_view = companion_wrap_data.as_ref().zip(companion_ref).map(
-                |((snapshot, edits), companion)| {
-                    CompanionView::new(self.entity_id, snapshot, edits, companion)
-                },
-            );
-            self.block_map
-                .read(self_new_wrap_snapshot, self_new_wrap_edits, companion_view);
-        }
-
-        if let Some((companion_dm, _)) = &self.companion {
-            let _ = companion_dm.update(cx, |dm, cx| {
-                if let Some((companion_snapshot, companion_edits)) = companion_wrap_data {
-                    let their_companion_ref = dm.companion.as_ref().map(|(_, c)| c.read(cx));
-                    dm.block_map.read(
-                        companion_snapshot,
-                        companion_edits,
-                        their_companion_ref.map(|c| {
-                            CompanionView::new(
-                                dm.entity_id,
-                                &self_wrap_snapshot,
-                                &self_wrap_edits,
-                                c,
-                            )
-                        }),
-                    );
-                }
-            });
-        }
-    }
-
-    #[instrument(skip_all)]
     fn tab_size(buffer: &Entity<MultiBuffer>, cx: &App) -> NonZeroU32 {
         if let Some(buffer) = buffer.read(cx).as_singleton().map(|buffer| buffer.read(cx)) {
             LanguageSettings::for_buffer(buffer, cx).tab_size
@@ -1207,9 +1095,7 @@ impl DisplayMap {
 #[derive(Debug, Default)]
 pub(crate) struct Highlights<'a> {
     pub text_highlights: Option<&'a TextHighlights>,
-    pub inlay_highlights: Option<&'a InlayHighlights>,
     pub semantic_token_highlights: Option<&'a SemanticTokensHighlights>,
-    pub styles: HighlightStyles,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1345,7 +1231,6 @@ pub struct DisplaySnapshot {
     pub crease_snapshot: CreaseSnapshot,
     block_snapshot: BlockSnapshot,
     text_highlights: TextHighlights,
-    inlay_highlights: InlayHighlights,
     semantic_token_highlights: SemanticTokensHighlights,
     clip_at_line_ends: bool,
     masked: bool,
@@ -1617,7 +1502,7 @@ impl DisplaySnapshot {
         &self,
         display_rows: Range<DisplayRow>,
         language_aware: LanguageAwareStyling,
-        highlight_styles: HighlightStyles,
+        _highlight_styles: HighlightStyles,
     ) -> DisplayChunks<'_> {
         self.block_snapshot.chunks(
             BlockRow(display_rows.start.0)..BlockRow(display_rows.end.0),
@@ -1625,9 +1510,7 @@ impl DisplaySnapshot {
             self.masked,
             Highlights {
                 text_highlights: Some(&self.text_highlights),
-                inlay_highlights: Some(&self.inlay_highlights),
                 semantic_token_highlights: Some(&self.semantic_token_highlights),
-                styles: highlight_styles,
             },
         )
     }
@@ -2226,15 +2109,6 @@ impl DisplaySnapshot {
             })
             .sorted_by_key(|(_, range)| range.start)
             .collect()
-    }
-
-    #[allow(unused)]
-    #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn inlay_highlights(
-        &self,
-        key: HighlightKey,
-    ) -> Option<&TreeMap<InlayId, (HighlightStyle, InlayHighlight)>> {
-        self.inlay_highlights.get(&key)
     }
 
     pub fn buffer_header_height(&self) -> u32 {
@@ -3800,90 +3674,6 @@ pub mod tests {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, f);
         });
-    }
-
-    #[gpui::test]
-    fn test_isomorphic_display_point_ranges_for_buffer_range(cx: &mut gpui::TestAppContext) {
-        cx.update(|cx| init_test(cx, &|_| {}));
-
-        let buffer = cx.new(|cx| Buffer::local("let x = 5;\n", cx));
-        let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
-        let buffer_snapshot = buffer.read_with(cx, |buffer, cx| buffer.snapshot(cx));
-
-        let font_size = px(14.0);
-        let map = cx.new(|cx| {
-            DisplayMap::new(
-                buffer.clone(),
-                font("Helvetica"),
-                font_size,
-                None,
-                1,
-                1,
-                FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
-                cx,
-            )
-        });
-
-        // Without inlays, a buffer range maps to a single display range.
-        let snapshot = map.update(cx, |map, cx| map.snapshot(cx));
-        let ranges = snapshot.isomorphic_display_point_ranges_for_buffer_range(
-            MultiBufferOffset(4)..MultiBufferOffset(9),
-        );
-        assert_eq!(ranges.len(), 1);
-        // "x = 5" is columns 4..9 with no inlays shifting anything.
-        assert_eq!(ranges[0].start, DisplayPoint::new(DisplayRow(0), 4));
-        assert_eq!(ranges[0].end, DisplayPoint::new(DisplayRow(0), 9));
-
-        // Insert a 4-char inlay hint ": i32" at buffer offset 5 (after "x").
-        map.update(cx, |map, cx| {
-            map.splice_inlays(
-                &[],
-                vec![Inlay::mock_hint(
-                    0,
-                    buffer_snapshot.anchor_after(MultiBufferOffset(5)),
-                    ": i32",
-                )],
-                cx,
-            );
-        });
-        let snapshot = map.update(cx, |map, cx| map.snapshot(cx));
-        assert_eq!(snapshot.text(), "let x: i32 = 5;\n");
-
-        // A buffer range [4..9] ("x = 5") now spans across the inlay.
-        // It should be split into two display ranges that skip the inlay text.
-        let ranges = snapshot.isomorphic_display_point_ranges_for_buffer_range(
-            MultiBufferOffset(4)..MultiBufferOffset(9),
-        );
-        assert_eq!(
-            ranges.len(),
-            2,
-            "expected the range to be split around the inlay, got: {:?}",
-            ranges,
-        );
-        // First sub-range: buffer [4, 5) → "x" at display columns 4..5
-        assert_eq!(ranges[0].start, DisplayPoint::new(DisplayRow(0), 4));
-        assert_eq!(ranges[0].end, DisplayPoint::new(DisplayRow(0), 5));
-        // Second sub-range: buffer [5, 9) → " = 5" at display columns 10..14
-        // (shifted right by the 5-char ": i32" inlay)
-        assert_eq!(ranges[1].start, DisplayPoint::new(DisplayRow(0), 10));
-        assert_eq!(ranges[1].end, DisplayPoint::new(DisplayRow(0), 14));
-
-        // A range entirely before the inlay is not split.
-        let ranges = snapshot.isomorphic_display_point_ranges_for_buffer_range(
-            MultiBufferOffset(0)..MultiBufferOffset(5),
-        );
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].start, DisplayPoint::new(DisplayRow(0), 0));
-        assert_eq!(ranges[0].end, DisplayPoint::new(DisplayRow(0), 5));
-
-        // A range entirely after the inlay is not split.
-        let ranges = snapshot.isomorphic_display_point_ranges_for_buffer_range(
-            MultiBufferOffset(5)..MultiBufferOffset(9),
-        );
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].start, DisplayPoint::new(DisplayRow(0), 10));
-        assert_eq!(ranges[0].end, DisplayPoint::new(DisplayRow(0), 14));
     }
 
     #[test]

@@ -360,13 +360,6 @@ impl Editor {
                         updated |= colors.set_colors(buffer_id, new_buffer_color_inlays);
                     }
 
-                    if colors.render_mode == DocumentColorsRenderMode::Inlay
-                        && !colors_splice.is_empty()
-                    {
-                        editor.splice_inlays(&colors_splice.to_remove, colors_splice.to_insert, cx);
-                        updated = true;
-                    }
-
                     if updated {
                         cx.notify();
                     }
