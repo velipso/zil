@@ -1,0 +1,16 @@
+[package]
+name = "grammar-builder"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = "1.0.86"
+ureq = "2"
+flate2 = "1"
+tar = "0.4"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[lints]
+workspace = true
