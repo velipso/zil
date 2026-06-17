@@ -965,62 +965,6 @@ impl Editor {
         self.select_to_syntax_nodes(window, cx, true);
     }
 
-    pub fn move_to_enclosing_bracket(
-        &mut self,
-        _: &MoveToEnclosingBracket,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.change_selections(Default::default(), window, cx, |s| {
-            s.move_offsets_with(&mut |snapshot, selection| {
-                let Some(enclosing_bracket_ranges) =
-                    snapshot.enclosing_bracket_ranges(selection.start..selection.end)
-                else {
-                    return;
-                };
-
-                let mut best_length = usize::MAX;
-                let mut best_inside = false;
-                let mut best_in_bracket_range = false;
-                let mut best_destination = None;
-                for (open, close) in enclosing_bracket_ranges {
-                    let close = close.to_inclusive();
-                    let length = *close.end() - open.start;
-                    let inside = selection.start >= open.end && selection.end <= *close.start();
-                    let in_bracket_range = open.to_inclusive().contains(&selection.head())
-                        || close.contains(&selection.head());
-
-                    // If best is next to a bracket and current isn't, skip
-                    if !in_bracket_range && best_in_bracket_range {
-                        continue;
-                    }
-
-                    // Prefer smaller lengths unless best is inside and current isn't
-                    if length > best_length && (best_inside || !inside) {
-                        continue;
-                    }
-
-                    best_length = length;
-                    best_inside = inside;
-                    best_in_bracket_range = in_bracket_range;
-                    best_destination = Some(
-                        if close.contains(&selection.start) && close.contains(&selection.end) {
-                            if inside { open.end } else { open.start }
-                        } else if inside {
-                            *close.start()
-                        } else {
-                            *close.end()
-                        },
-                    );
-                }
-
-                if let Some(destination) = best_destination {
-                    selection.collapse_to(destination, SelectionGoal::None);
-                }
-            })
-        });
-    }
-
     pub fn undo_selection(
         &mut self,
         _: &UndoSelection,
@@ -1506,7 +1450,6 @@ impl Editor {
         self.select_next_state = None;
         self.select_prev_state = None;
         self.select_syntax_node_history.try_clear();
-        self.invalidate_autoclose_regions(&selection_anchors, buffer);
         self.take_rename(false, window, cx);
 
         let newest_selection = self.selections.newest_anchor();
@@ -1530,7 +1473,6 @@ impl Editor {
             hide_hover(self, cx);
 
             self.refresh_document_highlights(cx);
-            refresh_linked_ranges(self, window, cx);
 
             self.refresh_selected_text_highlights(&display_map, false, window, cx);
             self.refresh_matching_bracket_highlights(&display_map, cx);
@@ -1615,10 +1557,6 @@ impl Editor {
             let old_cursor_position = &state.old_cursor_position;
 
             self.selections_did_change(true, old_cursor_position, state.effects, window, cx);
-
-            if self.should_open_signature_help_automatically(old_cursor_position, cx) {
-                self.show_signature_help_auto(window, cx);
-            }
         }
     }
 

@@ -656,7 +656,6 @@ impl BufferSearchBar {
     ) -> Self {
         let query_editor = cx.new(|cx| {
             let mut editor = Editor::auto_height(1, 4, window, cx);
-            editor.set_use_autoclose(false);
             editor.set_use_selection_highlight(false);
             editor
         });

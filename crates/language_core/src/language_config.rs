@@ -6,7 +6,6 @@ use regex::Regex;
 use schemars::{JsonSchema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{num::NonZeroU32, path::Path, sync::Arc};
-use util::serde::default_true;
 
 /// Controls the soft-wrapping behavior in the editor.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -42,9 +41,6 @@ pub struct LanguageConfig {
     /// The criteria for matching this language to a given file.
     #[serde(flatten)]
     pub matcher: LanguageMatcher,
-    /// List of bracket types in a language.
-    #[serde(default)]
-    pub brackets: BracketPairConfig,
     /// If set to true, auto indentation uses last non empty line to determine
     /// the indentation level for a new line.
     #[serde(default = "auto_indent_using_last_non_empty_line_default")]
@@ -68,11 +64,6 @@ pub struct LanguageConfig {
     /// outdenting, like aligning an `else` with its `if`.
     #[serde(default)]
     pub decrease_indent_patterns: Vec<DecreaseIndentConfig>,
-    /// A list of characters that trigger the automatic insertion of a closing
-    /// bracket when they immediately precede the point where an opening
-    /// bracket is inserted.
-    #[serde(default)]
-    pub autoclose_before: String,
     /// A placeholder used internally by Semantic Index.
     #[serde(default)]
     pub collapsed_placeholder: String,
@@ -135,9 +126,6 @@ pub struct LanguageConfig {
     /// languages, but should not appear to the user as a distinct language.
     #[serde(default)]
     pub hidden: bool,
-    /// If configured, this language contains JSX style tags, and should support auto-closing of those tags.
-    #[serde(default)]
-    pub jsx_tag_auto_close: Option<JsxTagAutoCloseConfig>,
     /// A list of characters that Zed should treat as word characters for completion queries.
     #[serde(default)]
     pub completion_query_characters: HashSet<char>,
@@ -166,13 +154,11 @@ impl Default for LanguageConfig {
             kernel_language_names: Default::default(),
             grammar: None,
             matcher: LanguageMatcher::default(),
-            brackets: Default::default(),
             auto_indent_using_last_non_empty_line: auto_indent_using_last_non_empty_line_default(),
             auto_indent_on_paste: None,
             increase_indent_pattern: Default::default(),
             decrease_indent_pattern: Default::default(),
             decrease_indent_patterns: Default::default(),
-            autoclose_before: Default::default(),
             line_comments: Default::default(),
             block_comment: Default::default(),
             documentation_comment: Default::default(),
@@ -190,7 +176,6 @@ impl Default for LanguageConfig {
             wrap_characters: None,
             prettier_parser_name: None,
             hidden: false,
-            jsx_tag_auto_close: None,
             completion_query_characters: Default::default(),
             linked_edit_characters: Default::default(),
             debuggers: Default::default(),
@@ -274,39 +259,6 @@ impl PartialEq for LanguageMatcher {
                 == other.first_line_pattern.as_ref().map(Regex::as_str)
             && self.modeline_aliases == other.modeline_aliases
     }
-}
-
-/// The configuration for JSX tag auto-closing.
-#[derive(Clone, Deserialize, JsonSchema, Debug)]
-pub struct JsxTagAutoCloseConfig {
-    /// The name of the node for a opening tag
-    pub open_tag_node_name: String,
-    /// The name of the node for an closing tag
-    pub close_tag_node_name: String,
-    /// The name of the node for a complete element with children for open and close tags
-    pub jsx_element_node_name: String,
-    /// The name of the node found within both opening and closing
-    /// tags that describes the tag name
-    pub tag_name_node_name: String,
-    /// Alternate Node names for tag names.
-    /// Specifically needed as TSX represents the name in `<Foo.Bar>`
-    /// as `member_expression` rather than `identifier` as usual
-    #[serde(default)]
-    pub tag_name_node_name_alternates: Vec<String>,
-    /// Some grammars are smart enough to detect a closing tag
-    /// that is not valid i.e. doesn't match it's corresponding
-    /// opening tag or does not have a corresponding opening tag
-    /// This should be set to the name of the node for invalid
-    /// closing tags if the grammar contains such a node, otherwise
-    /// detecting already closed tags will not work properly
-    #[serde(default)]
-    pub erroneous_close_tag_node_name: Option<String>,
-    /// See above for erroneous_close_tag_node_name for details
-    /// This should be set if the node used for the tag name
-    /// within erroneous closing tags is different from the
-    /// normal tag name node name
-    #[serde(default)]
-    pub erroneous_close_tag_name_node_name: Option<String>,
 }
 
 /// The configuration for block comments for this language.
@@ -403,70 +355,6 @@ impl<T> Override<T> {
             Some(Self::Remove { remove: false }) | None => original,
         }
     }
-}
-
-/// Configuration of handling bracket pairs for a given language.
-///
-/// This struct includes settings for defining which pairs of characters are considered brackets and
-/// also specifies any language-specific scopes where these pairs should be ignored for bracket matching purposes.
-#[derive(Clone, Debug, Default, JsonSchema)]
-#[schemars(with = "Vec::<BracketPairContent>")]
-pub struct BracketPairConfig {
-    /// A list of character pairs that should be treated as brackets in the context of a given language.
-    pub pairs: Vec<BracketPair>,
-    /// A list of tree-sitter scopes for which a given bracket should not be active.
-    /// N-th entry in `[Self::disabled_scopes_by_bracket_ix]` contains a list of disabled scopes for an n-th entry in `[Self::pairs]`
-    pub disabled_scopes_by_bracket_ix: Vec<Vec<String>>,
-}
-
-impl BracketPairConfig {
-    pub fn is_closing_brace(&self, c: char) -> bool {
-        self.pairs.iter().any(|pair| pair.end.starts_with(c))
-    }
-}
-
-#[derive(Deserialize, JsonSchema)]
-pub struct BracketPairContent {
-    #[serde(flatten)]
-    pub bracket_pair: BracketPair,
-    #[serde(default)]
-    pub not_in: Vec<String>,
-}
-
-impl<'de> Deserialize<'de> for BracketPairConfig {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let result = Vec::<BracketPairContent>::deserialize(deserializer)?;
-        let (brackets, disabled_scopes_by_bracket_ix) = result
-            .into_iter()
-            .map(|entry| (entry.bracket_pair, entry.not_in))
-            .unzip();
-
-        Ok(BracketPairConfig {
-            pairs: brackets,
-            disabled_scopes_by_bracket_ix,
-        })
-    }
-}
-
-/// Describes a single bracket pair and how an editor should react to e.g. inserting
-/// an opening bracket or to a newline character insertion in between `start` and `end` characters.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, JsonSchema)]
-pub struct BracketPair {
-    /// Starting substring for a bracket.
-    pub start: String,
-    /// Ending substring for a bracket.
-    pub end: String,
-    /// True if `end` should be automatically inserted right after `start` characters.
-    pub close: bool,
-    /// True if selected text should be surrounded by `start` and `end` characters.
-    #[serde(default = "default_true")]
-    pub surround: bool,
-    /// True if an extra newline should be inserted while the cursor is in the middle
-    /// of that bracket pair.
-    pub newline: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema)]

@@ -7830,89 +7830,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn autoclose_section() -> [SettingsPageItem; 5] {
-        [
-            SettingsPageItem::SectionHeader("Autoclose"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Use Autoclose",
-                description: "Whether to automatically type closing characters for you. For example, when you type '(', Zed will automatically add a closing ')' at the correct position.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).use_autoclose"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.use_autoclose.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.use_autoclose = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Use Auto Surround",
-                description: "Whether to automatically surround text with characters for you. For example, when you select text and type '(', Zed will automatically surround text with ().",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).use_auto_surround"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.use_auto_surround.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.use_auto_surround = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Always Treat Brackets As Autoclosed",
-                description: "Controls whether the closing characters are always skipped over and auto-removed no matter how they were inserted.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).always_treat_brackets_as_autoclosed"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.always_treat_brackets_as_autoclosed.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.always_treat_brackets_as_autoclosed = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "JSX Tag Auto Close",
-                description: "Whether to automatically close JSX tags.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).jsx_tag_auto_close"),
-                    // TODO(settings_ui): this setting should just be a bool
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.jsx_tag_auto_close.as_ref()?.enabled.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.jsx_tag_auto_close.get_or_insert_default().enabled = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     fn whitespace_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader("Whitespace"),
@@ -8464,7 +8381,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             wrapping_section(),
             indent_guides_section(),
             formatting_section(),
-            autoclose_section(),
             whitespace_section(),
             inlay_hints_section(),
             lsp_document_colors_item,
@@ -8478,7 +8394,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             wrapping_section(),
             indent_guides_section(),
             formatting_section(),
-            autoclose_section(),
             whitespace_section(),
             inlay_hints_section(),
             tasks_section(),
@@ -8490,7 +8405,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
 /// LanguageSettings items that should be included in the "Languages & Tools" page
 /// not the "Editor" page
 fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
-    fn lsp_section() -> [SettingsPageItem; 7] {
+    fn lsp_section() -> [SettingsPageItem; 6] {
         [
             SettingsPageItem::SectionHeader("LSP"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -8535,25 +8450,6 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
                     }
                     .unimplemented(),
                 ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Linked Edits",
-                description: "Whether to perform linked edits of associated ranges, if the LS supports it. For example, when editing opening <html> tag, the contents of the closing </html> tag will be edited as well.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).linked_edits"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.linked_edits.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.linked_edits = value;
-                        })
-                    },
-                }),
                 metadata: None,
                 files: USER | PROJECT,
             }),

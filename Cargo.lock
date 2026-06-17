@@ -3026,7 +3026,6 @@ dependencies = [
  "theme",
  "theme_settings",
  "time",
- "tracing",
  "tree-sitter-bash",
  "tree-sitter-c",
  "tree-sitter-go",

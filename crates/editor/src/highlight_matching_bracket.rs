@@ -1,8 +1,17 @@
 use crate::{Editor, HighlightKey, RangeToAnchorExt, display_map::DisplaySnapshot};
 use gpui::{AppContext, Context, HighlightStyle};
 use language::CursorShape;
-use multi_buffer::MultiBufferOffset;
+use multi_buffer::{MultiBufferOffset, MultiBufferSnapshot};
 use theme::ActiveTheme;
+use std::ops::Range;
+
+fn dumb_innermost_enclosing_bracket_ranges(
+    _buffer_snapshot: &MultiBufferSnapshot,
+    _range: Range<MultiBufferOffset>,
+) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
+    // VELIPSO: dumb scan for (), [], {}
+    None
+}
 
 impl Editor {
     #[ztracing::instrument(skip_all)]
@@ -35,7 +44,7 @@ impl Editor {
         }
         let task = cx.background_spawn({
             let buffer_snapshot = buffer_snapshot.clone();
-            async move { buffer_snapshot.innermost_enclosing_bracket_ranges(head..tail, None) }
+            async move { dumb_innermost_enclosing_bracket_ranges(&buffer_snapshot, head..tail) }
         });
         self.refresh_matching_bracket_highlights_task = cx.spawn({
             let buffer_snapshot = buffer_snapshot.clone();

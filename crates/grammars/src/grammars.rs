@@ -69,7 +69,6 @@ pub fn load_config_for_feature(name: &str, grammars_loaded: bool) -> LanguageCon
         LanguageConfig {
             name: config.name,
             matcher: config.matcher,
-            jsx_tag_auto_close: config.jsx_tag_auto_close,
             ..Default::default()
         }
     }

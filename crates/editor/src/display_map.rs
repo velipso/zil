@@ -1944,21 +1944,19 @@ impl DisplaySnapshot {
         let indent_len = self
             .line_indent_for_buffer_row(MultiBufferRow(row))
             .raw_len();
+
         let content_start = Point::new(row, indent_len);
         let line_text: String = snapshot
             .chars_at(content_start)
             .take_while(|ch| *ch != '\n')
             .collect();
 
-        let scope = snapshot.language_scope_at(Point::new(row, 0))?;
-        if scope
-            .brackets()
-            .any(|(pair, _)| line_text.starts_with(&pair.end))
-        {
-            return Some(indent_len);
+        // VELIPSO: configure this..???
+        if [")", "]", "}"].iter().any(|bracket| line_text.starts_with(bracket)) {
+            Some(indent_len)
+        } else {
+            None
         }
-
-        None
     }
 
     #[instrument(skip_all)]

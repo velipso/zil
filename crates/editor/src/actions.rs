@@ -201,9 +201,6 @@ pub struct HandleInput(pub String);
 pub struct DeleteToNextWordEnd {
     #[serde(default)]
     pub ignore_newlines: bool,
-    // Whether to stop before the end of the next word, if language-defined bracket is encountered.
-    #[serde(default)]
-    pub ignore_brackets: bool,
 }
 
 /// Deletes from the cursor to the start of the previous word.
@@ -214,9 +211,6 @@ pub struct DeleteToNextWordEnd {
 pub struct DeleteToPreviousWordStart {
     #[serde(default)]
     pub ignore_newlines: bool,
-    // Whether to stop before the start of the previous word, if language-defined bracket is encountered.
-    #[serde(default)]
-    pub ignore_brackets: bool,
 }
 
 /// Deletes from the cursor to the end of the next subword.
@@ -227,9 +221,6 @@ pub struct DeleteToPreviousWordStart {
 pub struct DeleteToNextSubwordEnd {
     #[serde(default)]
     pub ignore_newlines: bool,
-    // Whether to stop before the start of the previous word, if language-defined bracket is encountered.
-    #[serde(default)]
-    pub ignore_brackets: bool,
 }
 
 /// Deletes from the cursor to the start of the previous subword.
@@ -240,9 +231,6 @@ pub struct DeleteToNextSubwordEnd {
 pub struct DeleteToPreviousSubwordStart {
     #[serde(default)]
     pub ignore_newlines: bool,
-    // Whether to stop before the start of the previous word, if language-defined bracket is encountered.
-    #[serde(default)]
-    pub ignore_brackets: bool,
 }
 
 /// Cuts from cursor to end of line.

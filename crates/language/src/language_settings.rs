@@ -86,8 +86,6 @@ pub struct LanguageSettings {
     pub formatter: settings::FormatterList,
     /// Zed's Prettier integration settings.
     pub prettier: PrettierSettings,
-    /// Whether to automatically close JSX tags.
-    pub jsx_tag_auto_close: bool,
     /// Whether to use language servers to provide code intelligence.
     pub enable_language_server: bool,
     /// The list of language servers to use (or disable) for this language.
@@ -121,20 +119,12 @@ pub struct LanguageSettings {
     pub indent_list_on_tab: bool,
     /// Inlay hint related settings.
     pub inlay_hints: InlayHintSettings,
-    /// Whether to automatically close brackets.
-    pub use_autoclose: bool,
-    /// Whether to automatically surround text with brackets.
-    pub use_auto_surround: bool,
     /// Controls automatic indentation behavior when typing.
     pub auto_indent: AutoIndentMode,
     /// Whether indentation of pasted content should be adjusted based on the context.
     pub auto_indent_on_paste: bool,
-    /// Controls how the editor handles the autoclosed characters.
-    pub always_treat_brackets_as_autoclosed: bool,
     /// Which code actions to run on save
     pub code_actions_on_format: HashMap<String, bool>,
-    /// Whether to perform linked edits
-    pub linked_edits: bool,
     /// Task configuration for this language.
     pub tasks: LanguageTaskSettings,
     /// Preferred debuggers for this language.
@@ -559,7 +549,6 @@ impl settings::Settings for AllLanguageSettings {
                     plugins: prettier.plugins.unwrap_or_default(),
                     options: prettier.options.unwrap_or_default(),
                 },
-                jsx_tag_auto_close: settings.jsx_tag_auto_close.unwrap().enabled.unwrap(),
                 enable_language_server: settings.enable_language_server.unwrap(),
                 language_servers: settings.language_servers.unwrap(),
                 semantic_tokens: settings.semantic_tokens.unwrap(),
@@ -587,15 +576,9 @@ impl settings::Settings for AllLanguageSettings {
                         .toggle_on_modifiers_press
                         .map(|m| m.into_gpui()),
                 },
-                use_autoclose: settings.use_autoclose.unwrap(),
-                use_auto_surround: settings.use_auto_surround.unwrap(),
                 auto_indent: settings.auto_indent.unwrap(),
                 auto_indent_on_paste: settings.auto_indent_on_paste.unwrap(),
-                always_treat_brackets_as_autoclosed: settings
-                    .always_treat_brackets_as_autoclosed
-                    .unwrap(),
                 code_actions_on_format: settings.code_actions_on_format.unwrap(),
-                linked_edits: settings.linked_edits.unwrap(),
                 tasks: LanguageTaskSettings {
                     variables: tasks.variables.unwrap_or_default(),
                     enabled: tasks.enabled.unwrap(),
@@ -640,12 +623,6 @@ impl settings::Settings for AllLanguageSettings {
             file_types,
         }
     }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct JsxTagAutoCloseSettings {
-    /// Enables or disables auto-closing of JSX tags.
-    pub enabled: bool,
 }
 
 #[cfg(test)]

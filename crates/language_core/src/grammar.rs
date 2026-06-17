@@ -1,6 +1,6 @@
 use crate::{
     HighlightId, HighlightMap, LanguageConfig, LanguageConfigOverride, LanguageName,
-    LanguageQueries, language_config::BracketPairConfig,
+    LanguageQueries,
 };
 use anyhow::{Context as _, Result};
 use collections::HashMap;
@@ -32,7 +32,6 @@ pub struct Grammar {
     pub ts_language: tree_sitter::Language,
     pub error_query: Option<Query>,
     pub highlights_config: Option<HighlightsConfig>,
-    pub brackets_config: Option<BracketsConfig>,
     pub redactions_config: Option<RedactionConfig>,
     pub runnable_config: Option<RunnableConfig>,
     pub indents_config: Option<IndentConfig>,
@@ -262,7 +261,6 @@ impl Grammar {
         Self {
             id: GrammarId::new(),
             highlights_config: None,
-            brackets_config: None,
             outline_config: None,
             text_object_config: None,
             indents_config: None,
@@ -311,11 +309,6 @@ impl Grammar {
                 .with_highlights_query(query.as_ref())
                 .context("Error loading highlights query")?;
         }
-        if let Some(query) = queries.brackets {
-            self = self
-                .with_brackets_query(query.as_ref(), name)
-                .context("Error loading brackets query")?;
-        }
         if let Some(query) = queries.indents {
             self = self
                 .with_indents_query(query.as_ref(), name)
@@ -337,7 +330,6 @@ impl Grammar {
                     query.as_ref(),
                     name,
                     &config.overrides,
-                    &mut config.brackets,
                     &config.scope_opt_in_language_servers,
                 )
                 .context("Error loading override query")?;
@@ -512,49 +504,6 @@ impl Grammar {
         Ok(self)
     }
 
-    pub fn with_brackets_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
-        let query = Query::new(&self.ts_language, source)?;
-        let mut open_capture_ix = 0;
-        let mut close_capture_ix = 0;
-        if populate_capture_indices(
-            &query,
-            language_name,
-            "brackets",
-            &[],
-            &mut [
-                Capture::Required("open", &mut open_capture_ix),
-                Capture::Required("close", &mut close_capture_ix),
-            ],
-        ) {
-            let patterns = (0..query.pattern_count())
-                .map(|ix| {
-                    let mut config = BracketsPatternConfig::default();
-                    for setting in query.property_settings(ix) {
-                        let setting_key = setting.key.as_ref();
-                        if setting_key == "newline.only" {
-                            config.newline_only = true
-                        }
-                        if setting_key == "rainbow.exclude" {
-                            config.rainbow_exclude = true
-                        }
-                    }
-                    config
-                })
-                .collect();
-            self.brackets_config = Some(BracketsConfig {
-                query,
-                open_capture_ix,
-                close_capture_ix,
-                patterns,
-            });
-        }
-        Ok(self)
-    }
-
     pub fn with_indents_query(
         mut self,
         source: &str,
@@ -672,7 +621,6 @@ impl Grammar {
         source: &str,
         language_name: &LanguageName,
         overrides: &HashMap<String, LanguageConfigOverride>,
-        brackets: &mut BracketPairConfig,
         scope_opt_in_language_servers: &[LanguageServerName],
     ) -> Result<Self> {
         let query = Query::new(&self.ts_language, source)?;
@@ -707,9 +655,7 @@ impl Grammar {
             );
         }
 
-        let referenced_override_names = overrides
-            .keys()
-            .chain(brackets.disabled_scopes_by_bracket_ix.iter().flatten());
+        let referenced_override_names = overrides.keys();
 
         for referenced_name in referenced_override_names {
             if !override_configs_by_id
@@ -722,23 +668,6 @@ impl Grammar {
                 );
             }
         }
-
-        for entry in override_configs_by_id.values_mut() {
-            entry.value.disabled_bracket_ixs = brackets
-                .disabled_scopes_by_bracket_ix
-                .iter()
-                .enumerate()
-                .filter_map(|(ix, disabled_scope_names)| {
-                    if disabled_scope_names.contains(&entry.name) {
-                        Some(ix as u16)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-        }
-
-        brackets.disabled_scopes_by_bracket_ix.clear();
 
         self.override_config = Some(OverrideConfig {
             query,

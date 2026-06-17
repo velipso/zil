@@ -3943,17 +3943,6 @@ impl Project {
             .update(cx, |lsp_store, cx| lsp_store.hover(buffer, position, cx))
     }
 
-    pub fn linked_edits(
-        &self,
-        buffer: &Entity<Buffer>,
-        position: Anchor,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<Range<Anchor>>>> {
-        self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.linked_edits(buffer, position, cx)
-        })
-    }
-
     pub fn prepare_rename<T: ToPointUtf16>(
         &mut self,
         buffer: Entity<Buffer>,

@@ -226,8 +226,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: off
     pub prettier: Option<PrettierSettingsContent>,
-    /// Whether to automatically close JSX tags.
-    pub jsx_tag_auto_close: Option<JsxTagAutoCloseSettingsContent>,
     /// Whether to use language servers to provide code intelligence.
     ///
     /// Default: true
@@ -294,34 +292,11 @@ pub struct LanguageSettingsContent {
     pub indent_list_on_tab: Option<bool>,
     /// Inlay hint related settings.
     pub inlay_hints: Option<InlayHintSettingsContent>,
-    /// Whether to automatically type closing characters for you. For example,
-    /// when you type '(', Zed will automatically add a closing ')' at the correct position.
-    ///
-    /// Default: true
-    pub use_autoclose: Option<bool>,
-    /// Whether to automatically surround text with characters for you. For example,
-    /// when you select text and type '(', Zed will automatically surround text with ().
-    ///
-    /// Default: true
-    pub use_auto_surround: Option<bool>,
-    /// Controls how the editor handles the autoclosed characters.
-    /// When set to `false`(default), skipping over and auto-removing of the closing characters
-    /// happen only for auto-inserted characters.
-    /// Otherwise(when `true`), the closing characters are always skipped over and auto-removed
-    /// no matter how they were inserted.
-    ///
-    /// Default: false
-    pub always_treat_brackets_as_autoclosed: Option<bool>,
     /// Which code actions to run on save before the formatter.
     /// These are not run if formatting is off.
     ///
     /// Default: {} (or {"source.organizeImports": true} for Go).
     pub code_actions_on_format: Option<HashMap<String, bool>>,
-    /// Whether to perform linked edits of associated ranges, if the language server supports it.
-    /// For example, when editing opening <html> tag, the contents of the closing </html> tag will be edited as well.
-    ///
-    /// Default: true
-    pub linked_edits: Option<bool>,
     /// Controls automatic indentation behavior when typing.
     ///
     /// - "syntax_aware": Adjusts indentation based on syntax context (default)

@@ -19,10 +19,6 @@ impl Editor {
         }
     }
 
-    pub fn set_use_autoclose(&mut self, autoclose: bool) {
-        self.use_autoclose = autoclose;
-    }
-
     pub fn replay_insert_event(
         &mut self,
         text: &str,
@@ -79,22 +75,16 @@ impl Editor {
         self.unfold_buffers_with_selections(cx);
 
         let selections = self.selections.all_adjusted(&self.display_snapshot(cx));
-        let mut bracket_inserted = false;
         let mut edits = Vec::new();
-        let mut linked_edits = LinkedEdits::new();
-        let mut new_selections = Vec::with_capacity(selections.len());
-        let mut new_autoclose_regions = Vec::new();
+        let mut new_selections: Vec<(Selection<Anchor>, usize)> = Vec::with_capacity(selections.len());
         let snapshot = self.buffer.read(cx).read(cx);
-        let mut clear_linked_edit_ranges = false;
         let mut all_selections_read_only = true;
         let mut has_adjacent_edits = false;
         let mut in_adjacent_group = false;
 
-        let mut regions = self
-            .selections_with_autoclose_regions(selections, &snapshot)
-            .peekable();
+        let mut regions = selections.into_iter().peekable();
 
-        while let Some((selection, autoclose_region)) = regions.next() {
+        while let Some(selection) = regions.next() {
             if snapshot
                 .point_to_buffer_point(selection.head())
                 .is_none_or(|(snapshot, ..)| !snapshot.capability.editable())
@@ -109,217 +99,6 @@ impl Editor {
                 continue;
             }
             all_selections_read_only = false;
-
-            if let Some(scope) = snapshot.language_scope_at(selection.head()) {
-                // Determine if the inserted text matches the opening or closing
-                // bracket of any of this language's bracket pairs.
-                let mut bracket_pair = None;
-                let mut is_bracket_pair_start = false;
-                let mut is_bracket_pair_end = false;
-                if !text.is_empty() {
-                    let mut bracket_pair_matching_end = None;
-                    // `text` can be empty when a user is using IME (e.g. Chinese Wubi Simplified)
-                    //  and they are removing the character that triggered IME popup.
-                    for (pair, enabled) in scope.brackets() {
-                        if !pair.close && !pair.surround {
-                            continue;
-                        }
-
-                        if enabled && pair.start.ends_with(text.as_ref()) {
-                            let prefix_len = pair.start.len() - text.len();
-                            let preceding_text_matches_prefix = prefix_len == 0
-                                || (selection.start.column >= (prefix_len as u32)
-                                    && snapshot.contains_str_at(
-                                        Point::new(
-                                            selection.start.row,
-                                            selection.start.column - (prefix_len as u32),
-                                        ),
-                                        &pair.start[..prefix_len],
-                                    ));
-                            if preceding_text_matches_prefix {
-                                bracket_pair = Some(pair.clone());
-                                is_bracket_pair_start = true;
-                                break;
-                            }
-                        }
-                        if pair.end.as_str() == text.as_ref() && bracket_pair_matching_end.is_none()
-                        {
-                            // take first bracket pair matching end, but don't break in case a later bracket
-                            // pair matches start
-                            bracket_pair_matching_end = Some(pair.clone());
-                        }
-                    }
-                    if let Some(end) = bracket_pair_matching_end
-                        && bracket_pair.is_none()
-                    {
-                        bracket_pair = Some(end);
-                        is_bracket_pair_end = true;
-                    }
-                }
-
-                if let Some(bracket_pair) = bracket_pair {
-                    let snapshot_settings = snapshot.language_settings_at(selection.start, cx);
-                    let autoclose = self.use_autoclose && snapshot_settings.use_autoclose;
-                    let auto_surround =
-                        self.use_auto_surround && snapshot_settings.use_auto_surround;
-                    if selection.is_empty() {
-                        if is_bracket_pair_start {
-                            // If the inserted text is a suffix of an opening bracket and the
-                            // selection is preceded by the rest of the opening bracket, then
-                            // insert the closing bracket.
-                            let following_text_allows_autoclose = snapshot
-                                .chars_at(selection.start)
-                                .next()
-                                .is_none_or(|c| scope.should_autoclose_before(c));
-
-                            let preceding_text_allows_autoclose = selection.start.column == 0
-                                || snapshot
-                                    .reversed_chars_at(selection.start)
-                                    .next()
-                                    .is_none_or(|c| {
-                                        bracket_pair.start != bracket_pair.end
-                                            || !snapshot
-                                                .char_classifier_at(selection.start)
-                                                .is_word(c)
-                                    });
-
-                            let is_closing_quote = if bracket_pair.end == bracket_pair.start
-                                && bracket_pair.start.len() == 1
-                            {
-                                if let Some(target) = bracket_pair.start.chars().next() {
-                                    let mut byte_offset = 0u32;
-                                    let current_line_count = snapshot
-                                        .reversed_chars_at(selection.start)
-                                        .take_while(|&c| c != '\n')
-                                        .filter(|c| {
-                                            byte_offset += c.len_utf8() as u32;
-                                            if *c != target {
-                                                return false;
-                                            }
-
-                                            let point = Point::new(
-                                                selection.start.row,
-                                                selection.start.column.saturating_sub(byte_offset),
-                                            );
-
-                                            let is_enabled = snapshot
-                                                .language_scope_at(point)
-                                                .and_then(|scope| {
-                                                    scope
-                                                        .brackets()
-                                                        .find(|(pair, _)| {
-                                                            pair.start == bracket_pair.start
-                                                        })
-                                                        .map(|(_, enabled)| enabled)
-                                                })
-                                                .unwrap_or(true);
-
-                                            let is_delimiter = snapshot
-                                                .language_scope_at(Point::new(
-                                                    point.row,
-                                                    point.column + 1,
-                                                ))
-                                                .and_then(|scope| {
-                                                    scope
-                                                        .brackets()
-                                                        .find(|(pair, _)| {
-                                                            pair.start == bracket_pair.start
-                                                        })
-                                                        .map(|(_, enabled)| !enabled)
-                                                })
-                                                .unwrap_or(false);
-
-                                            is_enabled && !is_delimiter
-                                        })
-                                        .count();
-                                    current_line_count % 2 == 1
-                                } else {
-                                    false
-                                }
-                            } else {
-                                false
-                            };
-
-                            if autoclose
-                                && bracket_pair.close
-                                && following_text_allows_autoclose
-                                && preceding_text_allows_autoclose
-                                && !is_closing_quote
-                            {
-                                let anchor = snapshot.anchor_before(selection.end);
-                                new_selections.push((selection.map(|_| anchor), text.len()));
-                                new_autoclose_regions.push((
-                                    anchor,
-                                    text.len(),
-                                    selection.id,
-                                    bracket_pair.clone(),
-                                ));
-                                edits.push((
-                                    selection.range(),
-                                    format!("{}{}", text, bracket_pair.end).into(),
-                                ));
-                                bracket_inserted = true;
-                                continue;
-                            }
-                        }
-
-                        if let Some(region) = autoclose_region {
-                            // If the selection is followed by an auto-inserted closing bracket,
-                            // then don't insert that closing bracket again; just move the selection
-                            // past the closing bracket.
-                            let should_skip = selection.end == region.range.end.to_point(&snapshot)
-                                && text.as_ref() == region.pair.end.as_str()
-                                && snapshot.contains_str_at(region.range.end, text.as_ref());
-                            if should_skip {
-                                let anchor = snapshot.anchor_after(selection.end);
-                                new_selections
-                                    .push((selection.map(|_| anchor), region.pair.end.len()));
-                                continue;
-                            }
-                        }
-
-                        let always_treat_brackets_as_autoclosed = snapshot
-                            .language_settings_at(selection.start, cx)
-                            .always_treat_brackets_as_autoclosed;
-                        if always_treat_brackets_as_autoclosed
-                            && is_bracket_pair_end
-                            && snapshot.contains_str_at(selection.end, text.as_ref())
-                        {
-                            // Otherwise, when `always_treat_brackets_as_autoclosed` is set to `true
-                            // and the inserted text is a closing bracket and the selection is followed
-                            // by the closing bracket then move the selection past the closing bracket.
-                            let anchor = snapshot.anchor_after(selection.end);
-                            new_selections.push((selection.map(|_| anchor), text.len()));
-                            continue;
-                        }
-                    }
-                    // If an opening bracket is 1 character long and is typed while
-                    // text is selected, then surround that text with the bracket pair.
-                    else if auto_surround
-                        && bracket_pair.surround
-                        && is_bracket_pair_start
-                        && bracket_pair.start.chars().count() == 1
-                    {
-                        edits.push((selection.start..selection.start, text.clone()));
-                        edits.push((
-                            selection.end..selection.end,
-                            bracket_pair.end.as_str().into(),
-                        ));
-                        bracket_inserted = true;
-                        new_selections.push((
-                            Selection {
-                                id: selection.id,
-                                start: snapshot.anchor_after(selection.start),
-                                end: snapshot.anchor_before(selection.end),
-                                reversed: selection.reversed,
-                                goal: selection.goal,
-                            },
-                            0,
-                        ));
-                        continue;
-                    }
-                }
-            }
 
             if self.auto_replace_emoji_shortcode
                 && selection.is_empty()
@@ -360,7 +139,7 @@ impl Editor {
 
             let next_is_adjacent = regions
                 .peek()
-                .is_some_and(|(next, _)| selection.end == next.start);
+                .is_some_and(|next| selection.end == next.start);
 
             // If not handling any auto-close operation, then just replace the selected
             // text with the given input and move the selection to the end of the
@@ -372,31 +151,6 @@ impl Editor {
             } else {
                 snapshot.anchor_after(selection.end)
             };
-
-            if !self.linked_edit_ranges.is_empty() {
-                let start_anchor = snapshot.anchor_before(selection.start);
-                let classifier = snapshot
-                    .char_classifier_at(start_anchor)
-                    .scope_context(Some(CharScopeContext::LinkedEdit));
-
-                if let Some((_, anchor_range)) =
-                    snapshot.anchor_range_to_buffer_anchor_range(start_anchor..anchor)
-                {
-                    let is_word_char = text
-                        .chars()
-                        .next()
-                        .is_none_or(|char| classifier.is_word(char));
-
-                    let is_dot = text.as_ref() == ".";
-                    let should_apply_linked_edit = is_word_char || is_dot;
-
-                    if should_apply_linked_edit {
-                        linked_edits.push(&self, anchor_range, text.clone(), cx);
-                    } else {
-                        clear_linked_edit_ranges = true;
-                    }
-                }
-            }
 
             new_selections.push((selection.map(|_| anchor), 0));
             edits.push((selection.start..selection.end, text.clone()));
@@ -413,12 +167,6 @@ impl Editor {
         drop(snapshot);
 
         self.transact(window, cx, |this, window, cx| {
-            if clear_linked_edit_ranges {
-                this.linked_edit_ranges.clear();
-            }
-            let initial_buffer_versions =
-                jsx_tag_auto_close::construct_initial_buffer_versions_map(this, &edits, cx);
-
             this.buffer.update(cx, |buffer, cx| {
                 if has_adjacent_edits {
                     buffer.edit_non_coalesce(edits, this.autoindent_mode.clone(), cx);
@@ -426,7 +174,6 @@ impl Editor {
                     buffer.edit(edits, this.autoindent_mode.clone(), cx);
                 }
             });
-            linked_edits.apply(cx);
             let new_anchor_selections = new_selections.iter().map(|e| &e.0);
             let new_selection_deltas = new_selections.iter().map(|e| e.1);
             let map = this.display_map.update(cx, |map, cx| map.snapshot(cx));
@@ -444,52 +191,12 @@ impl Editor {
             })
             .collect::<Vec<_>>();
 
-            let mut i = 0;
-            for (position, delta, selection_id, pair) in new_autoclose_regions {
-                let position = position.to_offset(map.buffer_snapshot()) + delta;
-                let start = map.buffer_snapshot().anchor_before(position);
-                let end = map.buffer_snapshot().anchor_after(position);
-                while let Some(existing_state) = this.autoclose_regions.get(i) {
-                    match existing_state
-                        .range
-                        .start
-                        .cmp(&start, map.buffer_snapshot())
-                    {
-                        Ordering::Less => i += 1,
-                        Ordering::Greater => break,
-                        Ordering::Equal => {
-                            match end.cmp(&existing_state.range.end, map.buffer_snapshot()) {
-                                Ordering::Less => i += 1,
-                                Ordering::Equal => break,
-                                Ordering::Greater => break,
-                            }
-                        }
-                    }
-                }
-                this.autoclose_regions.insert(
-                    i,
-                    AutocloseRegion {
-                        selection_id,
-                        range: start..end,
-                        pair,
-                    },
-                );
-            }
-
             this.change_selections(
                 SelectionEffects::scroll(Autoscroll::fit()),
                 window,
                 cx,
                 |s| s.select(new_selections),
             );
-
-            let editor_settings = EditorSettings::get_global(cx);
-            if bracket_inserted
-                && (editor_settings.auto_signature_help
-                    || editor_settings.show_signature_help_after_edits)
-            {
-                this.show_signature_help(&ShowSignatureHelp, window, cx);
-            }
 
             if this.hard_wrap.is_some() {
                 let latest: Range<Point> = this.selections.newest(&map).range();
@@ -511,8 +218,6 @@ impl Editor {
                     )
                 }
             }
-            refresh_linked_ranges(this, window, cx);
-            jsx_tag_auto_close::handle_from(this, initial_buffer_versions, window, cx);
         });
     }
 
@@ -541,15 +246,7 @@ impl Editor {
                         let selection_is_empty = start == end;
                         let language_scope = buffer.language_scope_at(start);
                         let (delimiter, newline_config) = if let Some(language) = &language_scope {
-                            let needs_extra_newline = NewlineConfig::insert_extra_newline_brackets(
-                                &buffer,
-                                start..end,
-                                language,
-                            )
-                                || NewlineConfig::insert_extra_newline_tree_sitter(
-                                    &buffer,
-                                    start..end,
-                                );
+                            let needs_extra_newline = false; // VELIPSO: propagate
 
                             let mut newline_config = NewlineConfig::Newline {
                                 additional_indent: IndentSize::spaces(0),
@@ -900,35 +597,7 @@ impl Editor {
         let autoindent = text.is_empty().not().then(|| AutoindentMode::Block {
             original_indent_columns: Vec::new(),
         });
-        self.replace_selections(text, autoindent, window, cx, false);
-    }
-
-    /// Collects linked edits for the current selections, pairing each linked
-    /// range with `text`.
-    pub fn linked_edits_for_selections(&self, text: Arc<str>, cx: &App) -> LinkedEdits {
-        let multibuffer_snapshot = self.buffer().read(cx).snapshot(cx);
-        let mut linked_edits = LinkedEdits::new();
-        if !self.linked_edit_ranges.is_empty() {
-            for selection in self.selections.disjoint_anchors() {
-                let Some((_, range)) =
-                    multibuffer_snapshot.anchor_range_to_buffer_anchor_range(selection.range())
-                else {
-                    continue;
-                };
-                linked_edits.push(self, range, text.clone(), cx);
-            }
-        }
-        linked_edits
-    }
-
-    /// Deletes the content covered by the current selections and applies
-    /// linked edits.
-    pub fn delete_selections_with_linked_edits(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.replace_selections("", None, window, cx, true);
+        self.replace_selections(text, autoindent, window, cx);
     }
 
     pub fn delete_to_previous_word_start(
@@ -941,7 +610,6 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.select_autoclose_pair(window, cx);
             this.change_selections(Default::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
@@ -954,7 +622,6 @@ impl Editor {
                             map,
                             selection.head(),
                             cursor,
-                            action.ignore_brackets,
                         );
                         selection.set_head(cursor, SelectionGoal::None);
                     }
@@ -974,7 +641,6 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.select_autoclose_pair(window, cx);
             this.change_selections(Default::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
@@ -987,7 +653,6 @@ impl Editor {
                             map,
                             selection.head(),
                             cursor,
-                            action.ignore_brackets,
                         );
                         selection.set_head(cursor, SelectionGoal::None);
                     }
@@ -1019,7 +684,6 @@ impl Editor {
                             map,
                             selection.head(),
                             cursor,
-                            action.ignore_brackets,
                         );
                         selection.set_head(cursor, SelectionGoal::None);
                     }
@@ -1051,7 +715,6 @@ impl Editor {
                             map,
                             selection.head(),
                             cursor,
-                            action.ignore_brackets,
                         );
                         selection.set_head(cursor, SelectionGoal::None);
                     }
@@ -1799,74 +1462,6 @@ impl Editor {
         }
     }
 
-    pub(super) fn linked_editing_ranges_for(
-        &self,
-        query_range: Range<text::Anchor>,
-        cx: &App,
-    ) -> Option<HashMap<Entity<Buffer>, Vec<Range<text::Anchor>>>> {
-        use text::ToOffset as TO;
-
-        if self.linked_edit_ranges.is_empty() {
-            return None;
-        }
-        if query_range.start.buffer_id != query_range.end.buffer_id {
-            return None;
-        };
-        let multibuffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let buffer = self.buffer.read(cx).buffer(query_range.end.buffer_id)?;
-        let buffer_snapshot = buffer.read(cx).snapshot();
-        let (base_range, linked_ranges) = self.linked_edit_ranges.get(
-            buffer_snapshot.remote_id(),
-            query_range.clone(),
-            &buffer_snapshot,
-        )?;
-        // find offset from the start of current range to current cursor position
-        let start_byte_offset = TO::to_offset(&base_range.start, &buffer_snapshot);
-
-        let start_offset = TO::to_offset(&query_range.start, &buffer_snapshot);
-        let start_difference = start_offset - start_byte_offset;
-        let end_offset = TO::to_offset(&query_range.end, &buffer_snapshot);
-        let end_difference = end_offset - start_byte_offset;
-
-        // Current range has associated linked ranges.
-        let mut linked_edits = HashMap::<_, Vec<_>>::default();
-        for range in linked_ranges.iter() {
-            let start_offset = TO::to_offset(&range.start, &buffer_snapshot);
-            let end_offset = start_offset + end_difference;
-            let start_offset = start_offset + start_difference;
-            if start_offset > buffer_snapshot.len() || end_offset > buffer_snapshot.len() {
-                continue;
-            }
-            if self.selections.disjoint_anchor_ranges().any(|s| {
-                let Some((selection_start, _)) =
-                    multibuffer_snapshot.anchor_to_buffer_anchor(s.start)
-                else {
-                    return false;
-                };
-                let Some((selection_end, _)) = multibuffer_snapshot.anchor_to_buffer_anchor(s.end)
-                else {
-                    return false;
-                };
-                if selection_start.buffer_id != query_range.start.buffer_id
-                    || selection_end.buffer_id != query_range.end.buffer_id
-                {
-                    return false;
-                }
-                TO::to_offset(&selection_start, &buffer_snapshot) <= end_offset
-                    && TO::to_offset(&selection_end, &buffer_snapshot) >= start_offset
-            }) {
-                continue;
-            }
-            let start = buffer_snapshot.anchor_after(start_offset);
-            let end = buffer_snapshot.anchor_after(end_offset);
-            linked_edits
-                .entry(buffer.clone())
-                .or_default()
-                .push(start..end);
-        }
-        Some(linked_edits)
-    }
-
     pub(super) fn marked_text_ranges(
         &self,
         cx: &App,
@@ -1894,7 +1489,6 @@ impl Editor {
         autoindent_mode: Option<AutoindentMode>,
         window: &mut Window,
         cx: &mut Context<Self>,
-        apply_linked_edits: bool,
     ) {
         if self.read_only(cx) {
             return;
@@ -1903,11 +1497,6 @@ impl Editor {
         let text: Arc<str> = text.into();
         self.transact(window, cx, |this, window, cx| {
             let old_selections = this.selections.all_adjusted(&this.display_snapshot(cx));
-            let linked_edits = if apply_linked_edits {
-                this.linked_edits_for_selections(text.clone(), cx)
-            } else {
-                LinkedEdits::new()
-            };
 
             let selection_anchors = this.buffer.update(cx, |buffer, cx| {
                 let anchors = {
@@ -1930,121 +1519,12 @@ impl Editor {
                 anchors
             });
 
-            linked_edits.apply(cx);
-
             this.change_selections(Default::default(), window, cx, |s| {
                 s.select_anchors(selection_anchors);
             });
 
-            if apply_linked_edits {
-                refresh_linked_ranges(this, window, cx);
-            }
-
             cx.notify();
         });
-    }
-
-    /// If any empty selections is touching the start of its innermost containing autoclose
-    /// region, expand it to select the brackets.
-    pub(super) fn select_autoclose_pair(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let selections = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx));
-        let buffer = self.buffer.read(cx).read(cx);
-        let new_selections = self
-            .selections_with_autoclose_regions(selections, &buffer)
-            .map(|(mut selection, region)| {
-                if !selection.is_empty() {
-                    return selection;
-                }
-
-                if let Some(region) = region {
-                    let mut range = region.range.to_offset(&buffer);
-                    if selection.start == range.start && range.start.0 >= region.pair.start.len() {
-                        range.start -= region.pair.start.len();
-                        if buffer.contains_str_at(range.start, &region.pair.start)
-                            && buffer.contains_str_at(range.end, &region.pair.end)
-                        {
-                            range.end += region.pair.end.len();
-                            selection.start = range.start;
-                            selection.end = range.end;
-
-                            return selection;
-                        }
-                    }
-                }
-
-                let always_treat_brackets_as_autoclosed = buffer
-                    .language_settings_at(selection.start, cx)
-                    .always_treat_brackets_as_autoclosed;
-
-                if !always_treat_brackets_as_autoclosed {
-                    return selection;
-                }
-
-                if let Some(scope) = buffer.language_scope_at(selection.start) {
-                    for (pair, enabled) in scope.brackets() {
-                        if !enabled || !pair.close {
-                            continue;
-                        }
-
-                        if buffer.contains_str_at(selection.start, &pair.end) {
-                            let pair_start_len = pair.start.len();
-                            if buffer.contains_str_at(
-                                selection.start.saturating_sub_usize(pair_start_len),
-                                &pair.start,
-                            ) {
-                                selection.start -= pair_start_len;
-                                selection.end += pair.end.len();
-
-                                return selection;
-                            }
-                        }
-                    }
-                }
-
-                selection
-            })
-            .collect();
-
-        drop(buffer);
-        self.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
-            selections.select(new_selections)
-        });
-    }
-
-    /// Remove any autoclose regions that no longer contain their selection or have invalid anchors in ranges.
-    pub(super) fn invalidate_autoclose_regions(
-        &mut self,
-        mut selections: &[Selection<Anchor>],
-        buffer: &MultiBufferSnapshot,
-    ) {
-        self.autoclose_regions.retain(|state| {
-            if !state.range.start.is_valid(buffer) || !state.range.end.is_valid(buffer) {
-                return false;
-            }
-
-            let mut i = 0;
-            while let Some(selection) = selections.get(i) {
-                if selection.end.cmp(&state.range.start, buffer).is_lt() {
-                    selections = &selections[1..];
-                    continue;
-                }
-                if selection.start.cmp(&state.range.end, buffer).is_gt() {
-                    break;
-                }
-                if selection.id == state.selection_id {
-                    return true;
-                } else {
-                    i += 1;
-                }
-            }
-            false
-        });
-    }
-
-    fn set_use_auto_surround(&mut self, auto_surround: bool) {
-        self.use_auto_surround = auto_surround;
     }
 
     fn find_possible_emoji_shortcode_at_position(
@@ -2092,38 +1572,6 @@ impl Editor {
         // Found a possible emoji shortcode at the beginning of the buffer
         chars.reverse();
         Some(chars.iter().collect())
-    }
-
-    /// Iterate the given selections, and for each one, find the smallest surrounding
-    /// autoclose region. This uses the ordering of the selections and the autoclose
-    /// regions to avoid repeated comparisons.
-    fn selections_with_autoclose_regions<'a, D: ToOffset + Clone>(
-        &'a self,
-        selections: impl IntoIterator<Item = Selection<D>>,
-        buffer: &'a MultiBufferSnapshot,
-    ) -> impl Iterator<Item = (Selection<D>, Option<&'a AutocloseRegion>)> {
-        let mut i = 0;
-        let mut regions = self.autoclose_regions.as_slice();
-        selections.into_iter().map(move |selection| {
-            let range = selection.start.to_offset(buffer)..selection.end.to_offset(buffer);
-
-            let mut enclosing = None;
-            while let Some(pair_state) = regions.get(i) {
-                if pair_state.range.end.to_offset(buffer) < range.start {
-                    regions = &regions[i + 1..];
-                    i = 0;
-                } else if pair_state.range.start.to_offset(buffer) > range.end {
-                    break;
-                } else {
-                    if pair_state.selection_id == selection.id {
-                        enclosing = Some(pair_state);
-                    }
-                    i += 1;
-                }
-            }
-
-            (selection, enclosing)
-        })
     }
 }
 
@@ -2254,81 +1702,6 @@ impl NewlineConfig {
                 ..
             }
         )
-    }
-
-    fn insert_extra_newline_brackets(
-        buffer: &MultiBufferSnapshot,
-        range: Range<MultiBufferOffset>,
-        language: &language::LanguageScope,
-    ) -> bool {
-        let leading_whitespace_len = buffer
-            .reversed_chars_at(range.start)
-            .take_while(|c| c.is_whitespace() && *c != '\n')
-            .map(|c| c.len_utf8())
-            .sum::<usize>();
-        let trailing_whitespace_len = buffer
-            .chars_at(range.end)
-            .take_while(|c| c.is_whitespace() && *c != '\n')
-            .map(|c| c.len_utf8())
-            .sum::<usize>();
-        let range = range.start - leading_whitespace_len..range.end + trailing_whitespace_len;
-
-        language.brackets().any(|(pair, enabled)| {
-            let pair_start = pair.start.trim_end();
-            let pair_end = pair.end.trim_start();
-
-            enabled
-                && pair.newline
-                && buffer.contains_str_at(range.end, pair_end)
-                && buffer.contains_str_at(
-                    range.start.saturating_sub_usize(pair_start.len()),
-                    pair_start,
-                )
-        })
-    }
-
-    fn insert_extra_newline_tree_sitter(
-        buffer: &MultiBufferSnapshot,
-        range: Range<MultiBufferOffset>,
-    ) -> bool {
-        let (buffer, range) = match buffer
-            .range_to_buffer_ranges(range.start..range.end)
-            .as_slice()
-        {
-            [(buffer_snapshot, range, _)] => (buffer_snapshot.clone(), range.clone()),
-            _ => return false,
-        };
-        let pair = {
-            let mut result: Option<BracketMatch<usize>> = None;
-
-            for pair in buffer
-                .all_bracket_ranges(range.start.0..range.end.0)
-                .filter(move |pair| {
-                    pair.open_range.start <= range.start.0 && pair.close_range.end >= range.end.0
-                })
-            {
-                let len = pair.close_range.end - pair.open_range.start;
-
-                if let Some(existing) = &result {
-                    let existing_len = existing.close_range.end - existing.open_range.start;
-                    if len > existing_len {
-                        continue;
-                    }
-                }
-
-                result = Some(pair);
-            }
-
-            result
-        };
-        let Some(pair) = pair else {
-            return false;
-        };
-        pair.newline_only
-            && buffer
-                .chars_for_range(pair.open_range.end..range.start.0)
-                .chain(buffer.chars_for_range(range.end.0..pair.close_range.start))
-                .all(|c| c.is_whitespace() && c != '\n')
     }
 }
 
@@ -2883,14 +2256,7 @@ impl EntityInputHandler for Editor {
                 );
             }
 
-            // Disable auto-closing when composing text (i.e. typing a `"` on a Brazilian keyboard)
-            let use_autoclose = this.use_autoclose;
-            let use_auto_surround = this.use_auto_surround;
-            this.set_use_autoclose(false);
-            this.set_use_auto_surround(false);
             this.handle_input(text, window, cx);
-            this.set_use_autoclose(use_autoclose);
-            this.set_use_auto_surround(use_auto_surround);
 
             if let Some(new_selected_range) = new_selected_range_utf16 {
                 let snapshot = this.buffer.read(cx).read(cx);

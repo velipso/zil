@@ -40,10 +40,9 @@ pub use language_core::highlight_map::{HighlightId, HighlightMap};
 
 use futures::future::FutureExt as _;
 pub use language_core::{
-    BlockCommentConfig, BracketPair, BracketPairConfig, BracketPairContent, BracketsConfig,
-    BracketsPatternConfig, CodeLabel, CodeLabelBuilder, DebugVariablesConfig, DebuggerTextObject,
+    BlockCommentConfig, CodeLabel, CodeLabelBuilder, DebugVariablesConfig, DebuggerTextObject,
     DecreaseIndentConfig, Grammar, GrammarId, HighlightsConfig, IndentConfig, InjectionConfig,
-    InjectionPatternConfig, JsxTagAutoCloseConfig, LanguageConfig, LanguageConfigOverride,
+    InjectionPatternConfig, LanguageConfig, LanguageConfigOverride,
     LanguageId, LanguageMatcher, OrderedListConfig, OutlineConfig, Override, OverrideConfig,
     OverrideEntry, PromptResponseContext, RedactionConfig, RunnableCapture, RunnableConfig,
     SoftWrap, Symbol, TaskListConfig, TextObject, TextObjectConfig, ToLspPosition,
@@ -165,46 +164,6 @@ pub static PLAIN_TEXT: LazyLock<Arc<Language>> = LazyLock::new(|| {
                 path_suffixes: vec!["txt".to_owned()],
                 first_line_pattern: None,
                 modeline_aliases: vec!["text".to_owned(), "txt".to_owned()],
-            },
-            brackets: BracketPairConfig {
-                pairs: vec![
-                    BracketPair {
-                        start: "(".to_string(),
-                        end: ")".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: false,
-                    },
-                    BracketPair {
-                        start: "[".to_string(),
-                        end: "]".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: false,
-                    },
-                    BracketPair {
-                        start: "{".to_string(),
-                        end: "}".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: false,
-                    },
-                    BracketPair {
-                        start: "\"".to_string(),
-                        end: "\"".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: false,
-                    },
-                    BracketPair {
-                        start: "'".to_string(),
-                        end: "'".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: false,
-                    },
-                ],
-                disabled_scopes_by_bracket_ix: Default::default(),
             },
             ..Default::default()
         },
@@ -927,10 +886,6 @@ impl Language {
         })
     }
 
-    pub fn with_brackets_query(self, source: &str) -> Result<Self> {
-        self.with_grammar_query_and_name(|grammar, name| grammar.with_brackets_query(source, name))
-    }
-
     pub fn with_indents_query(self, source: &str) -> Result<Self> {
         self.with_grammar_query_and_name(|grammar, name| grammar.with_indents_query(source, name))
     }
@@ -947,7 +902,6 @@ impl Language {
                 source,
                 &self.config.name,
                 &self.config.overrides,
-                &mut self.config.brackets,
                 &self.config.scope_opt_in_language_servers,
             )?;
             self.grammar = Some(Arc::new(grammar));
@@ -1054,10 +1008,6 @@ impl Language {
 
     pub fn path_suffixes(&self) -> &[String] {
         &self.config.matcher.path_suffixes
-    }
-
-    pub fn should_autoclose_before(&self, c: char) -> bool {
-        c.is_whitespace() || self.config.autoclose_before.contains(c)
     }
 
     pub fn set_theme(&self, theme: &SyntaxTheme) {
@@ -1202,34 +1152,6 @@ impl LanguageScope {
         self.config_override()
             .and_then(|o| o.prefer_label_for_snippet)
             .unwrap_or(false)
-    }
-
-    /// Returns a list of bracket pairs for a given language with an additional
-    /// piece of information about whether the particular bracket pair is currently active for a given language.
-    pub fn brackets(&self) -> impl Iterator<Item = (&BracketPair, bool)> {
-        let mut disabled_ids = self
-            .config_override()
-            .map_or(&[] as _, |o| o.disabled_bracket_ixs.as_slice());
-        self.language
-            .config
-            .brackets
-            .pairs
-            .iter()
-            .enumerate()
-            .map(move |(ix, bracket)| {
-                let mut is_enabled = true;
-                if let Some(next_disabled_ix) = disabled_ids.first()
-                    && ix == *next_disabled_ix as usize
-                {
-                    disabled_ids = &disabled_ids[1..];
-                    is_enabled = false;
-                }
-                (bracket, is_enabled)
-            })
-    }
-
-    pub fn should_autoclose_before(&self, c: char) -> bool {
-        c.is_whitespace() || self.language.config.autoclose_before.contains(c)
     }
 
     pub fn language_allowed(&self, name: &LanguageServerName) -> bool {
@@ -1521,46 +1443,6 @@ pub fn rust_lang() -> Arc<Language> {
                 ..Default::default()
             },
             line_comments: vec!["// ".into(), "/// ".into(), "//! ".into()],
-            brackets: BracketPairConfig {
-                pairs: vec![
-                    BracketPair {
-                        start: "{".into(),
-                        end: "}".into(),
-                        close: true,
-                        surround: false,
-                        newline: true,
-                    },
-                    BracketPair {
-                        start: "[".into(),
-                        end: "]".into(),
-                        close: true,
-                        surround: false,
-                        newline: true,
-                    },
-                    BracketPair {
-                        start: "(".into(),
-                        end: ")".into(),
-                        close: true,
-                        surround: false,
-                        newline: true,
-                    },
-                    BracketPair {
-                        start: "<".into(),
-                        end: ">".into(),
-                        close: false,
-                        surround: false,
-                        newline: true,
-                    },
-                    BracketPair {
-                        start: "\"".into(),
-                        end: "\"".into(),
-                        close: true,
-                        surround: false,
-                        newline: false,
-                    },
-                ],
-                ..Default::default()
-            },
             ..Default::default()
         },
         Some(tree_sitter_rust::LANGUAGE.into()),
@@ -1571,9 +1453,6 @@ pub fn rust_lang() -> Arc<Language> {
         ))),
         indents: Some(Cow::from(include_str!(
             "../../grammars/src/rust/indents.scm"
-        ))),
-        brackets: Some(Cow::from(include_str!(
-            "../../grammars/src/rust/brackets.scm"
         ))),
         text_objects: Some(Cow::from(include_str!(
             "../../grammars/src/rust/textobjects.scm"
@@ -1616,9 +1495,6 @@ pub fn markdown_lang() -> Arc<Language> {
         Some(tree_sitter_md::LANGUAGE.into()),
     )
     .with_queries(LanguageQueries {
-        brackets: Some(Cow::from(include_str!(
-            "../../grammars/src/markdown/brackets.scm"
-        ))),
         injections: Some(Cow::from(include_str!(
             "../../grammars/src/markdown/injections.scm"
         ))),

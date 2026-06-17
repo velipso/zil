@@ -306,7 +306,6 @@ pub fn adjust_greedy_deletion(
     map: &DisplaySnapshot,
     delete_from: DisplayPoint,
     delete_until: DisplayPoint,
-    ignore_brackets: bool,
 ) -> DisplayPoint {
     if delete_from == delete_until {
         return delete_until;
@@ -326,35 +325,7 @@ pub fn adjust_greedy_deletion(
                 .to_offset(map.buffer_snapshot())
     };
 
-    let trimmed_delete_range = if ignore_brackets {
-        delete_range
-    } else {
-        let brackets_in_delete_range = map
-            .buffer_snapshot()
-            .bracket_ranges(delete_range.clone())
-            .into_iter()
-            .flatten()
-            .flat_map(|(left_bracket, right_bracket)| {
-                [
-                    left_bracket.start,
-                    left_bracket.end,
-                    right_bracket.start,
-                    right_bracket.end,
-                ]
-            })
-            .filter(|&bracket| delete_range.start < bracket && bracket < delete_range.end);
-        let closest_bracket = if is_backward {
-            brackets_in_delete_range.max()
-        } else {
-            brackets_in_delete_range.min()
-        };
-
-        if is_backward {
-            closest_bracket.unwrap_or(delete_range.start)..delete_range.end
-        } else {
-            delete_range.start..closest_bracket.unwrap_or(delete_range.end)
-        }
-    };
+    let trimmed_delete_range = delete_range;
 
     let mut whitespace_sequences = Vec::new();
     let mut current_offset = trimmed_delete_range.start;

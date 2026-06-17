@@ -513,7 +513,6 @@ impl VsCodeSettings {
     fn default_language_settings_content(&self) -> LanguageSettingsContent {
         LanguageSettingsContent {
             allow_rewrap: None,
-            always_treat_brackets_as_autoclosed: None,
             auto_indent: None,
             auto_indent_on_paste: self.read_bool("editor.formatOnPaste"),
             code_actions_on_format: None,
@@ -543,7 +542,6 @@ impl VsCodeSettings {
                 ..Default::default()
             }),
             inlay_hints: None,
-            jsx_tag_auto_close: None,
             language_servers: None,
             semantic_tokens: self
                 .read_bool("editor.semanticHighlighting.enabled")
@@ -556,7 +554,6 @@ impl VsCodeSettings {
                 }),
             document_folding_ranges: None,
             document_symbols: None,
-            linked_edits: self.read_bool("editor.linkedEditing"),
             preferred_line_length: self.read_u32("editor.wordWrapColumn"),
             prettier: None,
             remove_trailing_whitespace_on_save: self.read_bool("editor.trimAutoWhitespace"),
@@ -582,12 +579,6 @@ impl VsCodeSettings {
                 .read_u32("editor.tabSize")
                 .and_then(|n| NonZeroU32::new(n)),
             tasks: None,
-            use_auto_surround: self.read_enum("editor.autoSurround", |s| match s {
-                "languageDefined" | "quotes" | "brackets" => Some(true),
-                "never" => Some(false),
-                _ => None,
-            }),
-            use_autoclose: None,
             whitespace_map: None,
             wrap_guides: self
                 .read_value("editor.rulers")

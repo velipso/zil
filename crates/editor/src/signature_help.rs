@@ -1,14 +1,12 @@
 use crate::actions::ShowSignatureHelp;
 use crate::hover_popover::open_markdown_url;
-use crate::{BufferOffset, Editor, EditorSettings, ToggleAutoSignatureHelp, hover_markdown_style};
+use crate::{Editor, EditorSettings, ToggleAutoSignatureHelp, hover_markdown_style};
 use gpui::{
     App, Context, Entity, HighlightStyle, MouseButton, ScrollHandle, Size, StyledText, Task,
     TextStyle, Window, combine_highlights,
 };
-use language::BufferSnapshot;
 
 use markdown::{CopyButtonVisibility, Markdown, MarkdownElement};
-use multi_buffer::{Anchor, MultiBufferOffset, ToOffset};
 use settings::Settings;
 use std::ops::Range;
 use std::time::Duration;
@@ -21,14 +19,10 @@ use ui::{
     WithScrollbar, div, relative,
 };
 
-// Language-specific settings may define quotes as "brackets", so filter them out separately.
-const QUOTE_PAIRS: [(&str, &str); 3] = [("'", "'"), ("\"", "\""), ("`", "`")];
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SignatureHelpHiddenBy {
     AutoClose,
     Escape,
-    Selection,
 }
 
 impl Editor {
@@ -76,92 +70,6 @@ impl Editor {
         }
     }
 
-    pub(super) fn should_open_signature_help_automatically(
-        &mut self,
-        old_cursor_position: &Anchor,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if !(self.signature_help_state.is_shown() || self.auto_signature_help_enabled(cx)) {
-            return false;
-        }
-        let newest_selection = self
-            .selections
-            .newest::<MultiBufferOffset>(&self.display_snapshot(cx));
-        let head = newest_selection.head();
-
-        if !newest_selection.is_empty() && head != newest_selection.tail() {
-            self.signature_help_state
-                .hide(SignatureHelpHiddenBy::Selection);
-            return false;
-        }
-
-        let buffer_snapshot = self.buffer().read(cx).snapshot(cx);
-        let bracket_range = |position: MultiBufferOffset| {
-            let range = match (position, position + 1usize) {
-                (MultiBufferOffset(0), b) if b <= buffer_snapshot.len() => MultiBufferOffset(0)..b,
-                (MultiBufferOffset(0), b) => MultiBufferOffset(0)..b - 1,
-                (a, b) if b <= buffer_snapshot.len() => a - 1..b,
-                (a, b) => a - 1..b - 1,
-            };
-            let start = buffer_snapshot.clip_offset(range.start, text::Bias::Left);
-            let end = buffer_snapshot.clip_offset(range.end, text::Bias::Right);
-            start..end
-        };
-        let not_quote_like_brackets =
-            |buffer: &BufferSnapshot, start: Range<BufferOffset>, end: Range<BufferOffset>| {
-                let text_start = buffer.text_for_range(start).collect::<String>();
-                let text_end = buffer.text_for_range(end).collect::<String>();
-                QUOTE_PAIRS
-                    .into_iter()
-                    .all(|(start, end)| text_start != start && text_end != end)
-            };
-
-        let previous_position = old_cursor_position.to_offset(&buffer_snapshot);
-        let previous_brackets_range = bracket_range(previous_position);
-        let previous_brackets_surround = buffer_snapshot
-            .innermost_enclosing_bracket_ranges(
-                previous_brackets_range,
-                Some(&not_quote_like_brackets),
-            )
-            .filter(|(start_bracket_range, end_bracket_range)| {
-                start_bracket_range.start != previous_position
-                    && end_bracket_range.end != previous_position
-            });
-        let current_brackets_range = bracket_range(head);
-        let current_brackets_surround = buffer_snapshot
-            .innermost_enclosing_bracket_ranges(
-                current_brackets_range,
-                Some(&not_quote_like_brackets),
-            )
-            .filter(|(start_bracket_range, end_bracket_range)| {
-                start_bracket_range.start != head && end_bracket_range.end != head
-            });
-
-        match (previous_brackets_surround, current_brackets_surround) {
-            (None, None) => {
-                self.signature_help_state
-                    .hide(SignatureHelpHiddenBy::AutoClose);
-                false
-            }
-            (Some(_), None) => {
-                self.signature_help_state
-                    .hide(SignatureHelpHiddenBy::AutoClose);
-                false
-            }
-            (None, Some(_)) => true,
-            (Some(previous), Some(current)) => {
-                let condition = self.signature_help_state.hidden_by_selection()
-                    || previous != current
-                    || (previous == current && self.signature_help_state.is_shown());
-                if !condition {
-                    self.signature_help_state
-                        .hide(SignatureHelpHiddenBy::AutoClose);
-                }
-                condition
-            }
-        }
-    }
-
     pub fn show_signature_help(
         &mut self,
         _: &ShowSignatureHelp,
@@ -169,10 +77,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         self.show_signature_help_impl(false, window, cx);
-    }
-
-    pub(super) fn show_signature_help_auto(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_signature_help_impl(true, window, cx);
     }
 
     fn show_signature_help_impl(
@@ -330,10 +234,6 @@ impl SignatureHelpState {
             self.popover = None;
             self.hidden_by = Some(hidden_by);
         }
-    }
-
-    fn hidden_by_selection(&self) -> bool {
-        self.hidden_by == Some(SignatureHelpHiddenBy::Selection)
     }
 
     pub fn is_shown(&self) -> bool {

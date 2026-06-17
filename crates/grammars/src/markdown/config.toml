@@ -4,17 +4,6 @@ path_suffixes = ["md", "mdx", "mdwn", "mdc", "markdown", "MD"]
 modeline_aliases = ["md"]
 completion_query_characters = ["-"]
 block_comment = { start = "<!--", prefix = "", end = "-->", tab_size = 1 }
-autoclose_before = ";:.,=}])>"
-brackets = [
-    { start = "{", end = "}", close = true, newline = true },
-    { start = "[", end = "]", close = true, newline = true },
-    { start = "(", end = ")", close = true, newline = true },
-    { start = "<", end = ">", close = true, newline = true },
-    { start = "\"", end = "\"", close = false, newline = false },
-    { start = "'", end = "'", close = false, newline = false },
-    { start = "`", end = "`", close = false, newline = false },
-    { start = "*", end = "*", close = false, newline = false, surround = true },
-]
 rewrap_prefixes = [
     "[-*+]\\s+",
     "\\d+\\.\\s+",

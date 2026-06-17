@@ -765,7 +765,6 @@ impl DapLogView {
             editor.set_show_breakpoints(false, cx);
             editor.set_show_runnables(false, cx);
             editor.set_input_enabled(false);
-            editor.set_use_autoclose(false);
             editor.set_read_only(true);
             editor
         });

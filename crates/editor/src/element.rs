@@ -314,7 +314,6 @@ impl EditorElement {
         register_action(editor, window, Editor::move_to_start_of_larger_syntax_node);
         register_action(editor, window, Editor::move_to_end_of_larger_syntax_node);
         register_action(editor, window, Editor::select_enclosing_symbol);
-        register_action(editor, window, Editor::move_to_enclosing_bracket);
         register_action(editor, window, Editor::undo_selection);
         register_action(editor, window, Editor::redo_selection);
         if editor.read(cx).buffer_kind(cx) == ItemBufferKind::Multibuffer {

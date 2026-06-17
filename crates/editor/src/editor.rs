@@ -13,7 +13,6 @@
 //! If you're looking to improve Vim mode, you should check out Vim crate that wraps Editor and overrides its behavior.
 pub mod actions;
 pub mod blink_manager;
-mod bracket_colorization;
 mod clangd_ext;
 pub mod display_map;
 mod document_colors;
@@ -28,8 +27,6 @@ pub mod hover_popover;
 mod indent_guides;
 mod inlays;
 pub mod items;
-mod jsx_tag_auto_close;
-mod linked_editing_ranges;
 mod lsp_ext;
 mod mouse_context_menu;
 pub mod movement;
@@ -77,7 +74,6 @@ pub use element::{
 pub use hover_popover::hover_markdown_style;
 pub use inlays::Inlay;
 pub use items::MAX_TAB_TITLE_LEN;
-pub use linked_editing_ranges::LinkedEdits;
 pub use lsp_ext::lsp_tasks;
 pub use multi_buffer::{
     Anchor, AnchorRangeExt, BufferOffset, ExcerptRange, MBTextSummary, MultiBuffer,
@@ -118,8 +114,8 @@ use indent_guides::ActiveIndentGuidesState;
 use inlays::{InlaySplice, inlay_hints::InlayHintRefreshReason};
 use itertools::{Either, Itertools};
 use language::{
-    AutoindentMode, BlockCommentConfig, BracketMatch, BracketPair, Buffer, BufferRow,
-    BufferSnapshot, Capability, CharKind, CharScopeContext, CodeLabel, CursorShape,
+    AutoindentMode, BlockCommentConfig, Buffer, BufferRow,
+    BufferSnapshot, Capability, CharKind, CodeLabel, CursorShape,
     DiagnosticEntryRef, DiffOptions, HighlightedText, IndentKind, IndentSize, Language,
     LanguageAwareStyling, LanguageName, LanguageRegistry, LanguageScope, LocalFile, OffsetRangeExt,
     OutlineItem, Point, Selection, SelectionGoal, TextObject, TransactionId, TreeSitterOptions,
@@ -128,7 +124,6 @@ use language::{
     },
     point_from_lsp, text_diff_with_options,
 };
-use linked_editing_ranges::refresh_linked_ranges;
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
 use multi_buffer::{
@@ -185,7 +180,7 @@ use std::{
 use task::TaskVariables;
 use text::{BufferId, FromAnchor, OffsetUtf16, Rope, ToPoint as _};
 use theme::{
-    AccentColors, ActiveTheme, GlobalTheme, PlayerColor, StatusColors, SyntaxTheme, Theme,
+    ActiveTheme, GlobalTheme, PlayerColor, StatusColors, SyntaxTheme, Theme,
 };
 use theme_settings::{ThemeSettings, observe_buffer_font_size_adjustment};
 use ui::{
@@ -835,7 +830,6 @@ pub struct Editor {
     selection_history: SelectionHistory,
     defer_selection_effects: bool,
     deferred_selection_effects_state: Option<DeferredSelectionEffectsState>,
-    autoclose_regions: Vec<AutocloseRegion>,
     select_syntax_node_history: SelectSyntaxNodeHistory,
     ime_transaction: Option<TransactionId>,
     pub diagnostics_max_severity: DiagnosticSeverity,
@@ -892,8 +886,6 @@ pub struct Editor {
     debounced_selection_highlight_complete: bool,
     last_selection_from_search: bool,
     document_highlights_task: Option<Task<()>>,
-    linked_editing_range_task: Option<Task<Option<()>>>,
-    linked_edit_ranges: linked_editing_ranges::LinkedEditingRanges,
     pending_rename: Option<RenameState>,
     searchable: bool,
     cursor_shape: CursorShape,
@@ -930,11 +922,8 @@ pub struct Editor {
     editor_actions: Rc<
         RefCell<BTreeMap<EditorActionId, Box<dyn Fn(&Editor, &mut Window, &mut Context<Self>)>>>,
     >,
-    use_autoclose: bool,
-    use_auto_surround: bool,
     use_selection_highlight: bool,
     auto_replace_emoji_shortcode: bool,
-    jsx_tag_auto_close_enabled_in_any_buffer: bool,
     buffer_serialization: Option<BufferSerialization>,
     show_selection_menu: Option<bool>,
     custom_context_menu: Option<
@@ -987,7 +976,6 @@ pub struct Editor {
         Option<Box<dyn Fn(Point, &mut Window, &mut Context<Self>) + 'static>>,
     suppress_selection_callback: bool,
     applicable_language_settings: HashMap<Option<LanguageName>, LanguageSettings>,
-    accent_data: Option<AccentData>,
     bracket_fetched_tree_sitter_chunks: HashMap<Range<text::Anchor>, HashSet<Range<BufferRow>>>,
     semantic_token_state: SemanticTokenState,
     pub(crate) refresh_matching_bracket_highlights_task: Task<()>,
@@ -997,13 +985,6 @@ pub struct Editor {
     outline_symbols_at_cursor: Option<(BufferId, Vec<OutlineItem<Anchor>>)>,
     sticky_headers_task: Task<()>,
     sticky_headers: Option<Vec<OutlineItem<Anchor>>>,
-    pub(crate) colorize_brackets_task: Task<()>,
-}
-
-#[derive(Debug, PartialEq)]
-struct AccentData {
-    colors: AccentColors,
-    overrides: Vec<SharedString>,
 }
 
 fn debounce_value(debounce_ms: u64) -> Option<Duration> {
@@ -1332,13 +1313,6 @@ impl std::fmt::Debug for SelectNextState {
             .field("done", &self.done)
             .finish()
     }
-}
-
-#[derive(Debug)]
-struct AutocloseRegion {
-    selection_id: usize,
-    range: Range<Anchor>,
-    pair: BracketPair,
 }
 
 #[doc(hidden)]
@@ -1812,7 +1786,6 @@ impl Editor {
                             editor.refresh_runnables(Some(buffer_id), window, cx);
                             editor.update_lsp_data(Some(buffer_id), window, cx);
                             editor.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
-                            refresh_linked_ranges(editor, window, cx);
                             editor.refresh_document_highlights(cx);
                         }
                     }
@@ -1963,7 +1936,6 @@ impl Editor {
             selection_history: SelectionHistory::default(),
             defer_selection_effects: false,
             deferred_selection_effects_state: None,
-            autoclose_regions: Vec::new(),
             select_syntax_node_history: SelectSyntaxNodeHistory::default(),
             ime_transaction: None,
             active_diagnostics: ActiveDiagnostic::None,
@@ -2021,7 +1993,6 @@ impl Editor {
             debounced_selection_highlight_complete: false,
             last_selection_from_search: false,
             document_highlights_task: None,
-            linked_editing_range_task: None,
             pending_rename: None,
             searchable: !is_minimap,
             cursor_shape: EditorSettings::get_global(cx)
@@ -2036,11 +2007,8 @@ impl Editor {
             expects_character_input: !is_minimap,
             use_modal_editing: full_mode,
             read_only: is_minimap,
-            use_autoclose: true,
-            use_auto_surround: true,
             use_selection_highlight: true,
             auto_replace_emoji_shortcode: false,
-            jsx_tag_auto_close_enabled_in_any_buffer: false,
             leader_id: None,
             remote_id: None,
             hover_state: HoverState::default(),
@@ -2107,7 +2075,6 @@ impl Editor {
             inlay_hints: None,
             next_color_inlay_id: 0,
             post_scroll_update: Task::ready(()),
-            linked_edit_ranges: Default::default(),
             in_project_search: false,
             previous_search_ranges: None,
             breadcrumb_header: None,
@@ -2132,7 +2099,6 @@ impl Editor {
             suppress_selection_callback: false,
             applicable_language_settings: HashMap::default(),
             semantic_token_state: SemanticTokenState::new(cx, full_mode),
-            accent_data: None,
             bracket_fetched_tree_sitter_chunks: HashMap::default(),
             number_deleted_lines: false,
             refresh_matching_bracket_highlights_task: Task::ready(()),
@@ -2142,7 +2108,6 @@ impl Editor {
             outline_symbols_at_cursor: None,
             sticky_headers_task: Task::ready(()),
             sticky_headers: None,
-            colorize_brackets_task: Task::ready(()),
         };
 
         if is_minimap {
@@ -2150,7 +2115,6 @@ impl Editor {
         }
 
         editor.applicable_language_settings = editor.fetch_applicable_language_settings(cx);
-        editor.accent_data = editor.fetch_accent_data(cx);
 
         if let Some(breakpoints) = editor.breakpoint_store.as_ref() {
             editor
@@ -2244,7 +2208,6 @@ impl Editor {
         editor.selection_history.mode = SelectionHistoryMode::Normal;
 
         editor.scroll_manager.show_scrollbars(window, cx);
-        jsx_tag_auto_close::refresh_enabled_in_any_buffer(&mut editor, &multi_buffer, cx);
 
         if full_mode {
             let should_auto_hide_scrollbars = cx.should_auto_hide_scrollbars();
@@ -4102,11 +4065,8 @@ impl Editor {
         if self.read_only(cx) {
             return;
         }
+
         self.transact(window, cx, |this, window, cx| {
-            this.select_autoclose_pair(window, cx);
-
-            let linked_edits = this.linked_edits_for_selections(Arc::from(""), cx);
-
             let display_map = this.display_map.update(cx, |map, cx| map.snapshot(cx));
             let mut selections = this.selections.all::<MultiBufferPoint>(&display_map);
             for selection in &mut selections {
@@ -4144,8 +4104,6 @@ impl Editor {
 
             this.change_selections(Default::default(), window, cx, |s| s.select(selections));
             this.insert("", window, cx);
-            linked_edits.apply_with_left_expansion(cx);
-            refresh_linked_ranges(this, window, cx);
         });
     }
 
@@ -4164,10 +4122,7 @@ impl Editor {
                     }
                 })
             });
-            let linked_edits = this.linked_edits_for_selections(Arc::from(""), cx);
             this.insert("", window, cx);
-            linked_edits.apply(cx);
-            refresh_linked_ranges(this, window, cx);
         });
     }
 
@@ -8437,7 +8392,7 @@ impl Editor {
 
     fn on_buffer_event(
         &mut self,
-        multibuffer: &Entity<MultiBuffer>,
+        _multibuffer: &Entity<MultiBuffer>,
         event: &multi_buffer::Event,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -8497,7 +8452,6 @@ impl Editor {
                 self.refresh_runnables(None, window, cx);
                 self.bracket_fetched_tree_sitter_chunks
                     .retain(|range, _| range.start.buffer_id != buffer_id);
-                self.colorize_brackets(false, cx);
                 self.refresh_selected_text_highlights(&self.display_snapshot(cx), true, window, cx);
                 self.semantic_token_state.invalidate_buffer(&buffer_id);
                 cx.emit(EditorEvent::BufferRangesUpdated {
@@ -8529,7 +8483,6 @@ impl Editor {
                     display_map.unfold_buffers(removed_buffer_ids.iter().copied(), cx);
                 });
 
-                jsx_tag_auto_close::refresh_enabled_in_any_buffer(self, multibuffer, cx);
                 cx.emit(EditorEvent::BuffersRemoved {
                     removed_buffer_ids: removed_buffer_ids.clone(),
                 });
@@ -8545,8 +8498,6 @@ impl Editor {
             multi_buffer::Event::Reparsed(buffer_id) => {
                 self.refresh_runnables(Some(*buffer_id), window, cx);
                 self.refresh_selected_text_highlights(&self.display_snapshot(cx), true, window, cx);
-                self.colorize_brackets(true, cx);
-                jsx_tag_auto_close::refresh_enabled_in_any_buffer(self, multibuffer, cx);
 
                 cx.emit(EditorEvent::Reparsed(*buffer_id));
             }
@@ -8557,7 +8508,6 @@ impl Editor {
                 if !is_fresh_language {
                     self.registered_buffers.remove(&buffer_id);
                 }
-                jsx_tag_auto_close::refresh_enabled_in_any_buffer(self, multibuffer, cx);
                 cx.emit(EditorEvent::Reparsed(*buffer_id));
                 cx.notify();
             }
@@ -8586,38 +8536,6 @@ impl Editor {
         cx.notify();
     }
 
-    fn fetch_accent_data(&self, cx: &App) -> Option<AccentData> {
-        if !self.mode.is_full() {
-            return None;
-        }
-
-        let theme_settings = theme_settings::ThemeSettings::get_global(cx);
-        let theme = cx.theme();
-        let accent_colors = theme.accents().clone();
-
-        let accent_overrides = theme_settings
-            .theme_overrides
-            .get(theme.name.as_ref())
-            .map(|theme_style| &theme_style.accents)
-            .into_iter()
-            .flatten()
-            .chain(
-                theme_settings
-                    .experimental_theme_overrides
-                    .as_ref()
-                    .map(|overrides| &overrides.accents)
-                    .into_iter()
-                    .flatten(),
-            )
-            .flat_map(|accent| accent.0.clone().map(SharedString::from))
-            .collect();
-
-        Some(AccentData {
-            colors: accent_colors,
-            overrides: accent_overrides,
-        })
-    }
-
     fn fetch_applicable_language_settings(
         &self,
         cx: &App,
@@ -8643,10 +8561,6 @@ impl Editor {
         let new_language_settings = self.fetch_applicable_language_settings(cx);
         let language_settings_changed = new_language_settings != self.applicable_language_settings;
         self.applicable_language_settings = new_language_settings;
-
-        let new_accents = self.fetch_accent_data(cx);
-        let accents_changed = new_accents != self.accent_data;
-        self.accent_data = new_accents;
 
         if self.diagnostics_enabled() {
             let new_severity = EditorSettings::get_global(cx)
@@ -8714,10 +8628,6 @@ impl Editor {
                 }
             }
 
-            if language_settings_changed || accents_changed {
-                self.colorize_brackets(true, cx);
-            }
-
             if language_settings_changed {
                 self.clear_disabled_lsp_folding_ranges(window, cx);
                 self.refresh_document_symbols(None, cx);
@@ -8753,12 +8663,6 @@ impl Editor {
     fn theme_changed(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if !self.mode.is_full() {
             return;
-        }
-
-        let new_accents = self.fetch_accent_data(cx);
-        if new_accents != self.accent_data {
-            self.accent_data = new_accents;
-            self.colorize_brackets(true, cx);
         }
 
         self.invalidate_semantic_tokens(None);
@@ -9731,7 +9635,6 @@ impl Editor {
 
     fn do_update_data_on_scroll(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.register_visible_buffers(cx);
-        self.colorize_brackets(false, cx);
         self.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
 
         if !self.buffer().read(cx).is_singleton() || self.needs_initial_data_update {
