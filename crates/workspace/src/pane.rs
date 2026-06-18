@@ -1,7 +1,7 @@
 use crate::{
     CloseWindow, NewCenterTerminal, NewFile, NewTerminal, OpenInTerminal, OpenOptions,
-    OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,
-    Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
+    OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols,
+    Workspace, WorkspaceItemBuilder,
     focus_follows_mouse::FocusFollowsMouse as _,
     invalid_item_view::InvalidItemView,
     item::{
@@ -1368,38 +1368,6 @@ impl Pane {
 
     pub fn item_for_index(&self, ix: usize) -> Option<&dyn ItemHandle> {
         self.items.get(ix).map(|i| i.as_ref())
-    }
-
-    pub fn toggle_zoom(&mut self, _: &ToggleZoom, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.can_toggle_zoom {
-            cx.propagate();
-        } else if self.zoomed {
-            cx.emit(Event::ZoomOut);
-        } else if !self.items.is_empty() {
-            if !self.focus_handle.contains_focused(window, cx) {
-                cx.focus_self(window);
-            }
-            cx.emit(Event::ZoomIn);
-        }
-    }
-
-    pub fn zoom_in(&mut self, _: &ZoomIn, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.can_toggle_zoom {
-            cx.propagate();
-        } else if !self.zoomed && !self.items.is_empty() {
-            if !self.focus_handle.contains_focused(window, cx) {
-                cx.focus_self(window);
-            }
-            cx.emit(Event::ZoomIn);
-        }
-    }
-
-    pub fn zoom_out(&mut self, _: &ZoomOut, _window: &mut Window, cx: &mut Context<Self>) {
-        if !self.can_toggle_zoom {
-            cx.propagate();
-        } else if self.zoomed {
-            cx.emit(Event::ZoomOut);
-        }
     }
 
     pub fn activate_item(
@@ -4148,23 +4116,6 @@ fn default_render_tab_bar_buttons(
                     .into()
                 }),
         )
-        .child({
-            let zoomed = pane.is_zoomed();
-            IconButton::new("toggle_zoom", IconName::Maximize)
-                .icon_size(IconSize::Small)
-                .toggle_state(zoomed)
-                .selected_icon(IconName::Minimize)
-                .on_click(cx.listener(|pane, _, window, cx| {
-                    pane.toggle_zoom(&crate::ToggleZoom, window, cx);
-                }))
-                .tooltip(move |_window, cx| {
-                    Tooltip::for_action(
-                        if zoomed { "Zoom Out" } else { "Zoom In" },
-                        &ToggleZoom,
-                        cx,
-                    )
-                })
-        })
         .into_any_element()
         .into();
     (None, right_children)
@@ -4237,9 +4188,6 @@ impl Render for Pane {
             .on_action(cx.listener(|_, _: &JoinAll, _, cx| {
                 cx.emit(Event::JoinAll);
             }))
-            .on_action(cx.listener(Pane::toggle_zoom))
-            .on_action(cx.listener(Pane::zoom_in))
-            .on_action(cx.listener(Pane::zoom_out))
             .on_action(cx.listener(Self::navigate_backward))
             .on_action(cx.listener(Self::navigate_forward))
             .on_action(cx.listener(Self::go_to_older_tag))

@@ -2971,7 +2971,6 @@ dependencies = [
  "log",
  "lsp",
  "markdown",
- "menu",
  "multi_buffer",
  "parking_lot",
  "pretty_assertions",

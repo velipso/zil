@@ -322,14 +322,8 @@ actions!(
         ToggleLeftDock,
         /// Toggles the right dock.
         ToggleRightDock,
-        /// Toggles zoom on the active pane.
-        ToggleZoom,
         /// Toggles read-only mode for the active item (if supported by that item).
         ToggleReadOnlyFile,
-        /// Zooms in on the active pane.
-        ZoomIn,
-        /// Zooms out of the active pane.
-        ZoomOut,
         /// If any worktrees are in restricted mode, shows a modal with possible actions.
         /// If the modal is shown already, closes it without trusting any worktree.
         ToggleWorktreeSecurity,
