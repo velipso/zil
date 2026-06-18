@@ -12,18 +12,16 @@
 mod document_colors;
 mod document_symbols;
 mod folding_ranges;
-mod inlay_hints;
 pub mod log_store;
 pub mod lsp_ext_command;
 mod semantic_tokens;
 
 use self::document_colors::DocumentColorData;
 use self::document_symbols::DocumentSymbolsData;
-use self::inlay_hints::BufferInlayHints;
 use crate::{
-    Hover, InlayHint, InlayId,
+    Hover,
     ManifestProvidersStore, Project, ProjectPath, ProjectTransaction,
-    ResolveState, Symbol,
+    Symbol,
     buffer_store::{BufferStore, BufferStoreEvent},
     environment::ProjectEnvironment,
     lsp_command::{self, *},
@@ -62,7 +60,7 @@ use gpui::{
 use http_client::HttpClient;
 use itertools::Itertools as _;
 use language::{
-    Bias, BinaryStatus, Buffer, BufferRow, CachedLspAdapter, Capability, CodeLabel, Diff,
+    Bias, BinaryStatus, Buffer, CachedLspAdapter, Capability, CodeLabel, Diff,
     File as _, Language, LanguageName, LanguageRegistry, LocalFile,
     LspAdapter, LspAdapterDelegate, LspInstaller, ManifestDelegate, ManifestName, ModelineSettings, PointUtf16, TextBufferSnapshot, ToOffset,
     Toolchain, Transaction, Unclipped,
@@ -76,7 +74,6 @@ use language::{
         serialize_anchor_range,
     },
     range_from_lsp, range_to_lsp,
-    row_chunk::RowChunk,
 };
 use lsp::{
     AdapterServerCapabilities,
@@ -92,7 +89,7 @@ use parking_lot::Mutex;
 use postage::{sink::Sink, stream::Stream, watch};
 use rand::prelude::*;
 use rpc::{
-    AnyProtoClient, ErrorCode, ErrorExt as _,
+    AnyProtoClient,
     proto::{LspRequestId, LspRequestMessage as _},
 };
 use semver::Version;
@@ -130,7 +127,6 @@ pub use document_colors::DocumentColors;
 pub use folding_ranges::LspFoldingRange;
 pub use fs::*;
 pub use language::Location;
-pub use lsp_store::inlay_hints::{CacheInlayHints, InvalidationStrategy};
 pub use semantic_tokens::{
     BufferSemanticToken, BufferSemanticTokens, RefreshForServer, SemanticTokenStylizer, TokenType,
 };
@@ -978,41 +974,6 @@ impl LocalLspStore {
                             &mut cx,
                         )
                         .await
-                    }
-                }
-            })
-            .detach();
-
-        language_server
-            .on_request::<lsp::request::InlayHintRefreshRequest, _, _>({
-                let lsp_store = lsp_store.clone();
-                let request_id = Arc::new(AtomicUsize::new(0));
-                move |(), cx| {
-                    let lsp_store = lsp_store.clone();
-                    let request_id = request_id.clone();
-                    let mut cx = cx.clone();
-                    async move {
-                        lsp_store
-                            .update(&mut cx, |lsp_store, cx| {
-                                let request_id =
-                                    Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
-                                cx.emit(LspStoreEvent::RefreshInlayHints {
-                                    server_id,
-                                    request_id,
-                                });
-                                lsp_store
-                                    .downstream_client
-                                    .as_ref()
-                                    .map(|(client, project_id)| {
-                                        client.send(proto::RefreshInlayHints {
-                                            project_id: *project_id,
-                                            server_id: server_id.to_proto(),
-                                            request_id: request_id.map(|id| id as u64),
-                                        })
-                                    })
-                            })?
-                            .transpose()?;
-                        Ok(())
                     }
                 }
             })
@@ -3007,7 +2968,6 @@ pub struct LspStore {
     semantic_token_config: SemanticTokenConfig,
     lsp_data: HashMap<BufferId, BufferLspData>,
     buffer_reload_tasks: HashMap<BufferId, Task<anyhow::Result<()>>>,
-    next_hint_id: Arc<AtomicUsize>,
 }
 
 #[derive(Debug)]
@@ -3017,9 +2977,7 @@ pub struct BufferLspData {
     semantic_tokens: Option<SemanticTokensData>,
     folding_ranges: Option<FoldingRangeData>,
     document_symbols: Option<DocumentSymbolsData>,
-    inlay_hints: BufferInlayHints,
     lsp_requests: HashMap<LspKey, HashMap<LspRequestId, Task<()>>>,
-    chunk_lsp_requests: HashMap<LspKey, HashMap<RowChunk, LspRequestId>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -3036,9 +2994,7 @@ impl BufferLspData {
             semantic_tokens: None,
             folding_ranges: None,
             document_symbols: None,
-            inlay_hints: BufferInlayHints::new(buffer, cx),
             lsp_requests: HashMap::default(),
-            chunk_lsp_requests: HashMap::default(),
         }
     }
 
@@ -3046,8 +3002,6 @@ impl BufferLspData {
         if let Some(document_colors) = &mut self.document_colors {
             document_colors.remove_server_data(for_server);
         }
-
-        self.inlay_hints.remove_server_data(for_server);
 
         if let Some(semantic_tokens) = &mut self.semantic_tokens {
             semantic_tokens.remove_server_data(for_server);
@@ -3060,11 +3014,6 @@ impl BufferLspData {
         if let Some(document_symbols) = &mut self.document_symbols {
             document_symbols.remove_server_data(for_server);
         }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn inlay_hints(&self) -> &BufferInlayHints {
-        &self.inlay_hints
     }
 }
 
@@ -3084,10 +3033,6 @@ pub enum LspStoreEvent {
         new_language: Option<Arc<Language>>,
     },
     Notification(String),
-    RefreshInlayHints {
-        server_id: LanguageServerId,
-        request_id: Option<usize>,
-    },
     RefreshSemanticTokens {
         server_id: LanguageServerId,
         request_id: Option<usize>,
@@ -3158,10 +3103,8 @@ impl LspStore {
         client.add_entity_message_handler(Self::handle_language_server_log);
         client.add_entity_request_handler(Self::handle_format_buffers);
         client.add_entity_request_handler(Self::handle_get_project_symbols);
-        client.add_entity_request_handler(Self::handle_resolve_inlay_hint);
         client.add_entity_request_handler(Self::handle_get_color_presentation);
         client.add_entity_request_handler(Self::handle_open_buffer_for_symbol);
-        client.add_entity_request_handler(Self::handle_refresh_inlay_hints);
         client.add_entity_request_handler(Self::handle_refresh_semantic_tokens);
         client.add_entity_request_handler(Self::handle_register_buffer_with_language_servers);
         client.add_entity_request_handler(Self::handle_rename_project_entry);
@@ -3298,7 +3241,6 @@ impl LspStore {
             semantic_token_config: SemanticTokenConfig::new(cx),
             lsp_data: HashMap::default(),
             buffer_reload_tasks: HashMap::default(),
-            next_hint_id: Arc::default(),
             active_entry: None,
             _maintain_workspace_config,
             _maintain_buffer_languages: Self::maintain_buffer_languages(languages, cx),
@@ -3357,7 +3299,6 @@ impl LspStore {
             nonce: StdRng::from_os_rng().random(),
             lsp_server_capabilities: HashMap::default(),
             semantic_token_config: SemanticTokenConfig::new(cx),
-            next_hint_id: Arc::default(),
             lsp_data: HashMap::default(),
             buffer_reload_tasks: HashMap::default(),
             active_entry: None,
@@ -4283,418 +4224,6 @@ impl LspStore {
         local.lsp_tree = new_tree;
         for (id, _) in to_stop {
             self.stop_local_language_server(id, cx).detach();
-        }
-    }
-
-    pub fn resolved_hint(
-        &mut self,
-        buffer_id: BufferId,
-        id: InlayId,
-        cx: &mut Context<Self>,
-    ) -> Option<ResolvedHint> {
-        let buffer = self.buffer_store.read(cx).get(buffer_id)?;
-
-        let lsp_data = self.lsp_data.get_mut(&buffer_id)?;
-        let buffer_lsp_hints = &mut lsp_data.inlay_hints;
-        let hint = buffer_lsp_hints.hint_for_id(id)?.clone();
-        let (server_id, resolve_data) = match &hint.resolve_state {
-            ResolveState::Resolved => return Some(ResolvedHint::Resolved(hint)),
-            ResolveState::Resolving => {
-                return Some(ResolvedHint::Resolving(
-                    buffer_lsp_hints.hint_resolves.get(&id)?.clone(),
-                ));
-            }
-            ResolveState::CanResolve(server_id, resolve_data) => (*server_id, resolve_data.clone()),
-        };
-
-        let resolve_task = self.resolve_inlay_hint(hint, buffer, server_id, cx);
-        let buffer_lsp_hints = &mut self.lsp_data.get_mut(&buffer_id)?.inlay_hints;
-        let previous_task = buffer_lsp_hints.hint_resolves.insert(
-            id,
-            cx.spawn(async move |lsp_store, cx| {
-                let resolved_hint = resolve_task.await;
-                lsp_store
-                    .update(cx, |lsp_store, _| {
-                        if let Some(old_inlay_hint) = lsp_store
-                            .lsp_data
-                            .get_mut(&buffer_id)
-                            .and_then(|buffer_lsp_data| buffer_lsp_data.inlay_hints.hint_for_id(id))
-                        {
-                            match resolved_hint {
-                                Ok(resolved_hint) => {
-                                    *old_inlay_hint = resolved_hint;
-                                }
-                                Err(e) => {
-                                    old_inlay_hint.resolve_state =
-                                        ResolveState::CanResolve(server_id, resolve_data);
-                                    log::error!("Inlay hint resolve failed: {e:#}");
-                                }
-                            }
-                        }
-                    })
-                    .ok();
-            })
-            .shared(),
-        );
-        debug_assert!(
-            previous_task.is_none(),
-            "Did not change hint's resolve state after spawning its resolve"
-        );
-        buffer_lsp_hints.hint_for_id(id)?.resolve_state = ResolveState::Resolving;
-        None
-    }
-
-    pub fn applicable_inlay_chunks(
-        &mut self,
-        buffer: &Entity<Buffer>,
-        ranges: &[Range<text::Anchor>],
-        cx: &mut Context<Self>,
-    ) -> Vec<Range<BufferRow>> {
-        let buffer_snapshot = buffer.read(cx).snapshot();
-        let ranges = ranges
-            .iter()
-            .map(|range| range.to_point(&buffer_snapshot))
-            .collect::<Vec<_>>();
-
-        self.latest_lsp_data(buffer, cx)
-            .inlay_hints
-            .applicable_chunks(ranges.as_slice())
-            .map(|chunk| chunk.row_range())
-            .collect()
-    }
-
-    pub fn invalidate_inlay_hints<'a>(
-        &'a mut self,
-        for_buffers: impl IntoIterator<Item = &'a BufferId> + 'a,
-    ) {
-        for buffer_id in for_buffers {
-            if let Some(lsp_data) = self.lsp_data.get_mut(buffer_id) {
-                lsp_data.inlay_hints.clear();
-            }
-        }
-    }
-
-    pub fn inlay_hints(
-        &mut self,
-        invalidate: InvalidationStrategy,
-        buffer: Entity<Buffer>,
-        ranges: Vec<Range<text::Anchor>>,
-        known_chunks: Option<(clock::Global, HashSet<Range<BufferRow>>)>,
-        cx: &mut Context<Self>,
-    ) -> HashMap<Range<BufferRow>, Task<Result<CacheInlayHints>>> {
-        let next_hint_id = self.next_hint_id.clone();
-        let lsp_data = self.latest_lsp_data(&buffer, cx);
-        let query_version = lsp_data.buffer_version.clone();
-        let mut lsp_refresh_requested = false;
-        let for_server = if let InvalidationStrategy::RefreshRequested {
-            server_id,
-            request_id,
-        } = invalidate
-        {
-            let invalidated = lsp_data
-                .inlay_hints
-                .invalidate_for_server_refresh(server_id, request_id);
-            lsp_refresh_requested = invalidated;
-            Some(server_id)
-        } else {
-            None
-        };
-        let existing_inlay_hints = &mut lsp_data.inlay_hints;
-        let known_chunks = known_chunks
-            .filter(|(known_version, _)| !lsp_data.buffer_version.changed_since(known_version))
-            .map(|(_, known_chunks)| known_chunks)
-            .unwrap_or_default();
-
-        let buffer_snapshot = buffer.read(cx).snapshot();
-        let ranges = ranges
-            .iter()
-            .map(|range| range.to_point(&buffer_snapshot))
-            .collect::<Vec<_>>();
-
-        let mut hint_fetch_tasks = Vec::new();
-        let mut cached_inlay_hints = None;
-        let mut ranges_to_query = None;
-        let applicable_chunks = existing_inlay_hints
-            .applicable_chunks(ranges.as_slice())
-            .filter(|chunk| !known_chunks.contains(&chunk.row_range()))
-            .collect::<Vec<_>>();
-        if applicable_chunks.is_empty() {
-            return HashMap::default();
-        }
-
-        for row_chunk in applicable_chunks {
-            match (
-                existing_inlay_hints
-                    .cached_hints(&row_chunk)
-                    .filter(|_| !lsp_refresh_requested)
-                    .cloned(),
-                existing_inlay_hints
-                    .fetched_hints(&row_chunk)
-                    .as_ref()
-                    .filter(|_| !lsp_refresh_requested)
-                    .cloned(),
-            ) {
-                (None, None) => {
-                    let chunk_range = row_chunk.anchor_range();
-                    ranges_to_query
-                        .get_or_insert_with(Vec::new)
-                        .push((row_chunk, chunk_range));
-                }
-                (None, Some(fetched_hints)) => hint_fetch_tasks.push((row_chunk, fetched_hints)),
-                (Some(cached_hints), None) => {
-                    for (server_id, cached_hints) in cached_hints {
-                        if for_server.is_none_or(|for_server| for_server == server_id) {
-                            cached_inlay_hints
-                                .get_or_insert_with(HashMap::default)
-                                .entry(row_chunk.row_range())
-                                .or_insert_with(HashMap::default)
-                                .entry(server_id)
-                                .or_insert_with(Vec::new)
-                                .extend(cached_hints);
-                        }
-                    }
-                }
-                (Some(cached_hints), Some(fetched_hints)) => {
-                    hint_fetch_tasks.push((row_chunk, fetched_hints));
-                    for (server_id, cached_hints) in cached_hints {
-                        if for_server.is_none_or(|for_server| for_server == server_id) {
-                            cached_inlay_hints
-                                .get_or_insert_with(HashMap::default)
-                                .entry(row_chunk.row_range())
-                                .or_insert_with(HashMap::default)
-                                .entry(server_id)
-                                .or_insert_with(Vec::new)
-                                .extend(cached_hints);
-                        }
-                    }
-                }
-            }
-        }
-
-        if hint_fetch_tasks.is_empty()
-            && ranges_to_query
-                .as_ref()
-                .is_none_or(|ranges| ranges.is_empty())
-            && let Some(cached_inlay_hints) = cached_inlay_hints
-        {
-            cached_inlay_hints
-                .into_iter()
-                .map(|(row_chunk, hints)| (row_chunk, Task::ready(Ok(hints))))
-                .collect()
-        } else {
-            for (chunk, range_to_query) in ranges_to_query.into_iter().flatten() {
-                // When a server refresh was requested, other servers' cached hints
-                // are unaffected by the refresh and must be included in the result.
-                // Otherwise apply_fetched_hints (with should_invalidate()=true)
-                // removes all visible hints but only adds back the requesting
-                // server's new hints, permanently losing other servers' hints.
-                let other_servers_cached: CacheInlayHints = if lsp_refresh_requested {
-                    lsp_data
-                        .inlay_hints
-                        .cached_hints(&chunk)
-                        .cloned()
-                        .unwrap_or_default()
-                } else {
-                    HashMap::default()
-                };
-
-                let next_hint_id = next_hint_id.clone();
-                let buffer = buffer.clone();
-                let query_version = query_version.clone();
-                let new_inlay_hints = cx
-                    .spawn(async move |lsp_store, cx| {
-                        let new_fetch_task = lsp_store.update(cx, |lsp_store, cx| {
-                            lsp_store.fetch_inlay_hints(for_server, &buffer, range_to_query, cx)
-                        })?;
-                        new_fetch_task
-                            .await
-                            .and_then(|new_hints_by_server| {
-                                lsp_store.update(cx, |lsp_store, cx| {
-                                    let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
-                                    let update_cache = lsp_data.buffer_version == query_version;
-                                    if new_hints_by_server.is_empty() {
-                                        if update_cache {
-                                            lsp_data.inlay_hints.invalidate_for_chunk(chunk);
-                                        }
-                                        other_servers_cached
-                                    } else {
-                                        let mut result = other_servers_cached;
-                                        for (server_id, new_hints) in new_hints_by_server {
-                                            let new_hints = new_hints
-                                                .into_iter()
-                                                .map(|new_hint| {
-                                                    (
-                                                        InlayId::Hint(next_hint_id.fetch_add(
-                                                            1,
-                                                            atomic::Ordering::AcqRel,
-                                                        )),
-                                                        new_hint,
-                                                    )
-                                                })
-                                                .collect::<Vec<_>>();
-                                            if update_cache {
-                                                lsp_data.inlay_hints.insert_new_hints(
-                                                    chunk,
-                                                    server_id,
-                                                    new_hints.clone(),
-                                                );
-                                            }
-                                            result.insert(server_id, new_hints);
-                                        }
-                                        result
-                                    }
-                                })
-                            })
-                            .map_err(Arc::new)
-                    })
-                    .shared();
-
-                let fetch_task = lsp_data.inlay_hints.fetched_hints(&chunk);
-                *fetch_task = Some(new_inlay_hints.clone());
-                hint_fetch_tasks.push((chunk, new_inlay_hints));
-            }
-
-            cached_inlay_hints
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(row_chunk, hints)| (row_chunk, Task::ready(Ok(hints))))
-                .chain(hint_fetch_tasks.into_iter().map(|(chunk, hints_fetch)| {
-                    (
-                        chunk.row_range(),
-                        cx.spawn(async move |_, _| {
-                            hints_fetch.await.map_err(|e| {
-                                if e.error_code() != ErrorCode::Internal {
-                                    anyhow!(e.error_code())
-                                } else {
-                                    anyhow!("{e:#}")
-                                }
-                            })
-                        }),
-                    )
-                }))
-                .collect()
-        }
-    }
-
-    fn fetch_inlay_hints(
-        &mut self,
-        for_server: Option<LanguageServerId>,
-        buffer: &Entity<Buffer>,
-        range: Range<Anchor>,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<HashMap<LanguageServerId, Vec<InlayHint>>>> {
-        let request = InlayHints {
-            range: range.clone(),
-        };
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
-                return Task::ready(Ok(HashMap::default()));
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                for_server.map(|id| id.to_proto()),
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
-            cx.spawn(async move |weak_lsp_store, cx| {
-                let Some(lsp_store) = weak_lsp_store.upgrade() else {
-                    return Ok(HashMap::default());
-                };
-                let Some(responses) = request_task.await? else {
-                    return Ok(HashMap::default());
-                };
-
-                let inlay_hints = join_all(responses.payload.into_iter().map(|response| {
-                    let lsp_store = lsp_store.clone();
-                    let buffer = buffer.clone();
-                    let cx = cx.clone();
-                    let request = request.clone();
-                    async move {
-                        (
-                            LanguageServerId::from_proto(response.server_id),
-                            request
-                                .response_from_proto(response.response, lsp_store, buffer, cx)
-                                .await,
-                        )
-                    }
-                }))
-                .await;
-
-                let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-                let mut has_errors = false;
-                let inlay_hints = inlay_hints
-                    .into_iter()
-                    .filter_map(|(server_id, inlay_hints)| match inlay_hints {
-                        Ok(inlay_hints) => Some((server_id, inlay_hints)),
-                        Err(e) => {
-                            has_errors = true;
-                            log::error!("{e:#}");
-                            None
-                        }
-                    })
-                    .map(|(server_id, mut new_hints)| {
-                        new_hints.retain(|hint| {
-                            hint.position.is_valid(&buffer_snapshot)
-                                && range.start.is_valid(&buffer_snapshot)
-                                && range.end.is_valid(&buffer_snapshot)
-                                && hint.position.cmp(&range.start, &buffer_snapshot).is_ge()
-                                && hint.position.cmp(&range.end, &buffer_snapshot).is_lt()
-                        });
-                        (server_id, new_hints)
-                    })
-                    .collect::<HashMap<_, _>>();
-                anyhow::ensure!(
-                    !has_errors || !inlay_hints.is_empty(),
-                    "Failed to fetch inlay hints"
-                );
-                Ok(inlay_hints)
-            })
-        } else {
-            let inlay_hints_task = match for_server {
-                Some(server_id) => {
-                    let server_task = self.request_lsp(
-                        buffer.clone(),
-                        LanguageServerToQuery::Other(server_id),
-                        request,
-                        cx,
-                    );
-                    cx.background_spawn(async move {
-                        let mut responses = Vec::new();
-                        match server_task.await {
-                            Ok(response) => responses.push((server_id, response)),
-                            // rust-analyzer likes to error with this when its still loading up
-                            Err(e) if format!("{e:#}").ends_with("content modified") => (),
-                            Err(e) => log::error!(
-                                "Error handling response for inlay hints request: {e:#}"
-                            ),
-                        }
-                        responses
-                    })
-                }
-                None => self.request_multiple_lsp_locally(buffer, None::<usize>, request, cx),
-            };
-            let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-            cx.background_spawn(async move {
-                Ok(inlay_hints_task
-                    .await
-                    .into_iter()
-                    .map(|(server_id, mut new_hints)| {
-                        new_hints.retain(|hint| {
-                            hint.position.is_valid(&buffer_snapshot)
-                                && range.start.is_valid(&buffer_snapshot)
-                                && range.end.is_valid(&buffer_snapshot)
-                                && hint.position.cmp(&range.start, &buffer_snapshot).is_ge()
-                                && hint.position.cmp(&range.end, &buffer_snapshot).is_lt()
-                        });
-                        (server_id, new_hints)
-                    })
-                    .collect())
-            })
         }
     }
 
@@ -5786,39 +5315,6 @@ impl LspStore {
                 )
                 .await?;
             }
-            Request::InlayHints(inlay_hints) => {
-                let query_start = inlay_hints
-                    .start
-                    .clone()
-                    .and_then(deserialize_anchor)
-                    .context("invalid inlay hints range start")?;
-                let query_end = inlay_hints
-                    .end
-                    .clone()
-                    .and_then(deserialize_anchor)
-                    .context("invalid inlay hints range end")?;
-                Self::deduplicate_range_based_lsp_requests::<InlayHints>(
-                    &lsp_store,
-                    server_id,
-                    lsp_request_id,
-                    &inlay_hints,
-                    query_start..query_end,
-                    &mut cx,
-                )
-                .await
-                .context("preparing inlay hints request")?;
-                Self::query_lsp_locally::<InlayHints>(
-                    lsp_store,
-                    server_id,
-                    sender_id,
-                    lsp_request_id,
-                    inlay_hints,
-                    None,
-                    &mut cx,
-                )
-                .await
-                .context("querying for inlay hints")?
-            }
             //////////////////////////////
             // Below are LSP queries that need to fetch more data,
             // hence cannot just proxy the request to language server with `query_lsp_locally`.
@@ -6539,13 +6035,7 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) {
         if let Some(status) = self.language_server_statuses.get_mut(&language_server_id) {
-            if let Some(_) = status.pending_work.remove(&token) {
-                cx.emit(LspStoreEvent::RefreshInlayHints {
-                    server_id: language_server_id,
-                    request_id: None,
-                });
-            }
-            cx.notify();
+            status.pending_work.remove(&token);
         }
 
         cx.emit(LspStoreEvent::LanguageServerUpdate {
@@ -7876,13 +7366,6 @@ impl LspStore {
                     });
                     notify_server_capabilities_updated(&server, cx);
                 }
-                "textDocument/inlayHint" => {
-                    let options = parse_register_capabilities(reg)?;
-                    server.update_capabilities(|capabilities| {
-                        capabilities.inlay_hint_provider = Some(options);
-                    });
-                    notify_server_capabilities_updated(&server, cx);
-                }
                 "textDocument/documentSymbol" => {
                     let options = parse_register_capabilities(reg)?;
                     server.update_capabilities(|capabilities| {
@@ -8112,61 +7595,6 @@ impl LspStore {
                 _ => log::warn!("unhandled capability unregistration: {unreg:?}"),
             }
         }
-
-        Ok(())
-    }
-
-    async fn deduplicate_range_based_lsp_requests<T>(
-        lsp_store: &Entity<Self>,
-        server_id: Option<LanguageServerId>,
-        lsp_request_id: LspRequestId,
-        proto_request: &T::ProtoRequest,
-        range: Range<Anchor>,
-        cx: &mut AsyncApp,
-    ) -> Result<()>
-    where
-        T: LspCommand,
-        T::ProtoRequest: proto::LspRequestMessage,
-    {
-        let buffer_id = BufferId::new(proto_request.buffer_id())?;
-        let version = deserialize_version(proto_request.buffer_version());
-        let buffer = lsp_store.update(cx, |this, cx| {
-            this.buffer_store.read(cx).get_existing(buffer_id)
-        })?;
-        buffer
-            .update(cx, |buffer, _| buffer.wait_for_version(version))
-            .await?;
-        lsp_store.update(cx, |lsp_store, cx| {
-            let buffer_snapshot = buffer.read(cx).snapshot();
-            let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
-            let chunks_queried_for = lsp_data
-                .inlay_hints
-                .applicable_chunks(&[range.to_point(&buffer_snapshot)])
-                .collect::<Vec<_>>();
-            match chunks_queried_for.as_slice() {
-                &[chunk] => {
-                    let key = LspKey {
-                        request_type: TypeId::of::<T>(),
-                        server_queried: server_id,
-                    };
-                    let previous_request = lsp_data
-                        .chunk_lsp_requests
-                        .entry(key)
-                        .or_default()
-                        .insert(chunk, lsp_request_id);
-                    if let Some((previous_request, running_requests)) =
-                        previous_request.zip(lsp_data.lsp_requests.get_mut(&key))
-                    {
-                        running_requests.remove(&previous_request);
-                    }
-                }
-                _ambiguous_chunks => {
-                    // Have not found a unique chunk for the query range — be lenient and let the query to be spawned,
-                    // there, a buffer version-based check will be performed and outdated requests discarded.
-                }
-            }
-            anyhow::Ok(())
-        })?;
 
         Ok(())
     }
@@ -8904,7 +8332,6 @@ impl From<lsp::Documentation> for CompletionDocumentation {
 }
 
 pub enum ResolvedHint {
-    Resolved(InlayHint),
     Resolving(Shared<Task<()>>),
 }
 

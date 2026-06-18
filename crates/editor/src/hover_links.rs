@@ -51,13 +51,7 @@ impl RangeInEditor {
                 let point_after_start = range.start.cmp(point, &snapshot.buffer_snapshot()).is_le();
                 point_after_start && range.end.cmp(point, &snapshot.buffer_snapshot()).is_ge()
             }
-            (Self::Inlay(highlight), TriggerPoint::InlayHint(point, _, _)) => {
-                highlight.inlay == point.inlay
-                    && highlight.range.contains(&point.range.start)
-                    && highlight.range.contains(&point.range.end)
-            }
-            (Self::Inlay(_), TriggerPoint::Text(_))
-            | (Self::Text(_), TriggerPoint::InlayHint(_, _, _)) => false,
+            (Self::Inlay(_), TriggerPoint::Text(_)) => false,
         }
     }
 }
@@ -125,14 +119,12 @@ pub struct InlayHighlight {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TriggerPoint {
     Text(Anchor),
-    InlayHint(InlayHighlight, lsp::Location, LanguageServerId),
 }
 
 impl TriggerPoint {
     fn anchor(&self) -> &Anchor {
         match self {
             TriggerPoint::Text(anchor) => anchor,
-            TriggerPoint::InlayHint(inlay_range, _, _) => &inlay_range.inlay_position,
         }
     }
 }
@@ -160,7 +152,7 @@ impl Editor {
     pub(crate) fn update_hovered_link(
         &mut self,
         point_for_position: PointForPosition,
-        mouse_position: Option<gpui::Point<Pixels>>,
+        _mouse_position: Option<gpui::Point<Pixels>>,
         snapshot: &EditorSnapshot,
         modifiers: Modifiers,
         window: &mut Window,
@@ -188,15 +180,7 @@ impl Editor {
                 show_link_definition(modifiers.shift, self, trigger_point, snapshot, window, cx);
             }
             None => {
-                self.update_inlay_link_and_hover_points(
-                    snapshot,
-                    point_for_position,
-                    mouse_position,
-                    hovered_link_modifier,
-                    modifiers.shift,
-                    window,
-                    cx,
-                );
+                // do nothing
             }
         }
     }
@@ -222,23 +206,11 @@ impl Editor {
 
     pub fn scroll_hover(
         &mut self,
-        amount: ScrollAmount,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        _amount: ScrollAmount,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
     ) -> bool {
-        let selection = self.selections.newest_anchor().head();
-        let snapshot = self.snapshot(window, cx);
-
-        if let Some(popover) = self.hover_state.info_popovers.iter().find(|popover| {
-            popover
-                .symbol_range
-                .point_within_range(&TriggerPoint::Text(selection), &snapshot)
-        }) {
-            popover.scroll(amount, window, cx);
-            true
-        } else {
-            false
-        }
+        false // VELIPSO: propagate
     }
 
     fn cmd_click_reveal_task(
@@ -404,10 +376,6 @@ pub fn show_link_definition(
                         Some((symbol_range, links))
                     }
                 }
-                TriggerPoint::InlayHint(highlight, lsp_location, server_id) => Some((
-                    Some(RangeInEditor::Inlay(highlight.clone())),
-                    vec![HoverLink::LspLocation(lsp_location.clone(), *server_id)],
-                )),
             };
 
             this.update(cx, |editor, cx| {
@@ -448,9 +416,6 @@ pub fn show_link_definition(
                                         snapshot.anchor_before(offset_range.start)
                                             ..snapshot.anchor_after(offset_range.end),
                                     )
-                                }
-                                TriggerPoint::InlayHint(highlight, _, _) => {
-                                    RangeInEditor::Inlay(highlight.clone())
                                 }
                             });
 
@@ -921,7 +886,6 @@ mod tests {
         DisplayPoint,
         display_map::ToDisplayPoint,
         editor_tests::init_test,
-        inlays::inlay_hints::tests::{cached_hint_labels, visible_hint_labels},
         test::editor_lsp_test_context::EditorLspTestContext,
     };
     use futures::StreamExt;
@@ -929,7 +893,6 @@ mod tests {
     use indoc::indoc;
     use lsp::request::{GotoDefinition, GotoTypeDefinition};
     use multi_buffer::MultiBufferOffset;
-    use settings::InlayHintSettingsContent;
     use std::str::FromStr;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1466,157 +1429,6 @@ mod tests {
             "},
         );
         cx.background_executor.run_until_parked();
-    }
-
-    #[gpui::test]
-    async fn test_inlay_hover_links(cx: &mut gpui::TestAppContext) {
-        init_test(cx, |settings| {
-            settings.defaults.inlay_hints = Some(InlayHintSettingsContent {
-                enabled: Some(true),
-                show_value_hints: Some(false),
-                edit_debounce_ms: Some(0),
-                scroll_debounce_ms: Some(0),
-                show_type_hints: Some(true),
-                show_parameter_hints: Some(true),
-                show_other_hints: Some(true),
-                show_background: Some(false),
-                toggle_on_modifiers_press: None,
-            })
-        });
-
-        let mut cx = EditorLspTestContext::new_rust(
-            lsp::ServerCapabilities {
-                inlay_hint_provider: Some(lsp::OneOf::Left(true)),
-                ..Default::default()
-            },
-            cx,
-        )
-        .await;
-        cx.set_state(indoc! {"
-                struct TestStruct;
-
-                fn main() {
-                    let variableˇ = TestStruct;
-                }
-            "});
-        let hint_start_offset = cx.ranges(indoc! {"
-                struct TestStruct;
-
-                fn main() {
-                    let variableˇ = TestStruct;
-                }
-            "})[0]
-            .start;
-        let hint_position = cx.to_lsp(MultiBufferOffset(hint_start_offset));
-        let target_range = cx.lsp_range(indoc! {"
-                struct «TestStruct»;
-
-                fn main() {
-                    let variable = TestStruct;
-                }
-            "});
-
-        let expected_uri = cx.buffer_lsp_url.clone();
-        let hint_label = ": TestStruct";
-        cx.lsp
-            .set_request_handler::<lsp::request::InlayHintRequest, _, _>(move |params, _| {
-                let expected_uri = expected_uri.clone();
-                async move {
-                    assert_eq!(params.text_document.uri, expected_uri);
-                    Ok(Some(vec![lsp::InlayHint {
-                        position: hint_position,
-                        label: lsp::InlayHintLabel::LabelParts(vec![lsp::InlayHintLabelPart {
-                            value: hint_label.to_string(),
-                            location: Some(lsp::Location {
-                                uri: params.text_document.uri,
-                                range: target_range,
-                            }),
-                            ..Default::default()
-                        }]),
-                        kind: Some(lsp::InlayHintKind::TYPE),
-                        text_edits: None,
-                        tooltip: None,
-                        padding_left: Some(false),
-                        padding_right: Some(false),
-                        data: None,
-                    }]))
-                }
-            })
-            .next()
-            .await;
-        cx.background_executor.run_until_parked();
-        cx.update_editor(|editor, _window, cx| {
-            let expected_layers = vec![hint_label.to_string()];
-            assert_eq!(expected_layers, cached_hint_labels(editor, cx));
-            assert_eq!(expected_layers, visible_hint_labels(editor, cx));
-        });
-
-        let inlay_range = cx
-            .ranges(indoc! {"
-                struct TestStruct;
-
-                fn main() {
-                    let variable« »= TestStruct;
-                }
-            "})
-            .first()
-            .cloned()
-            .unwrap();
-        let midpoint = cx.update_editor(|editor, window, cx| {
-            let snapshot = editor.snapshot(window, cx);
-            let previous_valid = MultiBufferOffset(inlay_range.start).to_display_point(&snapshot);
-            let next_valid = MultiBufferOffset(inlay_range.end).to_display_point(&snapshot);
-            assert_eq!(previous_valid.row(), next_valid.row());
-            assert!(previous_valid.column() < next_valid.column());
-            DisplayPoint::new(
-                previous_valid.row(),
-                previous_valid.column() + (hint_label.len() / 2) as u32,
-            )
-        });
-        // Press cmd to trigger highlight
-        let hover_point = cx.pixel_position_for(midpoint);
-        cx.simulate_mouse_move(hover_point, None, Modifiers::secondary_key());
-        cx.background_executor.run_until_parked();
-        cx.update_editor(|editor, window, cx| {
-            let snapshot = editor.snapshot(window, cx);
-            let actual_highlights = snapshot
-                .inlay_highlights(HighlightKey::HoveredLinkState)
-                .into_iter()
-                .flat_map(|highlights| highlights.values().map(|(_, highlight)| highlight))
-                .collect::<Vec<_>>();
-
-            let buffer_snapshot = editor.buffer().update(cx, |buffer, cx| buffer.snapshot(cx));
-            let expected_highlight = InlayHighlight {
-                inlay: InlayId::Hint(0),
-                inlay_position: buffer_snapshot.anchor_after(MultiBufferOffset(inlay_range.start)),
-                range: 0..hint_label.len(),
-            };
-            assert_set_eq!(actual_highlights, vec![&expected_highlight]);
-        });
-
-        cx.simulate_mouse_move(hover_point, None, Modifiers::none());
-        // Assert no link highlights
-        cx.update_editor(|editor, window, cx| {
-                let snapshot = editor.snapshot(window, cx);
-                let actual_ranges = snapshot
-                    .text_highlight_ranges(HighlightKey::HoveredLinkState)
-                    .map(|ranges| ranges.as_ref().clone().1)
-                    .unwrap_or_default();
-
-                assert!(actual_ranges.is_empty(), "When no cmd is pressed, should have no hint label selected, but got: {actual_ranges:?}");
-            });
-
-        cx.simulate_modifiers_change(Modifiers::secondary_key());
-        cx.background_executor.run_until_parked();
-        cx.simulate_click(hover_point, Modifiers::secondary_key());
-        cx.background_executor.run_until_parked();
-        cx.assert_editor_state(indoc! {"
-                struct «TestStructˇ»;
-
-                fn main() {
-                    let variable = TestStruct;
-                }
-            "});
     }
 
     #[gpui::test]
@@ -2783,254 +2595,5 @@ Sentence ending file2.rs.
             // See LICENSE for details
             fn «definitionˇ»() {}
         "});
-    }
-
-    #[gpui::test]
-    async fn test_document_link_tooltip_popover(cx: &mut gpui::TestAppContext) {
-        init_test(cx, |_| {});
-
-        let mut cx = EditorLspTestContext::new_rust(
-            lsp::ServerCapabilities {
-                document_link_provider: Some(lsp::DocumentLinkOptions {
-                    resolve_provider: Some(false),
-                    work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
-                }),
-                ..lsp::ServerCapabilities::default()
-            },
-            cx,
-        )
-        .await;
-
-        cx.set_state(indoc! {"
-            // See LICENSE for detailsˇ
-        "});
-
-        let link_range = cx.lsp_range(indoc! {"
-            // See «LICENSE» for details
-        "});
-
-        let mut requests = cx
-            .lsp
-            .set_request_handler::<lsp::request::DocumentLinkRequest, _, _>(
-                move |_, _| async move {
-                    Ok(Some(vec![lsp::DocumentLink {
-                        range: link_range,
-                        target: Some(
-                            lsp::Uri::from_str("https://opensource.org/licenses/MIT").unwrap(),
-                        ),
-                        tooltip: Some("Open license".to_string()),
-                        data: None,
-                    }]))
-                },
-            );
-
-        cx.run_until_parked();
-        requests.next().await;
-        cx.run_until_parked();
-
-        let screen_coord = cx.pixel_position(indoc! {"
-            // See LICˇENSE for details
-        "});
-        // Plain hover (no modifier) is enough; the doc-link tooltip stacks
-        // alongside the regular LSP hover popovers.
-        cx.simulate_mouse_move(screen_coord, None, Modifiers::none());
-        let delay_ms = cx.update(|_, cx| EditorSettings::get_global(cx).hover_popover_delay.0);
-        cx.background_executor
-            .advance_clock(std::time::Duration::from_millis(delay_ms + 100));
-        cx.run_until_parked();
-
-        cx.update_editor(|editor, _, cx| {
-            let tooltip_text = editor
-                .hover_state
-                .info_popovers
-                .iter()
-                .find_map(|popover| {
-                    let parsed = popover.parsed_content.as_ref()?;
-                    let text = parsed.read(cx).parsed_markdown().source().to_string();
-                    (text == "Open license").then_some(text)
-                })
-                .expect("doc-link tooltip should appear in info_popovers on plain hover");
-            assert_eq!(tooltip_text, "Open license");
-        });
-
-        // Move the mouse off the link; `show_hover` re-fires for the new
-        // position and rebuilds `info_popovers` without the tooltip.
-        let off_link = cx.pixel_position(indoc! {"
-            // ˇSee LICENSE for details
-        "});
-        cx.simulate_mouse_move(off_link, None, Modifiers::none());
-        cx.background_executor
-            .advance_clock(std::time::Duration::from_millis(delay_ms + 100));
-        cx.run_until_parked();
-        cx.update_editor(|editor, _, cx| {
-            let still_present = editor.hover_state.info_popovers.iter().any(|popover| {
-                popover
-                    .parsed_content
-                    .as_ref()
-                    .map(|parsed| *parsed.read(cx).parsed_markdown().source() == "Open license")
-                    .unwrap_or(false)
-            });
-            assert!(
-                !still_present,
-                "doc-link tooltip should be cleared once the mouse leaves the link"
-            );
-        });
-    }
-
-    #[gpui::test]
-    async fn test_document_link_resolve_on_hover(cx: &mut gpui::TestAppContext) {
-        init_test(cx, |_| {});
-
-        let mut cx = EditorLspTestContext::new_rust(
-            lsp::ServerCapabilities {
-                document_link_provider: Some(lsp::DocumentLinkOptions {
-                    resolve_provider: Some(true),
-                    work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
-                }),
-                ..lsp::ServerCapabilities::default()
-            },
-            cx,
-        )
-        .await;
-
-        cx.set_state(indoc! {"
-            // See LICENSE for detailsˇ
-        "});
-
-        let link_range = cx.lsp_range(indoc! {"
-            // See «LICENSE» for details
-        "});
-        let resolve_data = serde_json::json!({"id": 42});
-
-        let mut document_link_requests = {
-            let resolve_data = resolve_data.clone();
-            cx.lsp
-                .set_request_handler::<lsp::request::DocumentLinkRequest, _, _>(move |_, _| {
-                    let resolve_data = resolve_data.clone();
-                    async move {
-                        Ok(Some(vec![lsp::DocumentLink {
-                            range: link_range,
-                            target: None,
-                            tooltip: None,
-                            data: Some(resolve_data),
-                        }]))
-                    }
-                })
-        };
-
-        let mut resolve_requests = cx
-            .lsp
-            .set_request_handler::<lsp::request::DocumentLinkResolve, _, _>(
-                move |req, _| async move {
-                    Ok(lsp::DocumentLink {
-                        range: req.range,
-                        target: Some(
-                            lsp::Uri::from_str("https://opensource.org/licenses/MIT").unwrap(),
-                        ),
-                        tooltip: Some("Resolved tooltip".to_string()),
-                        data: None,
-                    })
-                },
-            );
-
-        cx.run_until_parked();
-        document_link_requests.next().await;
-        cx.run_until_parked();
-
-        let screen_coord = cx.pixel_position(indoc! {"
-            // See LICˇENSE for details
-        "});
-        cx.simulate_mouse_move(screen_coord, None, Modifiers::none());
-        let delay_ms = cx.update(|_, cx| EditorSettings::get_global(cx).hover_popover_delay.0);
-        cx.background_executor
-            .advance_clock(std::time::Duration::from_millis(delay_ms + 100));
-        cx.run_until_parked();
-        // Hover triggers resolve, not a viewport sweep.
-        resolve_requests.next().await;
-        cx.run_until_parked();
-
-        cx.update_editor(|editor, _, cx| {
-            let tooltip_text = editor
-                .hover_state
-                .info_popovers
-                .iter()
-                .find_map(|popover| {
-                    let parsed = popover.parsed_content.as_ref()?;
-                    let text = parsed.read(cx).parsed_markdown().source().to_string();
-                    (text == "Resolved tooltip").then_some(text)
-                })
-                .expect("resolved doc-link tooltip should appear in info_popovers");
-            assert_eq!(tooltip_text, "Resolved tooltip");
-        });
-    }
-
-    #[gpui::test]
-    async fn test_document_link_tooltip_respects_hover_popover_enabled(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        init_test(cx, |_| {});
-
-        cx.update(|cx| {
-            use gpui::BorrowAppContext as _;
-            cx.update_global::<settings::SettingsStore, _>(|settings, cx| {
-                settings.update_user_settings(cx, |settings| {
-                    settings.editor.hover_popover_enabled = Some(false);
-                });
-            });
-        });
-
-        let mut cx = EditorLspTestContext::new_rust(
-            lsp::ServerCapabilities {
-                document_link_provider: Some(lsp::DocumentLinkOptions {
-                    resolve_provider: Some(false),
-                    work_done_progress_options: lsp::WorkDoneProgressOptions::default(),
-                }),
-                ..lsp::ServerCapabilities::default()
-            },
-            cx,
-        )
-        .await;
-
-        cx.set_state(indoc! {"
-            // See LICENSE for detailsˇ
-        "});
-
-        let link_range = cx.lsp_range(indoc! {"
-            // See «LICENSE» for details
-        "});
-
-        let mut requests = cx
-            .lsp
-            .set_request_handler::<lsp::request::DocumentLinkRequest, _, _>(
-                move |_, _| async move {
-                    Ok(Some(vec![lsp::DocumentLink {
-                        range: link_range,
-                        target: Some(
-                            lsp::Uri::from_str("https://opensource.org/licenses/MIT").unwrap(),
-                        ),
-                        tooltip: Some("Open license".to_string()),
-                        data: None,
-                    }]))
-                },
-            );
-
-        cx.run_until_parked();
-        requests.next().await;
-        cx.run_until_parked();
-
-        let screen_coord = cx.pixel_position(indoc! {"
-            // See LICˇENSE for details
-        "});
-        cx.simulate_mouse_move(screen_coord, None, Modifiers::none());
-        cx.background_executor
-            .advance_clock(std::time::Duration::from_millis(2000));
-        cx.run_until_parked();
-
-        cx.update_editor(|editor, _, _| {
-            assert!(
-                editor.hover_state.info_popovers.is_empty(),
-                "no popovers should appear when hover_popover_enabled is false"
-            );
-        });
     }
 }

@@ -1,13 +1,12 @@
 use super::{
     breakpoint_store::BreakpointStore,
-    dap_command::EvaluateCommand,
     locators,
     session::{self, Session, SessionStateEvent},
 };
 use remote::Interactive;
 
 use crate::{
-    InlayHint, InlayHintLabel, ProjectEnvironment, ResolveState,
+    ProjectEnvironment,
     debugger::session::SessionQuirks,
     project_settings::{DapBinary, ProjectSettings},
     worktree_store::WorktreeStore,
@@ -16,12 +15,11 @@ use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
 use collections::HashMap;
 use dap::{
-    Capabilities, DapRegistry, DebugRequest, EvaluateArgumentsContext, StackFrameId,
+    Capabilities, DapRegistry, DebugRequest,
     adapters::{
         DapDelegate, DebugAdapterBinary, DebugAdapterName, DebugTaskDefinition, TcpArguments,
     },
     client::SessionId,
-    inline_value::VariableLookupKind,
     messages::Message,
 };
 use fs::{Fs, RemoveOptions};
@@ -32,9 +30,8 @@ use futures::{
 };
 use gpui::{App, AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString, Task, TaskExt};
 use http_client::HttpClient;
-use language::{Buffer, LanguageToolchainStore};
+use language::{LanguageToolchainStore};
 use node_runtime::NodeRuntime;
-use settings::InlayHintKind;
 
 use remote::RemoteClient;
 use rpc::{
@@ -615,112 +612,6 @@ impl DapStore {
                 .update(cx, |env, cx| env.worktree_environment(worktree.clone(), cx)),
             local_store.is_headless,
         ))
-    }
-
-    pub fn resolve_inline_value_locations(
-        &self,
-        session: Entity<Session>,
-        stack_frame_id: StackFrameId,
-        buffer_handle: Entity<Buffer>,
-        inline_value_locations: Vec<dap::inline_value::InlineValueLocation>,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<InlayHint>>> {
-        let snapshot = buffer_handle.read(cx).snapshot();
-        let local_variables =
-            session
-                .read(cx)
-                .variables_by_stack_frame_id(stack_frame_id, false, true);
-        let global_variables =
-            session
-                .read(cx)
-                .variables_by_stack_frame_id(stack_frame_id, true, false);
-
-        fn format_value(mut value: String) -> String {
-            const LIMIT: usize = 100;
-
-            if let Some(index) = value.find("\n") {
-                value.truncate(index);
-                value.push_str("…");
-            }
-
-            if value.len() > LIMIT {
-                let mut index = LIMIT;
-                // If index isn't a char boundary truncate will cause a panic
-                while !value.is_char_boundary(index) {
-                    index -= 1;
-                }
-                value.truncate(index);
-                value.push_str("…");
-            }
-
-            format!(": {}", value)
-        }
-
-        cx.spawn(async move |_, cx| {
-            let mut inlay_hints = Vec::with_capacity(inline_value_locations.len());
-            for inline_value_location in inline_value_locations.iter() {
-                let point = snapshot.point_to_point_utf16(language::Point::new(
-                    inline_value_location.row as u32,
-                    inline_value_location.column as u32,
-                ));
-                let position = snapshot.anchor_after(point);
-
-                match inline_value_location.lookup {
-                    VariableLookupKind::Variable => {
-                        let variable_search =
-                            if inline_value_location.scope
-                                == dap::inline_value::VariableScope::Local
-                            {
-                                local_variables.iter().chain(global_variables.iter()).find(
-                                    |variable| variable.name == inline_value_location.variable_name,
-                                )
-                            } else {
-                                global_variables.iter().find(|variable| {
-                                    variable.name == inline_value_location.variable_name
-                                })
-                            };
-
-                        let Some(variable) = variable_search else {
-                            continue;
-                        };
-
-                        inlay_hints.push(InlayHint {
-                            position,
-                            label: InlayHintLabel::String(format_value(variable.value.clone())),
-                            kind: Some(InlayHintKind::Type),
-                            padding_left: false,
-                            padding_right: false,
-                            tooltip: None,
-                            resolve_state: ResolveState::Resolved,
-                        });
-                    }
-                    VariableLookupKind::Expression => {
-                        let eval_task = session.read_with(cx, |session, _| {
-                            session.state.request_dap(EvaluateCommand {
-                                expression: inline_value_location.variable_name.clone(),
-                                frame_id: Some(stack_frame_id),
-                                source: None,
-                                context: Some(EvaluateArgumentsContext::Variables),
-                            })
-                        });
-
-                        if let Some(response) = eval_task.await.log_err() {
-                            inlay_hints.push(InlayHint {
-                                position,
-                                label: InlayHintLabel::String(format_value(response.result)),
-                                kind: Some(InlayHintKind::Type),
-                                padding_left: false,
-                                padding_right: false,
-                                tooltip: None,
-                                resolve_state: ResolveState::Resolved,
-                            });
-                        };
-                    }
-                };
-            }
-
-            Ok(inlay_hints)
-        })
     }
 
     pub fn shutdown_sessions(&mut self, cx: &mut Context<Self>) -> Task<()> {

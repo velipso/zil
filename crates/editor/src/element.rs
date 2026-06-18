@@ -9,7 +9,7 @@ use crate::{
     CursorShape, CustomBlockId, DisplayPoint, DisplayRow,
     Editor, EditorMode, EditorSettings, EditorSnapshot, EditorStyle, FILE_HEADER_HEIGHT,
     FocusedBlock, GutterDimensions, HalfPageDown, HalfPageUp, HandleInput, HoveredCursor,
-    InlayHintRefreshReason, LineDown, LineHighlight, LineUp, MAX_LINE_LEN, MINIMAP_FONT_SIZE,
+    LineDown, LineHighlight, LineUp, MAX_LINE_LEN, MINIMAP_FONT_SIZE,
     PageDown, PageUp, Point, RowExt, RowRangeExt, Selection, SelectionDragState, SizingBehavior,
     SoftWrap, ToPoint,
     column_pixels,
@@ -21,11 +21,6 @@ use crate::{
         CurrentLineHighlight, DocumentColorsRenderMode, Minimap, MinimapThumb, MinimapThumbBorder,
         ScrollBeyondLastLine, ScrollbarAxes, ShowMinimap,
     },
-    hover_popover::{
-        self, HOVER_POPOVER_GAP, MIN_POPOVER_CHARACTER_WIDTH, MIN_POPOVER_LINE_HEIGHT,
-        POPOVER_RIGHT_OFFSET,
-    },
-    inlay_hint_settings,
     scroll::{
         ActiveScrollbarState, ScrollOffset, ScrollPixelOffset, ScrollbarThumbState,
         scroll_amount::ScrollAmount,
@@ -351,12 +346,10 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_line_numbers);
         register_action(editor, window, Editor::toggle_relative_line_numbers);
         register_action(editor, window, Editor::toggle_indent_guides);
-        register_action(editor, window, Editor::toggle_inlay_hints);
         register_action(editor, window, Editor::toggle_semantic_highlights);
         if editor.read(cx).supports_minimap(cx) {
             register_action(editor, window, Editor::toggle_minimap);
         }
-        register_action(editor, window, hover_popover::hover);
         register_action(editor, window, Editor::reveal_in_finder);
         register_action(editor, window, Editor::copy_path);
         register_action(editor, window, Editor::copy_relative_path);
@@ -504,29 +497,6 @@ impl EditorElement {
                     return;
                 }
                 editor.update(cx, |editor, cx| {
-                    let inlay_hint_settings = inlay_hint_settings(
-                        editor.selections.newest_anchor().head(),
-                        &editor.buffer.read(cx).snapshot(cx),
-                        cx,
-                    );
-
-                    if let Some(inlay_modifiers) = inlay_hint_settings
-                        .toggle_on_modifiers_press
-                        .as_ref()
-                        .filter(|modifiers| modifiers.modified())
-                    {
-                        editor.refresh_inlay_hints(
-                            InlayHintRefreshReason::ModifiersChanged(
-                                inlay_modifiers == &event.modifiers,
-                            ),
-                            cx,
-                        );
-                    }
-
-                    if editor.hover_state.focused(window, cx) {
-                        return;
-                    }
-
                     editor.handle_modifiers_changed(event.modifiers, &position_map, window, cx);
                 })
             }
@@ -1258,8 +1228,6 @@ impl EditorElement {
             minimap,
             thumb_layout: layout,
             thumb_border_style: minimap_settings.thumb_border,
-            minimap_line_height,
-            minimap_scroll_top,
             max_scroll_top: total_editor_lines,
         })
     }
@@ -2801,181 +2769,6 @@ impl EditorElement {
                     });
                 });
             }
-        }
-    }
-
-    fn layout_hover_popovers(
-        &self,
-        snapshot: &EditorSnapshot,
-        hitbox: &Hitbox,
-        visible_display_row_range: Range<DisplayRow>,
-        content_origin: gpui::Point<Pixels>,
-        scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
-        line_layouts: &[LineWithInvisibles],
-        line_height: Pixels,
-        em_width: Pixels,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        struct MeasuredHoverPopover {
-            element: AnyElement,
-            size: Size<Pixels>,
-            horizontal_offset: Pixels,
-        }
-
-        let max_size = size(
-            (120. * em_width) // Default size
-                .min(hitbox.size.width / 2.) // Shrink to half of the editor width
-                .max(MIN_POPOVER_CHARACTER_WIDTH * em_width), // Apply minimum width of 20 characters
-            (16. * line_height) // Default size
-                .min(hitbox.size.height / 2.) // Shrink to half of the editor height
-                .max(MIN_POPOVER_LINE_HEIGHT * line_height), // Apply minimum height of 4 lines
-        );
-
-        // Don't show hover popovers when context menu is open to avoid overlap
-        let has_context_menu = self.editor.read(cx).mouse_context_menu.is_some();
-        if has_context_menu {
-            return;
-        }
-
-        let hover_popovers = self.editor.update(cx, |editor, cx| {
-            editor.hover_state.render(
-                snapshot,
-                visible_display_row_range.clone(),
-                max_size,
-                &editor.text_layout_details(window, cx),
-                window,
-                cx,
-            )
-        });
-        let Some((popover_position, hover_popovers)) = hover_popovers else {
-            return;
-        };
-
-        // This is safe because we check on layout whether the required row is available
-        let hovered_row_layout = &line_layouts[popover_position
-            .row()
-            .minus(visible_display_row_range.start)
-            as usize];
-
-        // Compute Hovered Point
-        let x = hovered_row_layout.x_for_index(popover_position.column() as usize)
-            - Pixels::from(scroll_pixel_position.x);
-        let y = Pixels::from(
-            popover_position.row().as_f64() * ScrollPixelOffset::from(line_height)
-                - scroll_pixel_position.y,
-        );
-        let hovered_point = content_origin + point(x, y);
-
-        let mut overall_height = Pixels::ZERO;
-        let mut measured_hover_popovers = Vec::new();
-        for (position, mut hover_popover) in hover_popovers.into_iter().with_position() {
-            let size = hover_popover.layout_as_root(AvailableSpace::min_size(), window, cx);
-            let horizontal_offset =
-                (hitbox.top_right().x - POPOVER_RIGHT_OFFSET - (hovered_point.x + size.width))
-                    .min(Pixels::ZERO);
-            match position {
-                itertools::Position::Middle | itertools::Position::Last => {
-                    overall_height += HOVER_POPOVER_GAP
-                }
-                _ => {}
-            }
-            overall_height += size.height;
-            measured_hover_popovers.push(MeasuredHoverPopover {
-                element: hover_popover,
-                size,
-                horizontal_offset,
-            });
-        }
-
-        fn draw_occluder(
-            width: Pixels,
-            origin: gpui::Point<Pixels>,
-            window: &mut Window,
-            cx: &mut App,
-        ) {
-            let mut occlusion = div()
-                .size_full()
-                .occlude()
-                .on_mouse_move(|_, _, cx| cx.stop_propagation())
-                .into_any_element();
-            occlusion.layout_as_root(size(width, HOVER_POPOVER_GAP).into(), window, cx);
-            window.defer_draw(occlusion, origin, 2, None);
-        }
-
-        fn place_popovers_above(
-            hovered_point: gpui::Point<Pixels>,
-            measured_hover_popovers: Vec<MeasuredHoverPopover>,
-            window: &mut Window,
-            cx: &mut App,
-        ) {
-            let mut current_y = hovered_point.y;
-            for (position, popover) in measured_hover_popovers.into_iter().with_position() {
-                let size = popover.size;
-                let popover_origin = point(
-                    hovered_point.x + popover.horizontal_offset,
-                    current_y - size.height,
-                );
-
-                window.defer_draw(popover.element, popover_origin, 2, None);
-                if position != itertools::Position::Last {
-                    let origin = point(popover_origin.x, popover_origin.y - HOVER_POPOVER_GAP);
-                    draw_occluder(size.width, origin, window, cx);
-                }
-
-                current_y = popover_origin.y - HOVER_POPOVER_GAP;
-            }
-        }
-
-        fn place_popovers_below(
-            hovered_point: gpui::Point<Pixels>,
-            measured_hover_popovers: Vec<MeasuredHoverPopover>,
-            line_height: Pixels,
-            window: &mut Window,
-            cx: &mut App,
-        ) {
-            let mut current_y = hovered_point.y + line_height;
-            for (position, popover) in measured_hover_popovers.into_iter().with_position() {
-                let size = popover.size;
-                let popover_origin = point(hovered_point.x + popover.horizontal_offset, current_y);
-
-                window.defer_draw(popover.element, popover_origin, 2, None);
-                if position != itertools::Position::Last {
-                    let origin = point(popover_origin.x, popover_origin.y + size.height);
-                    draw_occluder(size.width, origin, window, cx);
-                }
-
-                current_y = popover_origin.y + size.height + HOVER_POPOVER_GAP;
-            }
-        }
-
-        let can_place_above = {
-            let mut bounds_above = Vec::new();
-            let mut current_y = hovered_point.y;
-            for popover in &measured_hover_popovers {
-                let size = popover.size;
-                let popover_origin = point(
-                    hovered_point.x + popover.horizontal_offset,
-                    current_y - size.height,
-                );
-                bounds_above.push(Bounds::new(popover_origin, size));
-                current_y = popover_origin.y - HOVER_POPOVER_GAP;
-            }
-            bounds_above
-                .iter()
-                .all(|b| b.is_contained_within(hitbox))
-        };
-
-        if can_place_above {
-            place_popovers_above(hovered_point, measured_hover_popovers, window, cx);
-        } else {
-            place_popovers_below(
-                hovered_point,
-                measured_hover_popovers,
-                line_height,
-                window,
-                cx,
-            );
         }
     }
 
@@ -6412,21 +6205,6 @@ impl Element for EditorElement {
                         );
                     }
 
-                    if !cx.has_active_drag() {
-                        self.layout_hover_popovers(
-                            &snapshot,
-                            &hitbox,
-                            start_row..end_row,
-                            content_origin,
-                            scroll_pixel_position,
-                            &line_layouts,
-                            line_height,
-                            em_width,
-                            window,
-                            cx,
-                        );
-                    }
-
                     let mouse_context_menu = self.layout_mouse_context_menu(
                         &snapshot,
                         start_row..end_row,
@@ -7173,8 +6951,6 @@ impl ScrollbarLayout {
 struct MinimapLayout {
     pub minimap: AnyElement,
     pub thumb_layout: ScrollbarLayout,
-    pub minimap_scroll_top: ScrollOffset,
-    pub minimap_line_height: Pixels,
     pub thumb_border_style: MinimapThumbBorder,
     pub max_scroll_top: ScrollOffset,
 }

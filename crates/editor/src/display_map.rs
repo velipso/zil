@@ -129,7 +129,7 @@ use std::{
 };
 
 use crate::{
-    EditorStyle, RowExt, inlays::Inlay, movement::TextLayoutDetails,
+    EditorStyle, RowExt, movement::TextLayoutDetails,
 };
 use block_map::{BlockRow, BlockSnapshot};
 use fold_map::FoldSnapshot;
@@ -1062,10 +1062,6 @@ impl DisplayMap {
         widths_changed
     }
 
-    pub(crate) fn current_inlays(&self) -> impl Iterator<Item = &Inlay> + Default {
-        self.inlay_map.current_inlays()
-    }
-
     #[instrument(skip_all)]
     fn tab_size(buffer: &Entity<MultiBuffer>, cx: &App) -> NonZeroU32 {
         if let Some(buffer) = buffer.read(cx).as_singleton().map(|buffer| buffer.read(cx)) {
@@ -1095,11 +1091,6 @@ pub(crate) struct Highlights<'a> {
 pub struct EditPredictionStyles {
     pub insertion: HighlightStyle,
     pub whitespace: HighlightStyle,
-}
-
-#[derive(Default, Debug, Clone, Copy)]
-pub struct HighlightStyles {
-    pub inlay_hint: Option<HighlightStyle>,
 }
 
 #[derive(Clone)]
@@ -1494,7 +1485,6 @@ impl DisplaySnapshot {
         &self,
         display_rows: Range<DisplayRow>,
         language_aware: LanguageAwareStyling,
-        _highlight_styles: HighlightStyles,
     ) -> DisplayChunks<'_> {
         self.block_snapshot.chunks(
             BlockRow(display_rows.start.0)..BlockRow(display_rows.end.0),
@@ -1514,14 +1504,7 @@ impl DisplaySnapshot {
         language_aware: LanguageAwareStyling,
         editor_style: &'a EditorStyle,
     ) -> impl Iterator<Item = HighlightedChunk<'a>> {
-        self.chunks(
-            display_rows,
-            language_aware,
-            HighlightStyles {
-                inlay_hint: Some(editor_style.inlay_hints_style),
-            },
-        )
-        .flat_map({
+        self.chunks(display_rows, language_aware).flat_map({
             move |chunk| {
                 let syntax_highlight_style = chunk
                     .syntax_highlight_id

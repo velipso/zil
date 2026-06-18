@@ -55,7 +55,6 @@ const FILENAMES: &[&str] = &[
     "completion.rs",
     "hover.rs",
     "references.rs",
-    "inlay_hints.rs",
     "git_blame.rs",
     "terminal.rs",
     "search.rs",

@@ -535,7 +535,6 @@ impl VsCodeSettings {
                 enabled: self.read_bool("editor.guides.indentation"),
                 ..Default::default()
             }),
-            inlay_hints: None,
             language_servers: None,
             semantic_tokens: self
                 .read_bool("editor.semanticHighlighting.enabled")

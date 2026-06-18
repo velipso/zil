@@ -13,18 +13,12 @@
 //!
 //! Editor uses [`crate::DisplayMap`] and [`crate::display_map::InlayMap`] to manage what's rendered inside the editor, using
 //! [`InlaySplice`] to update this state.
-
-/// Logic, related to managing LSP inlay hint inlays.
-pub mod inlay_hints;
-
 use std::sync::OnceLock;
 
-use gpui::{Hsla, Rgba, Task};
+use gpui::{Hsla, Rgba};
 use multi_buffer::Anchor;
 use project::{InlayHint, InlayId};
 use text::Rope;
-
-use crate::{Editor};
 
 /// A splice to send into the `inlay_map` for updating the visible inlays on the screen.
 /// "Visible" inlays may not be displayed in the buffer right away, but those are ready to be displayed on further buffer scroll, pane item activations, etc. right away without additional LSP queries or settings changes.
@@ -115,46 +109,5 @@ impl Inlay {
             InlayContent::Color(color) => Some(color),
             _ => None,
         }
-    }
-}
-
-pub struct InlineValueCache {
-    pub enabled: bool,
-    pub inlays: Vec<InlayId>,
-    pub refresh_task: Task<Option<()>>,
-}
-
-impl InlineValueCache {
-    pub fn new(enabled: bool) -> Self {
-        Self {
-            enabled,
-            inlays: Vec::new(),
-            refresh_task: Task::ready(None),
-        }
-    }
-}
-
-impl Editor {
-    pub fn inline_values_enabled(&self) -> bool {
-        self.inline_value_cache.enabled
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn inline_value_inlays(&self, cx: &gpui::App) -> Vec<Inlay> {
-        self.display_map
-            .read(cx)
-            .current_inlays()
-            .filter(|inlay| matches!(inlay.id, InlayId::DebuggerValue(_)))
-            .cloned()
-            .collect()
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn all_inlays(&self, cx: &gpui::App) -> Vec<Inlay> {
-        self.display_map
-            .read(cx)
-            .current_inlays()
-            .cloned()
-            .collect()
     }
 }

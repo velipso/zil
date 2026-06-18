@@ -286,8 +286,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: true
     pub indent_list_on_tab: Option<bool>,
-    /// Inlay hint related settings.
-    pub inlay_hints: Option<InlayHintSettingsContent>,
     /// Which code actions to run on save before the formatter.
     /// These are not run if formatting is off.
     ///

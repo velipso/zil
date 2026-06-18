@@ -1,7 +1,7 @@
 use editor::{Editor, EditorSettings};
 use gpui::{
     Action, Anchor, ClickEvent, Context, ElementId, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement, ParentElement, Render, Styled, Subscription,
+    FocusHandle, Focusable, InteractiveElement, ParentElement, Render, Styled,
     Window,
 };
 use search::{BufferSearchBar, buffer_search};
@@ -16,7 +16,6 @@ use workspace::{
 };
 
 pub struct QuickActionBar {
-    _inlay_hints_enabled_subscription: Option<Subscription>,
     active_item: Option<Box<dyn ItemHandle>>,
     buffer_search_bar: Entity<BufferSearchBar>,
     show: bool,
@@ -29,7 +28,6 @@ impl QuickActionBar {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut this = Self {
-            _inlay_hints_enabled_subscription: None,
             active_item: None,
             buffer_search_bar,
             show: true,
@@ -72,12 +70,9 @@ impl Render for QuickActionBar {
             return div().id("empty quick action bar");
         };
 
-        let supports_inlay_hints = editor.update(cx, |editor, cx| editor.supports_inlay_hints(cx));
         let supports_semantic_tokens =
             editor.update(cx, |editor, cx| editor.supports_semantic_tokens(cx));
         let editor_value = editor.read(cx);
-        let inlay_hints_enabled = editor_value.inlay_hints_enabled();
-        let inline_values_enabled = editor_value.inline_values_enabled();
         let semantic_highlights_enabled = editor_value.semantic_highlights_enabled();
         let show_line_numbers = editor_value.line_numbers_enabled(cx);
         let supports_minimap = editor_value.supports_minimap(cx);
@@ -121,50 +116,6 @@ impl Render for QuickActionBar {
                         let focus_handle = editor_focus_handle.clone();
                         |mut menu, _, _| {
                             menu = menu.context(focus_handle);
-
-                            if supports_inlay_hints {
-                                menu = menu.toggleable_entry(
-                                    "Inlay Hints",
-                                    inlay_hints_enabled,
-                                    IconPosition::Start,
-                                    Some(editor::actions::ToggleInlayHints.boxed_clone()),
-                                    {
-                                        let editor = editor.clone();
-                                        move |window, cx| {
-                                            editor
-                                                .update(cx, |editor, cx| {
-                                                    editor.toggle_inlay_hints(
-                                                        &editor::actions::ToggleInlayHints,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .ok();
-                                        }
-                                    },
-                                );
-
-                                menu = menu.toggleable_entry(
-                                    "Inline Values",
-                                    inline_values_enabled,
-                                    IconPosition::Start,
-                                    Some(editor::actions::ToggleInlineValues.boxed_clone()),
-                                    {
-                                        let editor = editor.clone();
-                                        move |window, cx| {
-                                            editor
-                                                .update(cx, |editor, cx| {
-                                                    editor.toggle_inline_values(
-                                                        &editor::actions::ToggleInlineValues,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .ok();
-                                        }
-                                    }
-                                );
-                            }
 
                             if supports_semantic_tokens {
                                 menu = menu.toggleable_entry(
@@ -298,51 +249,10 @@ impl RenderOnce for QuickActionBarButton {
 impl ToolbarItemView for QuickActionBar {
     fn set_active_pane_item(
         &mut self,
-        active_pane_item: Option<&dyn ItemHandle>,
+        _active_pane_item: Option<&dyn ItemHandle>,
         _: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.active_item = active_pane_item.map(ItemHandle::boxed_clone);
-        if let Some(active_item) = active_pane_item {
-            self._inlay_hints_enabled_subscription.take();
-
-            if let Some(editor) = active_item.downcast::<Editor>() {
-                let (
-                    mut inlay_hints_enabled,
-                    mut supports_inlay_hints,
-                    mut supports_semantic_tokens,
-                ) = editor.update(cx, |editor, cx| {
-                    (
-                        editor.inlay_hints_enabled(),
-                        editor.supports_inlay_hints(cx),
-                        editor.supports_semantic_tokens(cx),
-                    )
-                });
-                self._inlay_hints_enabled_subscription =
-                    Some(cx.observe(&editor, move |_, editor, cx| {
-                        let (
-                            new_inlay_hints_enabled,
-                            new_supports_inlay_hints,
-                            new_supports_semantic_tokens,
-                        ) = editor.update(cx, |editor, cx| {
-                            (
-                                editor.inlay_hints_enabled(),
-                                editor.supports_inlay_hints(cx),
-                                editor.supports_semantic_tokens(cx),
-                            )
-                        });
-                        let should_notify = inlay_hints_enabled != new_inlay_hints_enabled
-                            || supports_inlay_hints != new_supports_inlay_hints
-                            || supports_semantic_tokens != new_supports_semantic_tokens;
-                        inlay_hints_enabled = new_inlay_hints_enabled;
-                        supports_inlay_hints = new_supports_inlay_hints;
-                        supports_semantic_tokens = new_supports_semantic_tokens;
-                        if should_notify {
-                            cx.notify()
-                        }
-                    }));
-            }
-        }
         self.get_toolbar_item_location()
     }
 }

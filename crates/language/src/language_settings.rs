@@ -11,7 +11,7 @@ use ec4rs::{
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use gpui::{App, Modifiers, SharedString};
 use itertools::{Either, Itertools};
-use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
+use settings::{DocumentFoldingRanges, DocumentSymbols, SemanticTokens};
 
 pub use settings::{
     AutoIndentMode, FormatOnSave, Formatter, FormatterList,
@@ -115,8 +115,6 @@ pub struct LanguageSettings {
     pub extend_list_on_newline: bool,
     /// Whether to indent list items when pressing tab after a list marker.
     pub indent_list_on_tab: bool,
-    /// Inlay hint related settings.
-    pub inlay_hints: InlayHintSettings,
     /// Controls automatic indentation behavior when typing.
     pub auto_indent: AutoIndentMode,
     /// Whether indentation of pasted content should be adjusted based on the context.
@@ -512,7 +510,6 @@ impl settings::Settings for AllLanguageSettings {
         let all_languages = &content.project.all_languages;
 
         fn load_from_content(settings: LanguageSettingsContent) -> LanguageSettings {
-            let inlay_hints = settings.inlay_hints.unwrap();
             let prettier = settings.prettier.unwrap();
             let indent_guides = settings.indent_guides.unwrap();
             let tasks = settings.tasks.unwrap();
@@ -558,19 +555,6 @@ impl settings::Settings for AllLanguageSettings {
                 },
                 extend_list_on_newline: settings.extend_list_on_newline.unwrap(),
                 indent_list_on_tab: settings.indent_list_on_tab.unwrap(),
-                inlay_hints: InlayHintSettings {
-                    enabled: inlay_hints.enabled.unwrap(),
-                    show_value_hints: inlay_hints.show_value_hints.unwrap(),
-                    show_type_hints: inlay_hints.show_type_hints.unwrap(),
-                    show_parameter_hints: inlay_hints.show_parameter_hints.unwrap(),
-                    show_other_hints: inlay_hints.show_other_hints.unwrap(),
-                    show_background: inlay_hints.show_background.unwrap(),
-                    edit_debounce_ms: inlay_hints.edit_debounce_ms.unwrap(),
-                    scroll_debounce_ms: inlay_hints.scroll_debounce_ms.unwrap(),
-                    toggle_on_modifiers_press: inlay_hints
-                        .toggle_on_modifiers_press
-                        .map(|m| m.into_gpui()),
-                },
                 auto_indent: settings.auto_indent.unwrap(),
                 auto_indent_on_paste: settings.auto_indent_on_paste.unwrap(),
                 code_actions_on_format: settings.code_actions_on_format.unwrap(),

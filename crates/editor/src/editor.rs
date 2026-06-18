@@ -22,7 +22,6 @@ mod fold;
 mod folding_ranges;
 mod highlight_matching_bracket;
 pub mod hover_links;
-pub mod hover_popover;
 mod indent_guides;
 mod inlays;
 pub mod items;
@@ -65,7 +64,6 @@ pub use element::{
     CursorLayout, EditorElement, HighlightedRange, HighlightedRangeLine, PointForPosition,
     render_breadcrumb_text,
 };
-pub use hover_popover::hover_markdown_style;
 pub use inlays::Inlay;
 pub use items::MAX_TAB_TITLE_LEN;
 pub use lsp_ext::lsp_tasks;
@@ -95,7 +93,7 @@ use futures::{
 use gpui::{
     Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds, ClickEvent,
     ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
-    EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle, FontWeight,
+    EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle,
     HighlightStyle, Hsla, KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
     PaintQuad, ParentElement, Pixels, PressureStage, Render, SharedString,
     Size, Styled, Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection,
@@ -103,9 +101,8 @@ use gpui::{
     prelude::*, px, relative, size,
 };
 use hover_links::{HoverLink, HoveredLinkState, find_file};
-use hover_popover::{HoverState, hide_hover};
 use indent_guides::ActiveIndentGuidesState;
-use inlays::{InlaySplice, inlay_hints::InlayHintRefreshReason};
+use inlays::{InlaySplice};
 use itertools::{Either, Itertools};
 use language::{
     AutoindentMode, BlockCommentConfig, Buffer, BufferRow,
@@ -114,7 +111,7 @@ use language::{
     LanguageAwareStyling, LanguageName, LanguageScope, LocalFile, OffsetRangeExt,
     OutlineItem, Point, Selection, SelectionGoal, TextObject, TransactionId, TreeSitterOptions,
     language_settings::{
-        self, AllLanguageSettings, LanguageSettings, RewrapBehavior,
+        self, LanguageSettings, RewrapBehavior,
     },
     point_from_lsp, text_diff_with_options,
 };
@@ -128,7 +125,7 @@ use parking_lot::Mutex;
 use persistence::EditorDb;
 use project::{
     BreakpointWithPosition,
-    DocumentHighlight, InlayHint, InvalidationStrategy,
+    DocumentHighlight,
     Location, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
     ProjectTransaction,
     bookmark_store::BookmarkStore,
@@ -137,10 +134,9 @@ use project::{
             Breakpoint, BreakpointEditAction, BreakpointSessionState, BreakpointState,
             BreakpointStore, BreakpointStoreEvent,
         },
-        session::{Session, SessionEvent},
     },
     lsp_store::{
-        BufferSemanticTokens, CacheInlayHints, FormatTrigger,
+        BufferSemanticTokens, FormatTrigger,
         LspFormatTarget, OpenLspBufferHandle, RefreshForServer,
     },
     project_settings::{ProjectSettings},
@@ -197,10 +193,6 @@ use zed_actions::editor::{MoveDown, MoveUp};
 use crate::{
     editor_settings::MultiCursorModifier,
     hover_links::{find_url, find_url_from_range},
-    inlays::{
-        InlineValueCache,
-        inlay_hints::{LspInlayHintData, inlay_hint_settings},
-    },
     runnables::{RunnableData, RunnableTasks},
     scroll::ScrollOffset,
     selections_collection::resolve_selections_wrapping_blocks,
@@ -417,7 +409,6 @@ pub struct EditorStyle {
     pub scrollbar_width: Pixels,
     pub syntax: Arc<SyntaxTheme>,
     pub status: StatusColors,
-    pub inlay_hints_style: HighlightStyle,
     pub unnecessary_code_fade: f32,
 }
 
@@ -434,38 +425,9 @@ impl Default for EditorStyle {
             // We should look into removing the status colors from the editor
             // style and retrieve them directly from the theme.
             status: StatusColors::dark(),
-            inlay_hints_style: HighlightStyle::default(),
             unnecessary_code_fade: Default::default(),
         }
     }
-}
-
-pub fn make_inlay_hints_style(cx: &App) -> HighlightStyle {
-    let show_background = AllLanguageSettings::get_global(cx)
-        .defaults
-        .inlay_hints
-        .show_background;
-
-    let mut style = cx
-        .theme()
-        .syntax()
-        .style_for_name("hint")
-        .unwrap_or_default();
-
-    if style.color.is_none() {
-        style.color = Some(cx.theme().status().hint);
-    }
-
-    if !show_background {
-        style.background_color = None;
-        return style;
-    }
-
-    if style.background_color.is_none() {
-        style.background_color = Some(cx.theme().status().hint_background);
-    }
-
-    style
 }
 
 pub struct ContextMenuOptions {
@@ -887,13 +849,11 @@ pub struct Editor {
     read_only: bool,
     leader_id: Option<CollaboratorId>,
     remote_id: Option<ViewId>,
-    pub hover_state: HoverState,
     pending_mouse_down: Option<Rc<RefCell<Option<MouseDownEvent>>>>,
     prev_pressure_stage: Option<PressureStage>,
     gutter_hovered: bool,
     hovered_link_state: Option<HoveredLinkState>,
     in_leading_whitespace: bool,
-    next_inlay_id: usize,
     next_color_inlay_id: usize,
     _subscriptions: Vec<Subscription>,
     pixel_position_of_newest_cursor: Option<gpui::Point<Pixels>>,
@@ -939,7 +899,6 @@ pub struct Editor {
     serialize_folds: Task<()>,
     minimap: Option<Entity<Self>>,
     pub change_list: ChangeList,
-    inline_value_cache: InlineValueCache,
     number_deleted_lines: bool,
 
     selection_drag_state: SelectionDragState,
@@ -948,7 +907,6 @@ pub struct Editor {
     refresh_colors_task: Task<()>,
     use_document_folding_ranges: bool,
     refresh_folding_ranges_task: Task<()>,
-    inlay_hints: Option<LspInlayHintData>,
     folding_newlines: Task<()>,
     select_next_is_case_sensitive: Option<bool>,
     pub lookup_key: Option<Box<dyn Any + Send + Sync>>,
@@ -965,14 +923,6 @@ pub struct Editor {
     outline_symbols_at_cursor: Option<(BufferId, Vec<OutlineItem<Anchor>>)>,
     sticky_headers_task: Task<()>,
     sticky_headers: Option<Vec<OutlineItem<Anchor>>>,
-}
-
-fn debounce_value(debounce_ms: u64) -> Option<Duration> {
-    if debounce_ms > 0 {
-        Some(Duration::from_millis(debounce_ms))
-    } else {
-        None
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -1718,18 +1668,6 @@ impl Editor {
                 project,
                 window,
                 |editor, _, event, window, cx| match event {
-                    project::Event::RefreshInlayHints {
-                        server_id,
-                        request_id,
-                    } => {
-                        editor.refresh_inlay_hints(
-                            InlayHintRefreshReason::RefreshRequested {
-                                server_id: *server_id,
-                                request_id: *request_id,
-                            },
-                            cx,
-                        );
-                    }
                     project::Event::RefreshSemanticTokens {
                         server_id,
                         request_id,
@@ -1749,7 +1687,6 @@ impl Editor {
                         editor.invalidate_semantic_tokens(None);
                         editor.refresh_runnables(None, window, cx);
                         editor.update_lsp_data(None, window, cx);
-                        editor.refresh_inlay_hints(InlayHintRefreshReason::ServerRemoved, cx);
                     }
                     project::Event::LanguageServerBufferRegistered { buffer_id, .. } => {
                         let buffer_id = *buffer_id;
@@ -1757,7 +1694,6 @@ impl Editor {
                             editor.register_buffer(buffer_id, cx);
                             editor.refresh_runnables(Some(buffer_id), window, cx);
                             editor.update_lsp_data(Some(buffer_id), window, cx);
-                            editor.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
                             editor.refresh_document_highlights(cx);
                         }
                     }
@@ -1843,24 +1779,17 @@ impl Editor {
                 |editor, _, event, window, cx| match event {
                     BreakpointStoreEvent::ClearDebugLines => {
                         editor.clear_row_highlights::<ActiveDebugLine>();
-                        editor.refresh_inline_values(cx);
                     }
                     BreakpointStoreEvent::SetDebugLine => {
                         if editor.go_to_active_debug_line(window, cx) {
                             cx.stop_propagation();
                         }
-
-                        editor.refresh_inline_values(cx);
                     }
                     _ => {}
                 },
             ));
         }
 
-        let buffer_snapshot = multi_buffer.read(cx).snapshot(cx);
-
-        let inlay_hint_settings =
-            inlay_hint_settings(selections.newest_anchor().head(), &buffer_snapshot, cx);
         let focus_handle = cx.focus_handle();
         if !is_minimap {
             cx.on_focus(&focus_handle, window, Self::handle_focus)
@@ -1952,7 +1881,6 @@ impl Editor {
             active_indent_guides_state: ActiveIndentGuidesState::default(),
             nav_history: None,
             mouse_context_menu: None,
-            next_inlay_id: 0,
             quick_selection_highlight_task: None,
             debounced_selection_highlight_task: None,
             debounced_selection_highlight_complete: false,
@@ -1976,11 +1904,9 @@ impl Editor {
             auto_replace_emoji_shortcode: false,
             leader_id: None,
             remote_id: None,
-            hover_state: HoverState::default(),
             pending_mouse_down: None,
             prev_pressure_stage: None,
             hovered_link_state: None,
-            inline_value_cache: InlineValueCache::new(inlay_hint_settings.show_value_hints),
             gutter_hovered: false,
             pixel_position_of_newest_cursor: None,
             last_bounds: None,
@@ -2033,7 +1959,6 @@ impl Editor {
             refresh_colors_task: Task::ready(()),
             use_document_folding_ranges: false,
             refresh_folding_ranges_task: Task::ready(()),
-            inlay_hints: None,
             next_color_inlay_id: 0,
             post_scroll_update: Task::ready(()),
             in_project_search: false,
@@ -2133,35 +2058,6 @@ impl Editor {
             },
         ));
 
-        if let Some(dap_store) = editor
-            .project
-            .as_ref()
-            .map(|project| project.read(cx).dap_store())
-        {
-            let weak_editor = cx.weak_entity();
-
-            editor
-                ._subscriptions
-                .push(
-                    cx.observe_new::<project::debugger::session::Session>(move |_, _, cx| {
-                        let session_entity = cx.entity();
-                        weak_editor
-                            .update(cx, |editor, cx| {
-                                editor._subscriptions.push(
-                                    cx.subscribe(&session_entity, Self::on_debug_session_event),
-                                );
-                            })
-                            .ok();
-                    }),
-                );
-
-            for session in dap_store.read(cx).sessions().cloned().collect::<Vec<_>>() {
-                editor
-                    ._subscriptions
-                    .push(cx.subscribe(&session, Self::on_debug_session_event));
-            }
-        }
-
         // skip adding the initial selection to selection history
         editor.selection_history.mode = SelectionHistoryMode::Skipping;
         editor.end_selection(window, cx);
@@ -2179,7 +2075,6 @@ impl Editor {
                 editor.create_minimap(EditorSettings::get_global(cx).minimap, window, cx);
             editor.colors = Some(LspColorData::new(cx));
             editor.use_document_folding_ranges = true;
-            editor.inlay_hints = Some(LspInlayHintData::new(inlay_hint_settings));
 
             if let Some(buffer) = multi_buffer.read(cx).as_singleton() {
                 editor.register_buffer(buffer.read(cx).remote_id(), cx);
@@ -2763,7 +2658,6 @@ impl Editor {
     ) -> bool {
         let mut dismissed = false;
         dismissed |= self.take_rename(false, window, cx).is_some();
-        dismissed |= hide_hover(self, cx);
         dismissed |= self.mouse_context_menu.take().is_some();
         dismissed
     }
@@ -6710,10 +6604,6 @@ impl Editor {
                                                 scrollbar_width: cx.editor_style.scrollbar_width,
                                                 syntax: cx.editor_style.syntax.clone(),
                                                 status: cx.editor_style.status.clone(),
-                                                inlay_hints_style: HighlightStyle {
-                                                    font_weight: Some(FontWeight::BOLD),
-                                                    ..make_inlay_hints_style(cx.app)
-                                                },
                                                 ..EditorStyle::default()
                                             },
                                         ))
@@ -8197,98 +8087,6 @@ impl Editor {
         cx.notify();
     }
 
-    fn on_debug_session_event(
-        &mut self,
-        _session: Entity<Session>,
-        event: &SessionEvent,
-        cx: &mut Context<Self>,
-    ) {
-        if let SessionEvent::InvalidateInlineValue = event {
-            self.refresh_inline_values(cx);
-        }
-    }
-
-    pub fn refresh_inline_values(&mut self, cx: &mut Context<Self>) {
-        let Some(semantics) = self.semantics_provider.clone() else {
-            return;
-        };
-
-        if !self.inline_value_cache.enabled {
-            return;
-        }
-
-        let current_execution_position = self
-            .highlighted_rows
-            .get(&TypeId::of::<ActiveDebugLine>())
-            .and_then(|lines| lines.last().map(|line| line.range.end));
-
-        self.inline_value_cache.refresh_task = cx.spawn(async move |editor, cx| {
-            let inline_values = editor
-                .update(cx, |editor, cx| {
-                    let Some(current_execution_position) = current_execution_position else {
-                        return Some(Task::ready(Ok(Vec::new())));
-                    };
-
-                    let (buffer, buffer_anchor) =
-                        editor.buffer.read_with(cx, |multibuffer, cx| {
-                            let multibuffer_snapshot = multibuffer.snapshot(cx);
-                            let (buffer_anchor, _) = multibuffer_snapshot
-                                .anchor_to_buffer_anchor(current_execution_position)?;
-                            let buffer = multibuffer.buffer(buffer_anchor.buffer_id)?;
-                            Some((buffer, buffer_anchor))
-                        })?;
-
-                    let range = buffer.read(cx).anchor_before(0)..buffer_anchor;
-
-                    semantics.inline_values(buffer, range, cx)
-                })
-                .ok()
-                .flatten()?
-                .await
-                .context("refreshing debugger inlays")
-                .log_err()?;
-
-            let mut buffer_inline_values: HashMap<BufferId, Vec<InlayHint>> = HashMap::default();
-
-            for (buffer_id, inline_value) in inline_values
-                .into_iter()
-                .map(|hint| (hint.position.buffer_id, hint))
-            {
-                buffer_inline_values
-                    .entry(buffer_id)
-                    .or_default()
-                    .push(inline_value);
-            }
-
-            editor
-                .update(cx, |editor, cx| {
-                    let snapshot = editor.buffer.read(cx).snapshot(cx);
-                    let mut new_inlays = Vec::default();
-
-                    for (_buffer_id, inline_values) in buffer_inline_values {
-                        for hint in inline_values {
-                            let Some(anchor) = snapshot.anchor_in_excerpt(hint.position) else {
-                                continue;
-                            };
-                            let inlay = Inlay::debugger(
-                                post_inc(&mut editor.next_inlay_id),
-                                anchor,
-                                hint.text(),
-                            );
-                            if !inlay.text().chars().contains(&'\n') {
-                                new_inlays.push(inlay);
-                            }
-                        }
-                    }
-
-                    let mut inlay_ids = new_inlays.iter().map(|inlay| inlay.id).collect();
-                    std::mem::swap(&mut editor.inline_value_cache.inlays, &mut inlay_ids);
-                })
-                .ok()?;
-            Some(())
-        });
-    }
-
     fn on_buffer_event(
         &mut self,
         _multibuffer: &Entity<MultiBuffer>,
@@ -8318,10 +8116,6 @@ impl Editor {
                         let buffer_id = buffer.read(cx).remote_id();
                         self.register_buffer(buffer_id, cx);
                         self.update_lsp_data(Some(buffer_id), window, cx);
-                        self.refresh_inlay_hints(
-                            InlayHintRefreshReason::BufferEdited(buffer_id),
-                            cx,
-                        );
                     }
                 }
 
@@ -8346,7 +8140,6 @@ impl Editor {
                 let buffer_id = buffer.read(cx).remote_id();
                 self.register_visible_buffers(cx);
                 self.update_lsp_data(Some(buffer_id), window, cx);
-                self.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
                 self.refresh_runnables(None, window, cx);
                 self.bracket_fetched_tree_sitter_chunks
                     .retain(|range, _| range.start.buffer_id != buffer_id);
@@ -8359,13 +8152,6 @@ impl Editor {
                 });
             }
             multi_buffer::Event::BuffersRemoved { removed_buffer_ids } => {
-                if let Some(inlay_hints) = &mut self.inlay_hints {
-                    inlay_hints.remove_inlay_chunk_data(removed_buffer_ids);
-                }
-                self.refresh_inlay_hints(
-                    InlayHintRefreshReason::BuffersRemoved,
-                    cx,
-                );
                 for buffer_id in removed_buffer_ids {
                     self.registered_buffers.remove(buffer_id);
                     self.clear_runnables(Some(*buffer_id));
@@ -8458,7 +8244,6 @@ impl Editor {
         self.applicable_language_settings = new_language_settings;
 
         self.refresh_runnables(None, window, cx);
-        self.refresh_inline_values(cx);
 
         let old_cursor_shape = self.cursor_shape;
         let old_breadcrumbs_visible = self.breadcrumbs_visible();
@@ -8519,11 +8304,6 @@ impl Editor {
             }) {
                 self.refresh_document_colors(None, window, cx);
             }
-
-            self.refresh_inlay_hints(
-                InlayHintRefreshReason::SettingsChange,
-                cx,
-            );
 
             let new_semantic_token_rules = ProjectSettings::get_global(cx)
                 .global_lsp_settings
@@ -9000,23 +8780,18 @@ impl Editor {
         &mut self,
         event: FocusOutEvent,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
         if event.blurred != self.focus_handle {
             self.last_focused_descendant = Some(event.blurred);
         }
         self.selection_drag_state = SelectionDragState::None;
-        self.refresh_inlay_hints(InlayHintRefreshReason::ModifiersChanged(false), cx);
     }
 
-    pub fn handle_blur(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn handle_blur(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.blink_manager.update(cx, BlinkManager::disable);
         self.buffer
             .update(cx, |buffer, cx| buffer.remove_active_selections(cx));
-
-        if !self.hover_state.focused(window, cx) {
-            hide_hover(self, cx);
-        }
         cx.emit(EditorEvent::Blurred);
         cx.notify();
     }
@@ -9436,7 +9211,6 @@ impl Editor {
             scrollbar_width: EditorElement::SCROLLBAR_WIDTH,
             syntax: cx.theme().syntax().clone(),
             status: cx.theme().status().clone(),
-            inlay_hints_style: make_inlay_hints_style(cx),
             unnecessary_code_fade: settings.unnecessary_code_fade,
         }
     }
@@ -9512,7 +9286,6 @@ impl Editor {
 
     fn do_update_data_on_scroll(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.register_visible_buffers(cx);
-        self.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
 
         if !self.buffer().read(cx).is_singleton() || self.needs_initial_data_update {
             self.needs_initial_data_update = false;
@@ -9573,39 +9346,12 @@ pub trait SemanticsProvider {
         cx: &mut App,
     ) -> Option<Task<Option<Vec<project::Hover>>>>;
 
-    fn inline_values(
-        &self,
-        buffer_handle: Entity<Buffer>,
-        range: Range<text::Anchor>,
-        cx: &mut App,
-    ) -> Option<Task<anyhow::Result<Vec<InlayHint>>>>;
-
-    fn applicable_inlay_chunks(
-        &self,
-        buffer: &Entity<Buffer>,
-        ranges: &[Range<text::Anchor>],
-        cx: &mut App,
-    ) -> Vec<Range<BufferRow>>;
-
-    fn invalidate_inlay_hints(&self, for_buffers: &HashSet<BufferId>, cx: &mut App);
-
-    fn inlay_hints(
-        &self,
-        invalidate: InvalidationStrategy,
-        buffer: Entity<Buffer>,
-        ranges: Vec<Range<text::Anchor>>,
-        known_chunks: Option<(clock::Global, HashSet<Range<BufferRow>>)>,
-        cx: &mut App,
-    ) -> Option<HashMap<Range<BufferRow>, Task<Result<CacheInlayHints>>>>;
-
     fn semantic_tokens(
         &self,
         buffer: Entity<Buffer>,
         refresh: Option<RefreshForServer>,
         cx: &mut App,
     ) -> Option<Shared<Task<std::result::Result<BufferSemanticTokens, Arc<anyhow::Error>>>>>;
-
-    fn supports_inlay_hints(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool;
 
     fn supports_semantic_tokens(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool;
 
@@ -9655,22 +9401,6 @@ impl SemanticsProvider for WeakEntity<Project> {
         .ok()
     }
 
-    fn supports_inlay_hints(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool {
-        self.update(cx, |project, cx| {
-            if project
-                .active_debug_session(cx)
-                .is_some_and(|(session, _)| session.read(cx).any_stopped_thread())
-            {
-                return true;
-            }
-
-            buffer.update(cx, |buffer, cx| {
-                project.any_language_server_supports_inlay_hints(buffer, cx)
-            })
-        })
-        .unwrap_or(false)
-    }
-
     fn supports_semantic_tokens(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool {
         self.update(cx, |project, cx| {
             buffer.update(cx, |buffer, cx| {
@@ -9678,60 +9408,6 @@ impl SemanticsProvider for WeakEntity<Project> {
             })
         })
         .unwrap_or(false)
-    }
-
-    fn inline_values(
-        &self,
-        buffer_handle: Entity<Buffer>,
-        range: Range<text::Anchor>,
-        cx: &mut App,
-    ) -> Option<Task<anyhow::Result<Vec<InlayHint>>>> {
-        self.update(cx, |project, cx| {
-            let (session, active_stack_frame) = project.active_debug_session(cx)?;
-
-            Some(project.inline_values(session, active_stack_frame, buffer_handle, range, cx))
-        })
-        .ok()
-        .flatten()
-    }
-
-    fn applicable_inlay_chunks(
-        &self,
-        buffer: &Entity<Buffer>,
-        ranges: &[Range<text::Anchor>],
-        cx: &mut App,
-    ) -> Vec<Range<BufferRow>> {
-        self.update(cx, |project, cx| {
-            project.lsp_store().update(cx, |lsp_store, cx| {
-                lsp_store.applicable_inlay_chunks(buffer, ranges, cx)
-            })
-        })
-        .unwrap_or_default()
-    }
-
-    fn invalidate_inlay_hints(&self, for_buffers: &HashSet<BufferId>, cx: &mut App) {
-        self.update(cx, |project, cx| {
-            project.lsp_store().update(cx, |lsp_store, _| {
-                lsp_store.invalidate_inlay_hints(for_buffers)
-            })
-        })
-        .ok();
-    }
-
-    fn inlay_hints(
-        &self,
-        invalidate: InvalidationStrategy,
-        buffer: Entity<Buffer>,
-        ranges: Vec<Range<text::Anchor>>,
-        known_chunks: Option<(clock::Global, HashSet<Range<BufferRow>>)>,
-        cx: &mut App,
-    ) -> Option<HashMap<Range<BufferRow>, Task<Result<CacheInlayHints>>>> {
-        self.update(cx, |project, cx| {
-            project.lsp_store().update(cx, |lsp_store, cx| {
-                lsp_store.inlay_hints(invalidate, buffer, ranges, known_chunks, cx)
-            })
-        })
-        .ok()
     }
 
     fn semantic_tokens(

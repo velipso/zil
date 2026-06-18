@@ -119,12 +119,6 @@ message Envelope {
 
     UpdateWorktreeSettings update_worktree_settings = 107;
 
-    InlayHints inlay_hints = 108;
-    InlayHintsResponse inlay_hints_response = 109;
-    ResolveInlayHint resolve_inlay_hint = 110;
-    ResolveInlayHintResponse resolve_inlay_hint_response = 111;
-    RefreshInlayHints refresh_inlay_hints = 112;
-
     CreateChannel create_channel = 113;
     CreateChannelResponse create_channel_response = 114;
     InviteChannelMember invite_channel_member = 115;

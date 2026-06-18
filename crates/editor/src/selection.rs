@@ -1470,8 +1470,6 @@ impl Editor {
                 self.register_buffer(anchor.buffer_id, cx);
             }
 
-            hide_hover(self, cx);
-
             self.refresh_document_highlights(cx);
 
             self.refresh_selected_text_highlights(&display_map, false, window, cx);

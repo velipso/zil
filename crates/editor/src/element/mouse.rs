@@ -21,7 +21,7 @@ use crate::{
     EditorSettings, EditorSnapshot, GutterHoverButton, HoveredCursor, JumpData,
     SelectPhase, Selection, SelectionDragState,
     display_map::ToDisplayPoint, editor_settings::DoubleClickInMultibuffer,
-    hover_popover::hover_at, mouse_context_menu, scroll::ScrollPixelOffset,
+    mouse_context_menu, scroll::ScrollPixelOffset,
 };
 
 impl EditorElement {
@@ -112,26 +112,10 @@ impl EditorElement {
             );
 
             if let Some(point) = point_for_position.as_valid() {
-                let anchor = position_map
-                    .snapshot
-                    .buffer_snapshot()
-                    .anchor_before(point.to_offset(&position_map.snapshot, Bias::Left));
-                hover_at(editor, Some(anchor), Some(event.position), window, cx);
                 Self::update_visible_cursor(editor, point, position_map, window, cx);
-            } else {
-                editor.update_inlay_link_and_hover_points(
-                    &position_map.snapshot,
-                    point_for_position,
-                    Some(event.position),
-                    modifiers.secondary(),
-                    modifiers.shift,
-                    window,
-                    cx,
-                );
             }
         } else {
             editor.hide_hovered_link(cx);
-            hover_at(editor, None, Some(event.position), window, cx);
         }
     }
 
@@ -329,9 +313,6 @@ impl EditorElement {
             move |event: &MouseMoveEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble {
                     editor.update(cx, |editor, cx| {
-                        if editor.hover_state.focused(window, cx) {
-                            return;
-                        }
                         if event.pressed_button == Some(MouseButton::Left)
                             || event.pressed_button == Some(MouseButton::Middle)
                         {

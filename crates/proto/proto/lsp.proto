@@ -78,19 +78,6 @@ message DocumentSymbol {
   repeated DocumentSymbol children = 7;
 }
 
-message InlayHints {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor start = 3;
-  Anchor end = 4;
-  repeated VectorClockEntry version = 5;
-}
-
-message InlayHintsResponse {
-  repeated InlayHint hints = 1;
-  repeated VectorClockEntry version = 2;
-}
-
 message SemanticTokens {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -244,50 +231,6 @@ message LinkedEditingRangeResponse {
   repeated VectorClockEntry version = 4;
 }
 
-message InlayHint {
-  Anchor position = 1;
-  InlayHintLabel label = 2;
-  optional string kind = 3;
-  bool padding_left = 4;
-  bool padding_right = 5;
-  InlayHintTooltip tooltip = 6;
-  ResolveState resolve_state = 7;
-}
-
-message InlayHintLabel {
-  oneof label {
-    string value = 1;
-    InlayHintLabelParts label_parts = 2;
-  }
-}
-
-message InlayHintLabelParts {
-  repeated InlayHintLabelPart parts = 1;
-}
-
-message InlayHintLabelPart {
-  string value = 1;
-  InlayHintLabelPartTooltip tooltip = 2;
-  optional string location_url = 3;
-  PointUtf16 location_range_start = 4;
-  PointUtf16 location_range_end = 5;
-  optional uint64 language_server_id = 6;
-}
-
-message InlayHintTooltip {
-  oneof content {
-    string value = 1;
-    MarkupContent markup_content = 2;
-  }
-}
-
-message InlayHintLabelPartTooltip {
-  oneof content {
-    string value = 1;
-    MarkupContent markup_content = 2;
-  }
-}
-
 message ResolveState {
   State state = 1;
   LspResolveState lsp_resolve_state = 2;
@@ -302,23 +245,6 @@ message ResolveState {
     optional string value = 1;
     uint64 server_id = 2;
   }
-}
-
-message ResolveInlayHint {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  uint64 language_server_id = 3;
-  InlayHint hint = 4;
-}
-
-message ResolveInlayHintResponse {
-  InlayHint hint = 1;
-}
-
-message RefreshInlayHints {
-  uint64 project_id = 1;
-  uint64 server_id = 2;
-  optional uint64 request_id = 3;
 }
 
 message MarkupContent {
@@ -596,7 +522,6 @@ message LspQuery {
   oneof request {
     GetDocumentColor get_document_color = 4;
     GetHover get_hover = 5;
-    InlayHints inlay_hints = 14;
     SemanticTokens semantic_tokens = 16;
     GetFoldingRanges get_folding_ranges = 17;
     GetDocumentSymbols get_document_symbols = 18;
@@ -613,7 +538,6 @@ message LspResponse {
   oneof response {
     GetHoverResponse get_hover_response = 1;
     GetDocumentColorResponse get_document_color_response = 6;
-    InlayHintsResponse inlay_hints_response = 13;
     SemanticTokensResponse semantic_tokens_response = 14;
     GetFoldingRangesResponse get_folding_ranges_response = 15;
     GetDocumentSymbolsResponse get_document_symbols_response = 16;

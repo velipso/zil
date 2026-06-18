@@ -7,7 +7,6 @@ use crate::{
     Anchor, DisplayPoint, DisplayRow, Editor, EditorEvent, EditorMode, EditorSettings,
     MultiBufferSnapshot, RowExt, SizingBehavior, ToPoint,
     display_map::{DisplaySnapshot, ToDisplayPoint},
-    hover_popover::hide_hover,
     persistence::EditorDb,
 };
 pub use autoscroll::{Autoscroll, AutoscrollStrategy};
@@ -807,7 +806,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> WasScrolled {
-        hide_hover(self, cx);
         let workspace_id = self.workspace.as_ref().and_then(|workspace| workspace.1);
 
         let adjusted_position = if self.scroll_manager.forbid_vertical_scroll {
@@ -840,7 +838,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        hide_hover(self, cx);
         let workspace_id = self.workspace.as_ref().and_then(|workspace| workspace.1);
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let top_row = scroll_anchor
@@ -865,7 +862,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        hide_hover(self, cx);
         let workspace_id = self.workspace.as_ref().and_then(|workspace| workspace.1);
         let buffer_snapshot = self.buffer().read(cx).snapshot(cx);
         if !scroll_anchor.anchor.is_valid(&buffer_snapshot) {
