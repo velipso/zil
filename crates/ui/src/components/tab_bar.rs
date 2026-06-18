@@ -11,6 +11,7 @@ pub struct TabBar {
     children: SmallVec<[AnyElement; 2]>,
     end_children: SmallVec<[AnyElement; 2]>,
     scroll_handle: Option<ScrollHandle>,
+    show_tab_bar_stacked: bool,
 }
 
 impl TabBar {
@@ -21,6 +22,7 @@ impl TabBar {
             children: SmallVec::new(),
             end_children: SmallVec::new(),
             scroll_handle: None,
+            show_tab_bar_stacked: false,
         }
     }
 
@@ -81,6 +83,11 @@ impl TabBar {
         );
         self
     }
+
+    pub fn set_show_tab_bar_stacked(mut self, show: bool) -> Self {
+        self.show_tab_bar_stacked = show;
+        self
+    }
 }
 
 impl ParentElement for TabBar {
@@ -91,13 +98,19 @@ impl ParentElement for TabBar {
 
 impl RenderOnce for TabBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let stacked_tabs = self.show_tab_bar_stacked;
         div()
             .id(self.id)
             .group("tab_bar")
             .flex()
             .flex_none()
             .w_full()
-            .h(Tab::container_height(cx))
+            .when(stacked_tabs, |this| {
+                this.min_h(Tab::container_height(cx))
+            })
+            .when(!stacked_tabs, |this| {
+                this.h(Tab::container_height(cx))
+            })
             .bg(cx.theme().colors().tab_bar_background)
             .when(!self.start_children.is_empty(), |this| {
                 this.child(
@@ -115,26 +128,49 @@ impl RenderOnce for TabBar {
                 div()
                     .relative()
                     .flex_1()
-                    .h_full()
-                    .overflow_x_hidden()
+                    .when(stacked_tabs, |this| {
+                        this.min_h(Tab::container_height(cx))
+                    })
+                    .when(!stacked_tabs, |this| {
+                        this
+                            .h_full()
+                            .overflow_x_hidden()
+                    })
                     .child(
                         div()
                             .absolute()
                             .top_0()
                             .left_0()
-                            .size_full()
+                            .when(stacked_tabs, |this| {
+                                this
+                                    .right_0()
+                                    .bottom_0()
+                            })
+                            .when(!stacked_tabs, |this| {
+                                this.size_full()
+                            })
                             .border_b_1()
                             .border_color(cx.theme().colors().border),
                     )
                     .child(
-                        h_flex()
-                            .id("tabs")
-                            .flex_grow_1()
-                            .overflow_x_scroll()
-                            .when_some(self.scroll_handle, |cx, scroll_handle| {
-                                cx.track_scroll(&scroll_handle)
-                            })
-                            .children(self.children),
+                        if stacked_tabs {
+                            div()
+                                .id("tabs")
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .w_full()
+                                .children(self.children)
+                        } else {
+                            h_flex()
+                                .id("tabs")
+                                .flex_grow_1()
+                                .overflow_x_scroll()
+                                .when_some(self.scroll_handle, |cx, scroll_handle| {
+                                    cx.track_scroll(&scroll_handle)
+                                })
+                                .children(self.children)
+                        }
                     ),
             )
             .when(!self.end_children.is_empty(), |this| {

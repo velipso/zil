@@ -401,6 +401,7 @@ pub struct Pane {
     >,
     render_tab_bar: Rc<dyn Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> AnyElement>,
     show_tab_bar_buttons: bool,
+    show_tab_bar_stacked: bool,
     max_tabs: Option<NonZeroUsize>,
     use_max_tabs: bool,
     _subscriptions: Vec<Subscription>,
@@ -570,6 +571,7 @@ impl Pane {
             render_tab_bar_buttons: Rc::new(default_render_tab_bar_buttons),
             render_tab_bar: Rc::new(Self::render_tab_bar),
             show_tab_bar_buttons: TabBarSettings::get_global(cx).show_tab_bar_buttons,
+            show_tab_bar_stacked: TabBarSettings::get_global(cx).show_tab_bar_stacked,
             display_nav_history_buttons: Some(
                 TabBarSettings::get_global(cx).show_nav_history_buttons,
             ),
@@ -701,6 +703,7 @@ impl Pane {
         }
 
         self.show_tab_bar_buttons = tab_bar_settings.show_tab_bar_buttons;
+        self.show_tab_bar_stacked = tab_bar_settings.show_tab_bar_stacked;
 
         if !PreviewTabsSettings::get_global(cx).enabled {
             self.preview_item_id = None;
@@ -2524,6 +2527,7 @@ impl Pane {
 
         let capability = item.capability(cx);
         let tab = Tab::new(ix)
+            .set_show_tab_bar_stacked(self.show_tab_bar_stacked)
             .position(if is_first_item {
                 TabPosition::First
             } else if is_last_item {
@@ -3040,17 +3044,40 @@ impl Pane {
             })
             .collect::<Vec<_>>();
         let tab_count = tab_items.len();
-        self.render_single_row_tab_bar(
-            tab_items,
-            tab_count,
-            navigate_backward,
-            navigate_forward,
-            window,
-            cx,
-        )
+        let tab_container = if self.show_tab_bar_stacked {
+            div()
+                .id("tabs")
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .w_full()
+        } else {
+            h_flex()
+                .id("tabs")
+                .overflow_x_scroll()
+                .w_full()
+                .track_scroll(&self.tab_bar_scroll_handle)
+                .on_scroll_wheel(cx.listener(|this, _, _, _| {
+                    this.suppress_scroll = true;
+                }))
+        };
+        let tab_bar = self
+            .configure_tab_bar(
+                TabBar::new("tab_bar"),
+                navigate_backward,
+                navigate_forward,
+                window,
+                cx,
+            )
+            .child(
+                tab_container
+                    .children(tab_items)
+                    .child(self.render_tab_bar_drop_target(tab_count, cx))
+            );
+        tab_bar.into_any_element()
     }
 
-    fn configure_tab_bar_start(
+    fn configure_tab_bar(
         &mut self,
         tab_bar: TabBar,
         navigate_backward: IconButton,
@@ -3078,45 +3105,7 @@ impl Pane {
                     tab_bar
                 }
             })
-    }
-
-    fn render_single_row_tab_bar(
-        &mut self,
-        tab_items: Vec<AnyElement>,
-        tab_count: usize,
-        navigate_backward: IconButton,
-        navigate_forward: IconButton,
-        window: &mut Window,
-        cx: &mut Context<Pane>,
-    ) -> AnyElement {
-        let tab_bar = self
-            .configure_tab_bar_start(
-                TabBar::new("tab_bar"),
-                navigate_backward,
-                navigate_forward,
-                window,
-                cx,
-            )
-            .child(self.render_tabs_container(tab_items, tab_count, cx));
-        tab_bar.into_any_element()
-    }
-
-    fn render_tabs_container(
-        &mut self,
-        tab_items: Vec<AnyElement>,
-        tab_count: usize,
-        cx: &mut Context<Pane>,
-    ) -> impl IntoElement {
-        h_flex()
-            .id("unpinned tabs")
-            .overflow_x_scroll()
-            .w_full()
-            .track_scroll(&self.tab_bar_scroll_handle)
-            .on_scroll_wheel(cx.listener(|this, _, _, _| {
-                this.suppress_scroll = true;
-            }))
-            .children(tab_items)
-            .child(self.render_tab_bar_drop_target(tab_count, cx))
+            .map(|tab_bar| tab_bar.set_show_tab_bar_stacked(self.show_tab_bar_stacked))
     }
 
     fn render_tab_bar_drop_target(

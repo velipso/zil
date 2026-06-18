@@ -426,6 +426,10 @@ pub struct TabBarSettingsContent {
     ///
     /// Default: true
     pub show_tab_bar_buttons: Option<bool>,
+    /// Whether or not the tab bar is stacked
+    ///
+    /// Default: false
+    pub show_tab_bar_stacked: Option<bool>,
 }
 
 #[with_fallible_options]
