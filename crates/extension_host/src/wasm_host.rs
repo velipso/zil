@@ -6,9 +6,9 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use async_trait::async_trait;
 use dap::{DebugRequest, StartDebuggingRequestArgumentsRequest};
 use extension::{
-    CodeLabel, Command, Completion, ContextServerConfiguration, DebugAdapterBinary,
+    CodeLabel, Command, Completion, DebugAdapterBinary,
     DebugTaskDefinition, ExtensionCapability, ExtensionHostProxy, KeyValueStoreDelegate,
-    ProjectDelegate, SlashCommand, SlashCommandArgumentCompletion, SlashCommandOutput, Symbol,
+    SlashCommand, SlashCommandArgumentCompletion, SlashCommandOutput, Symbol,
     WorktreeDelegate,
 };
 use fs::Fs;
@@ -342,52 +342,6 @@ impl extension::Extension for WasmExtension {
                     .map_err(|err| store.data().extension_error(err))?;
 
                 Ok(output.into())
-            }
-            .boxed()
-        })
-        .await?
-    }
-
-    async fn context_server_command(
-        &self,
-        context_server_id: Arc<str>,
-        project: Arc<dyn ProjectDelegate>,
-    ) -> Result<Command> {
-        self.call(|extension, store| {
-            async move {
-                let project_resource = store.data_mut().table.push(project)?;
-                let command = extension
-                    .call_context_server_command(store, context_server_id.clone(), project_resource)
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?;
-                anyhow::Ok(command.into())
-            }
-            .boxed()
-        })
-        .await?
-    }
-
-    async fn context_server_configuration(
-        &self,
-        context_server_id: Arc<str>,
-        project: Arc<dyn ProjectDelegate>,
-    ) -> Result<Option<ContextServerConfiguration>> {
-        self.call(|extension, store| {
-            async move {
-                let project_resource = store.data_mut().table.push(project)?;
-                let Some(configuration) = extension
-                    .call_context_server_configuration(
-                        store,
-                        context_server_id.clone(),
-                        project_resource,
-                    )
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?
-                else {
-                    return Ok(None);
-                };
-
-                Ok(Some(configuration.try_into()?))
             }
             .boxed()
         })

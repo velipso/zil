@@ -16,7 +16,6 @@ members = [
     "crates/command_palette",
     "crates/command_palette_hooks",
     "crates/component",
-    "crates/context_server",
     "crates/crashes",
     "crates/credentials_provider",
     "crates/dap",
@@ -80,7 +79,6 @@ members = [
     "crates/net",
     "crates/node_runtime",
     "crates/notifications",
-    "crates/oauth_callback_server",
     "crates/open_path_prompt",
     "crates/outline",
     "crates/paths",
@@ -187,7 +185,6 @@ command_palette = { path = "crates/command_palette" }
 command_palette_hooks = { path = "crates/command_palette_hooks" }
 component = { path = "crates/component" }
 console = "0.16"
-context_server = { path = "crates/context_server" }
 crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
@@ -252,7 +249,6 @@ multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
 node_runtime = { path = "crates/node_runtime" }
 notifications = { path = "crates/notifications" }
-oauth_callback_server = { path = "crates/oauth_callback_server" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
 panel = { path = "crates/panel" }

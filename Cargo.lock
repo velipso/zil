@@ -1878,37 +1878,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "context_server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel 2.5.0",
- "async-trait",
- "base64 0.22.1",
- "collections",
- "futures",
- "futures-lite 1.13.0",
- "gpui",
- "http_client",
- "log",
- "net",
- "oauth_callback_server",
- "parking_lot",
- "pollster 0.4.0",
- "postage",
- "rand 0.9.4",
- "schemars",
- "serde",
- "serde_json",
- "settings",
- "sha2",
- "slotmap",
- "tempfile",
- "url",
- "util",
-]
-
-[[package]]
 name = "convert_case"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7358,17 +7327,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oauth_callback_server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "log",
- "tiny_http",
- "url",
-]
-
-[[package]]
 name = "objc"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8555,8 +8513,6 @@ dependencies = [
  "client",
  "clock",
  "collections",
- "context_server",
- "credentials_provider",
  "dap",
  "encoding_rs",
  "extension",
