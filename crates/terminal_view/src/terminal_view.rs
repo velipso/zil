@@ -517,7 +517,6 @@ impl TerminalView {
                     "Close Terminal Tab",
                     Box::new(CloseActiveItem {
                         save_intent: None,
-                        close_pinned: true,
                     }),
                 )
         });

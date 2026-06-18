@@ -125,7 +125,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     "Close Editor",
                     workspace::CloseActiveItem {
                         save_intent: None,
-                        close_pinned: true,
                     },
                 ),
                 MenuItem::action("Close Project", workspace::CloseProject),

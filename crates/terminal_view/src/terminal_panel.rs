@@ -391,10 +391,6 @@ impl TerminalPanel {
             pane::Event::Focus => {
                 self.active_pane = pane.clone();
             }
-            pane::Event::ItemPinned | pane::Event::ItemUnpinned => {
-                self.serialize(cx);
-            }
-
             _ => {}
         }
     }

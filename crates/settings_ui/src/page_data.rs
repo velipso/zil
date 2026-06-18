@@ -3558,7 +3558,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn tab_bar_section() -> [SettingsPageItem; 9] {
+    fn tab_bar_section() -> [SettingsPageItem; 8] {
         [
             SettingsPageItem::SectionHeader("Tab Bar"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -3672,28 +3672,6 @@ fn window_and_layout_page() -> SettingsPage {
                             .tab_bar
                             .get_or_insert_default()
                             .show_tab_bar_buttons = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Pinned Tabs Layout",
-                description: "Show pinned tabs in a separate row above unpinned tabs.",
-                field: Box::new(SettingField {
-                    json_path: Some("tab_bar.show_pinned_tabs_in_separate_row"),
-                    pick: |settings_content| {
-                        settings_content
-                            .tab_bar
-                            .as_ref()?
-                            .show_pinned_tabs_in_separate_row
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .tab_bar
-                            .get_or_insert_default()
-                            .show_pinned_tabs_in_separate_row = value;
                     },
                 }),
                 metadata: None,

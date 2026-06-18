@@ -78,12 +78,10 @@ fn serialize_pane(pane: &Entity<Pane>, active: bool, cx: &mut App) -> Serialized
         .map(|item| item.item_id().as_u64())
         .filter(|active_id| items_to_serialize.contains(active_id));
 
-    let pinned_count = pane.pinned_count();
     SerializedPane {
         active,
         children,
         active_item,
-        pinned_count,
     }
 }
 
@@ -220,7 +218,6 @@ async fn deserialize_pane_group(
                 })
                 .log_err()?;
             let active_item = serialized_pane.active_item;
-            let pinned_count = serialized_pane.pinned_count;
             let new_items = deserialize_terminal_views(
                 workspace_id,
                 project.clone(),
@@ -235,7 +232,6 @@ async fn deserialize_pane_group(
 
                     let items = pane.update_in(cx, |pane, window, cx| {
                         populate_pane_items(pane, new_items, active_item, window, cx);
-                        pane.set_pinned_count(pinned_count.min(pane.items_len()));
                         pane.items_len()
                     });
                     // Avoid blank panes in splits
@@ -335,8 +331,6 @@ pub(crate) struct SerializedPane {
     pub active: bool,
     pub children: Vec<u64>,
     pub active_item: Option<u64>,
-    #[serde(default)]
-    pub pinned_count: usize,
 }
 
 #[derive(Debug)]
