@@ -4013,10 +4013,12 @@ impl EditorElement {
         if let Some(mut layout) = layout.minimap.take() {
             let minimap_hitbox = layout.thumb_layout.hitbox.clone();
             let dragging_minimap = self.editor.read(cx).scroll_manager.is_dragging_minimap();
+            let minimap_axis = ScrollbarAxis::Vertical;
 
             window.paint_layer(layout.thumb_layout.hitbox.bounds, |window| {
                 window.with_element_namespace("minimap", |window| {
                     layout.minimap.paint(window, cx);
+
                     if let Some(thumb_bounds) = layout.thumb_layout.thumb_bounds {
                         let minimap_thumb_color = match layout.thumb_layout.thumb_state {
                             ScrollbarThumbState::Idle => {
@@ -4029,6 +4031,7 @@ impl EditorElement {
                                 cx.theme().colors().minimap_thumb_active_background
                             }
                         };
+
                         let minimap_thumb_border = match layout.thumb_border_style {
                             MinimapThumbBorder::Full => Edges::all(ScrollbarLayout::BORDER_WIDTH),
                             MinimapThumbBorder::LeftOnly => Edges {
@@ -4070,17 +4073,28 @@ impl EditorElement {
                 window.set_cursor_style(CursorStyle::Arrow, &minimap_hitbox);
             }
 
-            let minimap_axis = ScrollbarAxis::Vertical;
-            let pixels_per_line = Pixels::from(
-                ScrollPixelOffset::from(minimap_hitbox.size.height) / layout.max_scroll_top,
-            )
-            .min(layout.minimap_line_height);
+            let thumb_height = layout
+                .thumb_layout
+                .thumb_bounds
+                .map_or(Pixels::ZERO, |bounds| bounds.size.along(minimap_axis));
+
+            let track_height = (minimap_hitbox.size.along(minimap_axis) - thumb_height)
+                .max(Pixels::from(1.));
+
+            let scroll_for_thumb_top = move |thumb_top: Pixels| {
+                let ratio = f64::from(thumb_top) / f64::from(track_height);
+                (layout.max_scroll_top * ratio).clamp(0., layout.max_scroll_top)
+            };
+
+            let scroll_delta_for_mouse_delta = move |mouse_delta: Pixels| {
+                let ratio = f64::from(mouse_delta) / f64::from(track_height);
+                layout.max_scroll_top * ratio
+            };
 
             let mut mouse_position = window.mouse_position();
 
             window.on_mouse_event({
                 let editor = self.editor.clone();
-
                 let minimap_hitbox = minimap_hitbox.clone();
 
                 move |event: &MouseMoveEvent, phase, window, cx| {
@@ -4094,20 +4108,14 @@ impl EditorElement {
                         {
                             let old_position = mouse_position.along(minimap_axis);
                             let new_position = event.position.along(minimap_axis);
-                            if (minimap_hitbox.origin.along(minimap_axis)
-                                ..minimap_hitbox.bottom_right().along(minimap_axis))
-                                .contains(&old_position)
-                            {
-                                let position =
-                                    editor.scroll_position(cx).apply_along(minimap_axis, |p| {
-                                        (p + ScrollPixelOffset::from(
-                                            (new_position - old_position) / pixels_per_line,
-                                        ))
-                                        .max(0.)
-                                    });
+                            let mouse_delta = new_position - old_position;
+                            let scroll_delta = scroll_delta_for_mouse_delta(mouse_delta);
 
-                                editor.set_scroll_position(position, window, cx);
-                            }
+                            let position = editor.scroll_position(cx).apply_along(minimap_axis, |p| {
+                                (p + scroll_delta).clamp(0., layout.max_scroll_top)
+                            });
+
+                            editor.set_scroll_position(position, window, cx);
                             cx.stop_propagation();
                         } else if minimap_hitbox.is_hovered(window) {
                             editor.scroll_manager.set_is_hovering_minimap_thumb(
@@ -4119,14 +4127,13 @@ impl EditorElement {
                                 cx,
                             );
 
-                            // Stop hover events from propagating to the
-                            // underlying editor if the minimap hitbox is hovered
                             if !event.dragging() {
                                 cx.stop_propagation();
                             }
                         } else {
                             editor.scroll_manager.hide_minimap_thumb(cx);
                         }
+
                         mouse_position = event.position;
                     });
                 }
@@ -4135,6 +4142,8 @@ impl EditorElement {
             if dragging_minimap {
                 window.on_mouse_event({
                     let editor = self.editor.clone();
+                    let minimap_hitbox = minimap_hitbox.clone();
+
                     move |event: &MouseUpEvent, phase, window, cx| {
                         if phase == DispatchPhase::Capture {
                             return;
@@ -4152,6 +4161,7 @@ impl EditorElement {
                             } else {
                                 editor.scroll_manager.hide_minimap_thumb(cx);
                             }
+
                             cx.stop_propagation();
                         });
                     }
@@ -4159,6 +4169,7 @@ impl EditorElement {
             } else {
                 window.on_mouse_event({
                     let editor = self.editor.clone();
+                    let minimap_hitbox = minimap_hitbox.clone();
 
                     move |event: &MouseDownEvent, phase, window, cx| {
                         if phase == DispatchPhase::Capture || !minimap_hitbox.is_hovered(window) {
@@ -4176,19 +4187,15 @@ impl EditorElement {
                                 let click_position =
                                     event_position.relative_to(&minimap_hitbox.origin).y;
 
-                                let top_position = (click_position
-                                    - thumb_bounds.size.along(minimap_axis) / 2.0)
-                                    .max(Pixels::ZERO);
+                                let thumb_top = (click_position - thumb_height / 2.0)
+                                    .clamp(Pixels::ZERO, track_height);
 
-                                let scroll_offset = (layout.minimap_scroll_top
-                                    + ScrollPixelOffset::from(
-                                        top_position / layout.minimap_line_height,
-                                    ))
-                                .min(layout.max_scroll_top);
+                                let scroll_offset = scroll_for_thumb_top(thumb_top);
 
                                 let scroll_position = editor
                                     .scroll_position(cx)
                                     .apply_along(minimap_axis, |_| scroll_offset);
+
                                 editor.set_scroll_position(scroll_position, window, cx);
                             }
 

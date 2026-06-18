@@ -474,7 +474,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             }
         }
 
-        let search_button = cx.new(|_| search::search_status_button::SearchButton::new());
         let active_file_name = cx.new(|_| workspace::active_file_name::ActiveFileName::new());
         let active_buffer_encoding =
             cx.new(|_| encoding_selector::ActiveBufferEncoding::new(workspace));
@@ -498,7 +497,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         let line_ending_indicator =
             cx.new(|_| line_ending_selector::LineEndingIndicator::default());
         workspace.status_bar().update(cx, |status_bar, cx| {
-            status_bar.add_left_item(search_button, window, cx);
             status_bar.add_left_item(lsp_button, window, cx);
             status_bar.add_left_item(active_file_name, window, cx);
             status_bar.add_right_item(active_buffer_encoding, window, cx);

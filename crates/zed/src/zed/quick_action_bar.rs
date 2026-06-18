@@ -76,7 +76,6 @@ impl Render for QuickActionBar {
         let supports_semantic_tokens =
             editor.update(cx, |editor, cx| editor.supports_semantic_tokens(cx));
         let editor_value = editor.read(cx);
-        let selection_menu_enabled = editor_value.selection_menu_enabled(cx);
         let inlay_hints_enabled = editor_value.inlay_hints_enabled();
         let inline_values_enabled = editor_value.inline_values_enabled();
         let semantic_highlights_enabled = editor_value.semantic_highlights_enabled();
@@ -224,27 +223,6 @@ impl Render for QuickActionBar {
                                                     window,
                                                     cx,
                                                 );
-                                            })
-                                            .ok();
-                                    }
-                                },
-                            );
-
-                            menu = menu.toggleable_entry(
-                                "Selection Menu",
-                                selection_menu_enabled,
-                                IconPosition::Start,
-                                Some(editor::actions::ToggleSelectionMenu.boxed_clone()),
-                                {
-                                    let editor = editor.clone();
-                                    move |window, cx| {
-                                        editor
-                                            .update(cx, |editor, cx| {
-                                                editor.toggle_selection_menu(
-                                                    &editor::actions::ToggleSelectionMenu,
-                                                    window,
-                                                    cx,
-                                                )
                                             })
                                             .ok();
                                     }

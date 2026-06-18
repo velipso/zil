@@ -907,7 +907,6 @@ pub struct Editor {
     use_selection_highlight: bool,
     auto_replace_emoji_shortcode: bool,
     buffer_serialization: Option<BufferSerialization>,
-    show_selection_menu: Option<bool>,
     custom_context_menu: Option<
         Box<
             dyn 'static
@@ -1995,7 +1994,6 @@ impl Editor {
             editor_actions: Rc::default(),
             in_leading_whitespace: false,
             custom_context_menu: None,
-            show_selection_menu: None,
             buffer_serialization: is_minimap.not().then(|| {
                 BufferSerialization::new(
                     ProjectSettings::get_global(cx)
@@ -2324,25 +2322,6 @@ impl Editor {
                     .and_then(|file| file.as_local().map(|file| file.abs_path(cx)))
             }
         })
-    }
-
-    pub fn selection_menu_enabled(&self, cx: &App) -> bool {
-        self.show_selection_menu
-            .unwrap_or_else(|| EditorSettings::get_global(cx).toolbar.selections_menu)
-    }
-
-    pub fn toggle_selection_menu(
-        &mut self,
-        _: &ToggleSelectionMenu,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.show_selection_menu = self
-            .show_selection_menu
-            .map(|show_selections_menu| !show_selections_menu)
-            .or_else(|| Some(!EditorSettings::get_global(cx).toolbar.selections_menu));
-
-        cx.notify();
     }
 
     pub fn new_file(

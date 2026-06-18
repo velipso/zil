@@ -10,11 +10,10 @@ use workspace::notifications::NotificationId;
 use workspace::{Toast, Workspace};
 pub use zed_actions::search::ToggleIncludeIgnored;
 
-pub use search_status_button::SEARCH_ICON;
+pub const SEARCH_ICON: IconName = IconName::MagnifyingGlass;
 
 pub mod buffer_search;
 pub(crate) mod search_bar;
-pub mod search_status_button;
 
 pub fn init(cx: &mut App) {
     menu::init();
