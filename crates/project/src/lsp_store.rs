@@ -13,12 +13,9 @@ mod document_colors;
 mod document_symbols;
 mod folding_ranges;
 mod inlay_hints;
-pub mod json_language_server_ext;
 pub mod log_store;
 pub mod lsp_ext_command;
-pub mod rust_analyzer_ext;
 mod semantic_tokens;
-pub mod vue_language_server_ext;
 
 use self::document_colors::DocumentColorData;
 use self::document_symbols::DocumentSymbolsData;
@@ -1184,10 +1181,6 @@ impl LocalLspStore {
                 }
             })
             .detach();
-
-        vue_language_server_ext::register_requests(lsp_store.clone(), language_server);
-        json_language_server_ext::register_requests(lsp_store.clone(), language_server);
-        rust_analyzer_ext::register_notifications(lsp_store.clone(), language_server);
     }
 
     fn shutdown_language_servers_on_quit(&mut self) -> impl Future<Output = ()> + use<> {

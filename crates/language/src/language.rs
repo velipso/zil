@@ -543,14 +543,6 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
         None
     }
 
-    /// Method only implemented by the default JSON language server adapter.
-    /// Used to provide dynamic reloading of the JSON schemas used to
-    /// provide autocompletion and diagnostics in Zed setting and keybind
-    /// files
-    fn is_primary_zed_json_schema_adapter(&self) -> bool {
-        false
-    }
-
     /// True for the extension adapter and false otherwise.
     fn is_extension(&self) -> bool {
         false

@@ -2,7 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use anyhow::{Context as _, Result};
 use collections::HashMap;
-use gpui::{App, AsyncApp, BorrowAppContext as _, Entity, Task, WeakEntity};
+use gpui::{App, AsyncApp, Entity, Task, WeakEntity};
 use language::{
     LanguageRegistry, LanguageServerName, LspAdapterDelegate,
     language_settings::AllLanguageSettings,
@@ -50,35 +50,10 @@ static DYNAMIC_SCHEMA_CACHE: LazyLock<RwLock<HashMap<String, String>>> =
 
 pub fn init(cx: &mut App) {
     cx.set_global(SchemaStore::default());
-    project::lsp_store::json_language_server_ext::register_schema_handler(
-        handle_schema_request,
-        cx,
-    );
 
     cx.observe_new(|_, _, cx| {
         let lsp_store = cx.weak_entity();
         cx.global_mut::<SchemaStore>().lsp_stores.push(lsp_store);
-    })
-    .detach();
-
-    if let Some(extension_events) = extension::ExtensionEvents::try_global(cx) {
-        cx.subscribe(&extension_events, move |_, evt, cx| match evt {
-            extension::Event::ExtensionsInstalledChanged => {
-                cx.update_global::<SchemaStore, _>(|schema_store, cx| {
-                    schema_store.notify_schema_changed(ChangedSchemas::Settings, cx);
-                });
-            }
-            extension::Event::ExtensionUninstalled(_)
-            | extension::Event::ExtensionInstalled(_)
-            | extension::Event::ConfigureExtensionRequested(_) => {}
-        })
-        .detach();
-    }
-
-    cx.observe_global::<dap::DapRegistry>(move |cx| {
-        cx.update_global::<SchemaStore, _>(|schema_store, cx| {
-            schema_store.notify_schema_changed(ChangedSchemas::DebugTasks, cx);
-        });
     })
     .detach();
 }
@@ -89,49 +64,6 @@ pub struct SchemaStore {
 }
 
 impl gpui::Global for SchemaStore {}
-
-enum ChangedSchemas {
-    Settings,
-    DebugTasks,
-}
-
-impl SchemaStore {
-    fn notify_schema_changed(&mut self, changed_schemas: ChangedSchemas, cx: &mut App) {
-        let uris_to_invalidate = match changed_schemas {
-            ChangedSchemas::Settings => {
-                let settings_uri_prefix = &format!("{SCHEMA_URI_PREFIX}settings");
-                let project_settings_uri = &format!("{SCHEMA_URI_PREFIX}project_settings");
-                DYNAMIC_SCHEMA_CACHE
-                    .write()
-                    .extract_if(|uri, _| {
-                        uri == project_settings_uri || uri.starts_with(settings_uri_prefix)
-                    })
-                    .map(|(url, _)| url)
-                    .collect()
-            }
-            ChangedSchemas::DebugTasks => DYNAMIC_SCHEMA_CACHE
-                .write()
-                .remove_entry(&format!("{SCHEMA_URI_PREFIX}debug_tasks"))
-                .map_or_else(Vec::new, |(uri, _)| vec![uri]),
-        };
-
-        if uris_to_invalidate.is_empty() {
-            return;
-        }
-
-        self.lsp_stores.retain(|lsp_store| {
-            let Some(lsp_store) = lsp_store.upgrade() else {
-                return false;
-            };
-            project::lsp_store::json_language_server_ext::notify_schemas_changed(
-                lsp_store,
-                &uris_to_invalidate,
-                cx,
-            );
-            true
-        })
-    }
-}
 
 pub fn handle_schema_request(
     lsp_store: Entity<LspStore>,
