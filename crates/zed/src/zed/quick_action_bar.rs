@@ -249,10 +249,11 @@ impl RenderOnce for QuickActionBarButton {
 impl ToolbarItemView for QuickActionBar {
     fn set_active_pane_item(
         &mut self,
-        _active_pane_item: Option<&dyn ItemHandle>,
+        active_pane_item: Option<&dyn ItemHandle>,
         _: &mut Window,
         _cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
+        self.active_item = active_pane_item.map(ItemHandle::boxed_clone);
         self.get_toolbar_item_location()
     }
 }
