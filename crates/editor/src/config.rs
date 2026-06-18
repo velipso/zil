@@ -198,11 +198,6 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_show_breakpoints(&mut self, show_breakpoints: bool, cx: &mut Context<Self>) {
-        self.show_breakpoints = Some(show_breakpoints);
-        cx.notify();
-    }
-
     fn set_show_scrollbars(&mut self, show: bool, cx: &mut Context<Self>) {
         self.show_scrollbars = ScrollbarAxes {
             horizontal: show,

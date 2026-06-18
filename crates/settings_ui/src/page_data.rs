@@ -5512,7 +5512,7 @@ fn panels_page() -> SettingsPage {
 }
 
 fn debugger_page() -> SettingsPage {
-    fn general_section() -> [SettingsPageItem; 6] {
+    fn general_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader("General"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -5532,28 +5532,6 @@ fn debugger_page() -> SettingsPage {
                             .debugger
                             .get_or_insert_default()
                             .stepping_granularity = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Save Breakpoints",
-                description: "Whether breakpoints should be reused across Zed sessions.",
-                field: Box::new(SettingField {
-                    json_path: Some("debugger.save_breakpoints"),
-                    pick: |settings_content| {
-                        settings_content
-                            .debugger
-                            .as_ref()?
-                            .save_breakpoints
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .debugger
-                            .get_or_insert_default()
-                            .save_breakpoints = value;
                     },
                 }),
                 metadata: None,

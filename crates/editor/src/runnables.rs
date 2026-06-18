@@ -35,12 +35,6 @@ impl RunnableData {
         }
     }
 
-    pub fn all_runnables(&self) -> impl Iterator<Item = &RunnableTasks> {
-        self.runnables
-            .values()
-            .flat_map(|(_, tasks)| tasks.values())
-    }
-
     pub fn has_cached(&self, buffer_id: BufferId, version: &Global) -> bool {
         self.runnables
             .get(&buffer_id)

@@ -26,7 +26,7 @@ use crate::{
         scroll_amount::ScrollAmount,
     },
 };
-use collections::{BTreeMap, HashMap, HashSet};
+use collections::{BTreeMap, HashMap};
 use gpui::{
     Action, Along, AnyElement, App, AppContext, AvailableSpace, Axis as ScrollbarAxis, BorderStyle,
     Bounds, ClipboardItem, ContentMask, Context, Corners, CursorStyle, DispatchPhase, Edges,
@@ -47,7 +47,6 @@ use multi_buffer::{
     Anchor, ExpandExcerptDirection, ExpandInfo, MultiBufferRow, RowInfo,
 };
 
-use project::debugger::breakpoint_store::{Breakpoint, BreakpointSessionState};
 use settings::{
     IndentGuideBackgroundColoring, IndentGuideColoring,
     Settings,
@@ -368,13 +367,6 @@ impl EditorElement {
         register_action(editor, window, Editor::open_active_item_in_terminal);
         register_action(editor, window, Editor::spawn_nearest_task);
         register_action(editor, window, Editor::open_selections_in_multibuffer);
-        register_action(editor, window, Editor::toggle_bookmark);
-        register_action(editor, window, Editor::go_to_next_bookmark);
-        register_action(editor, window, Editor::go_to_previous_bookmark);
-        register_action(editor, window, Editor::toggle_breakpoint);
-        register_action(editor, window, Editor::edit_log_breakpoint);
-        register_action(editor, window, Editor::enable_breakpoint);
-        register_action(editor, window, Editor::disable_breakpoint);
         register_action(editor, window, Editor::toggle_read_only);
         register_action(editor, window, Editor::reload_file);
 
@@ -1553,88 +1545,6 @@ impl EditorElement {
         }
 
         (offset_y, length, row_range)
-    }
-
-    fn layout_bookmarks(
-        &self,
-        gutter: &Gutter<'_>,
-        bookmarks: &HashSet<DisplayRow>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<AnyElement> {
-        if self.split_side == Some(SplitSide::Left) {
-            return Vec::new();
-        }
-
-        self.editor.update(cx, |editor, cx| {
-            bookmarks
-                .iter()
-                .filter_map(|row| {
-                    gutter.layout_item_skipping_folds(
-                        *row,
-                        |cx, _| editor.render_bookmark(*row, cx).into_any_element(),
-                        window,
-                        cx,
-                    )
-                })
-                .collect_vec()
-        })
-    }
-
-    fn layout_gutter_hover_button(
-        &self,
-        gutter: &Gutter,
-        position: Anchor,
-        row: DisplayRow,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<AnyElement> {
-        if self.split_side == Some(SplitSide::Left) {
-            return None;
-        }
-
-        self.editor.update(cx, |editor, cx| {
-            gutter.layout_item_skipping_folds(
-                row,
-                |cx, window| {
-                    editor
-                        .render_gutter_hover_button(position, row, window, cx)
-                        .into_any_element()
-                },
-                window,
-                cx,
-            )
-        })
-    }
-
-    fn layout_breakpoints(
-        &self,
-        gutter: &Gutter,
-        breakpoints: &HashMap<DisplayRow, (Anchor, Breakpoint, Option<BreakpointSessionState>)>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<AnyElement> {
-        if self.split_side == Some(SplitSide::Left) {
-            return Vec::new();
-        }
-
-        self.editor.update(cx, |editor, cx| {
-            breakpoints
-                .iter()
-                .filter_map(|(row, (text_anchor, bp, state))| {
-                    gutter.layout_item_skipping_folds(
-                        *row,
-                        |cx, _| {
-                            editor
-                                .render_breakpoint(*text_anchor, *row, &bp, *state, cx)
-                                .into_any_element()
-                        },
-                        window,
-                        cx,
-                    )
-                })
-                .collect_vec()
-        })
     }
 
     fn layout_expand_toggles(
@@ -3103,14 +3013,6 @@ impl EditorElement {
                 }
             });
 
-            for bookmark in layout.bookmarks.iter_mut() {
-                bookmark.paint(window, cx);
-            }
-
-            for breakpoint in layout.breakpoints.iter_mut() {
-                breakpoint.paint(window, cx);
-            }
-
             for test_indicator in layout.test_indicators.iter_mut() {
                 test_indicator.paint(window, cx);
             }
@@ -4126,70 +4028,6 @@ struct Gutter<'a> {
     hitbox: &'a Hitbox,
     snapshot: &'a EditorSnapshot,
     row_infos: &'a [RowInfo],
-}
-
-impl Gutter<'_> {
-    fn layout_item_skipping_folds(
-        &self,
-        display_row: DisplayRow,
-        render_item: impl Fn(&mut Context<'_, Editor>, &mut Window) -> AnyElement,
-        window: &mut Window,
-        cx: &mut Context<'_, Editor>,
-    ) -> Option<AnyElement> {
-        let row = MultiBufferRow(
-            DisplayPoint::new(display_row, 0)
-                .to_point(self.snapshot)
-                .row,
-        );
-        if self.snapshot.is_line_folded(row) {
-            return None;
-        }
-
-        self.layout_item(display_row, render_item, window, cx)
-    }
-
-    fn layout_item(
-        &self,
-        display_row: DisplayRow,
-        render_item: impl Fn(&mut Context<'_, Editor>, &mut Window) -> AnyElement,
-        window: &mut Window,
-        cx: &mut Context<'_, Editor>,
-    ) -> Option<AnyElement> {
-        if !self.range.contains(&display_row) {
-            return None;
-        }
-
-        let button = self.prepaint_button(render_item(cx, window), display_row, window, cx);
-        Some(button)
-    }
-
-    fn prepaint_button(
-        &self,
-        mut button: AnyElement,
-        row: DisplayRow,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> AnyElement {
-        let available_space = size(
-            AvailableSpace::MinContent,
-            AvailableSpace::Definite(self.line_height),
-        );
-        let indicator_size = button.layout_as_root(available_space, window, cx);
-        let x = px(2.);
-
-        let mut y = Pixels::from(
-            (row.as_f64() - self.scroll_position.y) * ScrollPixelOffset::from(self.line_height),
-        );
-        y += (self.line_height - indicator_size.height) / 2.;
-
-        button.prepaint_as_root(
-            self.hitbox.origin + point(x, y),
-            available_space,
-            window,
-            cx,
-        );
-        button
-    }
 }
 
 pub fn render_breadcrumb_text(
@@ -5690,7 +5528,7 @@ impl Element for EditorElement {
                         })
                         .unwrap_or_else(|| (Vec::new(), Vec::new(), HashMap::default()));
 
-                    let (selections, mut active_rows) = self
+                    let (selections, active_rows) = self
                         .layout_selections(
                             start_anchor,
                             end_anchor,
@@ -5723,20 +5561,6 @@ impl Element for EditorElement {
                             .row()
                         })
                     });
-
-                    let run_indicator_rows = self.editor.update(cx, |editor, cx| {
-                        editor.active_run_indicators(start_row..end_row, window, cx)
-                    });
-
-                    let mut breakpoint_rows = self.editor.update(cx, |editor, cx| {
-                        editor.active_breakpoints(start_row..end_row, window, cx)
-                    });
-
-                    for (display_row, (_, bp, state)) in &breakpoint_rows {
-                        if bp.is_enabled() && state.is_none_or(|s| s.verified) {
-                            active_rows.entry(*display_row).or_default().breakpoint = true;
-                        }
-                    }
 
                     let gutter = Gutter {
                         line_height,
@@ -6157,54 +5981,6 @@ impl Element for EditorElement {
 
                     let test_indicators = Vec::new();
 
-                    let show_bookmarks =
-                        snapshot.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
-
-                    let bookmark_rows = self.editor.update(cx, |editor, cx| {
-                        let mut rows = editor.active_bookmarks(start_row..end_row, window, cx);
-                        rows.retain(|k| !run_indicator_rows.contains(k));
-                        rows.retain(|k| !breakpoint_rows.contains_key(k));
-                        rows
-                    });
-
-                    let bookmarks = if show_bookmarks {
-                        self.layout_bookmarks(&gutter, &bookmark_rows, window, cx)
-                    } else {
-                        Vec::new()
-                    };
-
-                    let show_breakpoints = snapshot
-                        .show_breakpoints
-                        .unwrap_or(gutter_settings.breakpoints);
-
-                    breakpoint_rows.retain(|k, _| !run_indicator_rows.contains(k));
-                    let mut breakpoints = if show_breakpoints {
-                        self.layout_breakpoints(&gutter, &breakpoint_rows, window, cx)
-                    } else {
-                        Vec::new()
-                    };
-
-                    let gutter_hover_button = self
-                        .editor
-                        .read(cx)
-                        .gutter_hover_button
-                        .0
-                        .filter(|phantom| phantom.is_active)
-                        .map(|phantom| phantom.display_row);
-
-                    if let Some(row) = gutter_hover_button
-                        && !breakpoint_rows.contains_key(&row)
-                        && !run_indicator_rows.contains(&row)
-                        && !bookmark_rows.contains(&row)
-                        && (show_bookmarks || show_breakpoints)
-                    {
-                        let position = snapshot
-                            .display_point_to_anchor(DisplayPoint::new(row, 0), Bias::Right);
-                        breakpoints.extend(
-                            self.layout_gutter_hover_button(&gutter, position, row, window, cx),
-                        );
-                    }
-
                     let mouse_context_menu = self.layout_mouse_context_menu(
                         &snapshot,
                         start_row..end_row,
@@ -6341,8 +6117,6 @@ impl Element for EditorElement {
                         selections,
                         mouse_context_menu,
                         test_indicators,
-                        bookmarks,
-                        breakpoints,
                         crease_toggles,
                         crease_trailers,
                         tab_invisible,
@@ -6541,8 +6315,6 @@ pub struct EditorLayout {
     navigation_overlay_paint_commands: Vec<NavigationOverlayPaintCommand>,
     selections: Vec<(PlayerColor, Vec<SelectionLayout>)>,
     test_indicators: Vec<AnyElement>,
-    bookmarks: Vec<AnyElement>,
-    breakpoints: Vec<AnyElement>,
     crease_toggles: Vec<Option<AnyElement>>,
     expand_toggles: Vec<Option<(AnyElement, gpui::Point<Pixels>)>>,
     crease_trailers: Vec<Option<CreaseTrailerLayout>>,

@@ -1,5 +1,4 @@
 use super::{
-    breakpoint_store::BreakpointStore,
     locators,
     session::{self, Session, SessionStateEvent},
 };
@@ -91,7 +90,6 @@ pub struct RemoteDapStore {
 pub struct DapStore {
     mode: DapStoreMode,
     downstream_client: Option<(AnyProtoClient, u64)>,
-    breakpoint_store: Entity<BreakpointStore>,
     worktree_store: Entity<WorktreeStore>,
     sessions: BTreeMap<SessionId, Entity<Session>>,
     next_session_id: u32,
@@ -135,7 +133,6 @@ impl DapStore {
         environment: Entity<ProjectEnvironment>,
         toolchain_store: Arc<dyn LanguageToolchainStore>,
         worktree_store: Entity<WorktreeStore>,
-        breakpoint_store: Entity<BreakpointStore>,
         is_headless: bool,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -148,13 +145,12 @@ impl DapStore {
             is_headless,
         });
 
-        Self::new(mode, breakpoint_store, worktree_store, fs, cx)
+        Self::new(mode, worktree_store, fs, cx)
     }
 
     pub fn new_remote(
         project_id: u64,
         remote_client: Entity<RemoteClient>,
-        breakpoint_store: Entity<BreakpointStore>,
         worktree_store: Entity<WorktreeStore>,
         node_runtime: NodeRuntime,
         http_client: Arc<dyn HttpClient>,
@@ -169,20 +165,18 @@ impl DapStore {
             http_client,
         });
 
-        Self::new(mode, breakpoint_store, worktree_store, fs, cx)
+        Self::new(mode, worktree_store, fs, cx)
     }
 
     pub fn new_collab(
         _project_id: u64,
         _upstream_client: AnyProtoClient,
-        breakpoint_store: Entity<BreakpointStore>,
         worktree_store: Entity<WorktreeStore>,
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self::new(
             DapStoreMode::Collab,
-            breakpoint_store,
             worktree_store,
             fs,
             cx,
@@ -191,7 +185,6 @@ impl DapStore {
 
     fn new(
         mode: DapStoreMode,
-        breakpoint_store: Entity<BreakpointStore>,
         worktree_store: Entity<WorktreeStore>,
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
@@ -230,7 +223,6 @@ impl DapStore {
             mode,
             next_session_id: 0,
             downstream_client: None,
-            breakpoint_store,
             worktree_store,
             sessions: Default::default(),
             adapter_options: Default::default(),
@@ -471,7 +463,6 @@ impl DapStore {
             DapStoreMode::Collab => (None, None, None),
         };
         let session = Session::new(
-            self.breakpoint_store.clone(),
             session_id,
             parent_session,
             label,
@@ -560,34 +551,8 @@ impl DapStore {
             .map(|client| client.read(cx).capabilities.clone())
     }
 
-    pub fn breakpoint_store(&self) -> &Entity<BreakpointStore> {
-        &self.breakpoint_store
-    }
-
     pub fn worktree_store(&self) -> &Entity<WorktreeStore> {
         &self.worktree_store
-    }
-
-    #[allow(dead_code)]
-    async fn handle_ignore_breakpoint_state(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::IgnoreBreakpointState>,
-        mut cx: AsyncApp,
-    ) -> Result<()> {
-        let session_id = SessionId::from_proto(envelope.payload.session_id);
-
-        this.update(&mut cx, |this, cx| {
-            if let Some(session) = this.session_by_id(&session_id) {
-                session.update(cx, |session, cx| {
-                    session.set_ignore_breakpoints(envelope.payload.ignore, cx)
-                })
-            } else {
-                Task::ready(HashMap::default())
-            }
-        })
-        .await;
-
-        Ok(())
     }
 
     fn delegate(
@@ -788,25 +753,10 @@ impl DapStore {
 
     pub fn sync_adapter_options(
         &mut self,
-        session: &Entity<Session>,
-        cx: &App,
+        _session: &Entity<Session>,
+        _cx: &App,
     ) -> Arc<PersistedAdapterOptions> {
-        let session = session.read(cx);
-        let adapter = session.adapter();
-        let exceptions = session.exception_breakpoints();
-        let exception_breakpoints = exceptions
-            .map(|(exception, enabled)| {
-                (
-                    exception.filter.clone(),
-                    PersistedExceptionBreakpoint { enabled: *enabled },
-                )
-            })
-            .collect();
-        let options = Arc::new(PersistedAdapterOptions {
-            exception_breakpoints,
-        });
-        self.adapter_options.insert(adapter, options.clone());
-        options
+        todo!("sync_adapter_options");
     }
 
     pub fn set_adapter_options(

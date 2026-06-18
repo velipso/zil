@@ -723,32 +723,12 @@ actions!(
         Tab,
         /// Removes a tab character or outdents.
         Backtab,
-        /// Toggles a bookmark at the current line.
-        ToggleBookmark,
-        /// Toggles a breakpoint at the current line.
-        ToggleBreakpoint,
         /// Toggles the case of selected text.
         ToggleCase,
-        /// Disables the breakpoint at the current line.
-        DisableBreakpoint,
-        /// Enables the breakpoint at the current line.
-        EnableBreakpoint,
-        /// Edits the log message for a breakpoint.
-        EditLogBreakpoint,
-        /// Toggles inline git blame display.
-        ToggleDiagnostics,
         /// Toggles indent guides display.
         ToggleIndentGuides,
-        /// Toggles inlay hints display.
-        ToggleInlayHints,
         /// Toggles semantic highlights display.
         ToggleSemanticHighlights,
-        /// Toggles inline values display.
-        ToggleInlineValues,
-        /// Toggles inline diagnostics display.
-        ToggleInlineDiagnostics,
-        /// Toggles edit prediction feature.
-        ToggleEditPrediction,
         /// Toggles line numbers display.
         ToggleLineNumbers,
         /// Toggles the minimap display.

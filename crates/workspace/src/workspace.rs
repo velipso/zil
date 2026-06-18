@@ -96,7 +96,7 @@ use postage::stream::Stream;
 use project::{
     DirectoryLister, Project, ProjectEntryId, ProjectPath, ResolvedPath, Worktree, WorktreeId,
     WorktreeSettings,
-    debugger::{breakpoint_store::BreakpointStoreEvent, session::ThreadStatus},
+    debugger::session::ThreadStatus,
     project_settings::ProjectSettings,
     toolchain_store::ToolchainStoreEvent,
     trusted_worktrees::{RemoteHostLocation, TrustedWorktrees, TrustedWorktreesEvent},
@@ -318,8 +318,6 @@ actions!(
         ToggleBottomDock,
         /// Toggles centered layout mode.
         ToggleCenteredLayout,
-        /// Toggles edit prediction feature globally for all files.
-        ToggleEditPrediction,
         /// Toggles the left dock.
         ToggleLeftDock,
         /// Toggles the right dock.
@@ -1604,18 +1602,6 @@ impl Workspace {
         })
         .detach();
 
-        cx.subscribe_in(
-            &project.read(cx).breakpoint_store(),
-            window,
-            |workspace, _, event, window, cx| match event {
-                BreakpointStoreEvent::BreakpointsUpdated(_, _)
-                | BreakpointStoreEvent::BreakpointsCleared(_) => {
-                    workspace.serialize_workspace(window, cx);
-                }
-                BreakpointStoreEvent::SetDebugLine | BreakpointStoreEvent::ClearDebugLines => {}
-            },
-        )
-        .detach();
         if let Some(toolchain_store) = project.read(cx).toolchain_store() {
             cx.subscribe_in(
                 &toolchain_store,
@@ -6897,19 +6883,6 @@ impl Workspace {
 
         match self.workspace_location(cx) {
             WorkspaceLocation::Location(location, paths) => {
-                let bookmarks = self.project.update(cx, |project, cx| {
-                    project
-                        .bookmark_store()
-                        .read(cx)
-                        .all_serialized_bookmarks(cx)
-                });
-
-                let breakpoints = self.project.update(cx, |project, cx| {
-                    project
-                        .breakpoint_store()
-                        .read(cx)
-                        .all_source_breakpoints(cx)
-                });
                 let user_toolchains = self
                     .project
                     .read(cx)
@@ -6932,8 +6905,6 @@ impl Workspace {
                     docks,
                     centered_layout: self.centered_layout,
                     session_id: self.session_id.clone(),
-                    bookmarks,
-                    breakpoints,
                     window_id: Some(window.window_handle().window_id().as_u64()),
                     user_toolchains,
                 };
@@ -7139,26 +7110,6 @@ impl Workspace {
 
                 cx.notify();
             })?;
-
-            project
-                .update(cx, |project, cx| {
-                    project.bookmark_store().update(cx, |bookmark_store, cx| {
-                        bookmark_store.load_serialized_bookmarks(serialized_workspace.bookmarks, cx)
-                    })
-                })
-                .await
-                .log_err();
-
-            let _ = project
-                .update(cx, |project, cx| {
-                    project
-                        .breakpoint_store()
-                        .update(cx, |breakpoint_store, cx| {
-                            breakpoint_store
-                                .with_serialized_breakpoints(serialized_workspace.breakpoints, cx)
-                        })
-                })
-                .await;
 
             // Clean up all the items that have _not_ been loaded. Our ItemIds aren't stable. That means
             // after loading the items, we might have different items and in order to avoid
@@ -7620,7 +7571,6 @@ impl Workspace {
             .on_action(cx.listener(|workspace, _: &FocusCenterPane, window, cx| {
                 workspace.focus_center_pane(window, cx);
             }))
-            .on_action(cx.listener(Workspace::clear_bookmarks))
             .on_action(cx.listener(Workspace::cancel))
     }
 
@@ -7740,15 +7690,6 @@ impl Workspace {
             .detach_and_log_err(cx);
         }
         cx.notify();
-    }
-
-    pub fn clear_bookmarks(&mut self, _: &ClearBookmarks, _: &mut Window, cx: &mut Context<Self>) {
-        self.project()
-            .read(cx)
-            .bookmark_store()
-            .update(cx, |bookmark_store, cx| {
-                bookmark_store.clear_bookmarks(cx);
-            });
     }
 
     fn adjust_padding(padding: Option<f32>) -> f32 {

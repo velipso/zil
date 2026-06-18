@@ -761,8 +761,6 @@ impl DapLogView {
             let mut editor = Editor::multi_line(window, cx);
             editor.set_text(log_contents, window, cx);
             editor.move_to_end(&editor::actions::MoveToEnd, window, cx);
-            editor.set_show_bookmarks(false, cx);
-            editor.set_show_breakpoints(false, cx);
             editor.set_show_runnables(false, cx);
             editor.set_input_enabled(false);
             editor.set_read_only(true);

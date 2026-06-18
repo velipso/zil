@@ -1,5 +1,5 @@
 #![expect(clippy::result_large_err)]
-use std::{path::Path, sync::Arc};
+use std::{sync::Arc};
 
 use dap::client::DebugAdapterClient;
 use gpui::{App, Subscription};
@@ -27,26 +27,10 @@ pub fn intercept_debug_sessions<T: Fn(&Arc<DebugAdapterClient>) + 'static>(
     })
 }
 
-fn register_default_handlers(session: &Session, client: &Arc<DebugAdapterClient>, cx: &mut App) {
+fn register_default_handlers(_session: &Session, client: &Arc<DebugAdapterClient>, _cx: &mut App) {
     client.on_request::<dap::requests::Initialize, _>(move |_, _| Ok(Default::default()));
-    let paths = session.breakpoint_store.read(cx).breakpoint_paths();
-
-    client.on_request::<dap::requests::SetBreakpoints, _>(move |_, args| {
-        let p = Arc::from(Path::new(&args.source.path.unwrap()));
-        if !paths.contains(&p) {
-            panic!("Sent breakpoints for path without any")
-        }
-
-        Ok(dap::SetBreakpointsResponse {
-            breakpoints: Vec::default(),
-        })
-    });
 
     client.on_request::<dap::requests::Launch, _>(move |_, _| Ok(()));
-
-    client.on_request::<dap::requests::SetExceptionBreakpoints, _>(move |_, _| {
-        Ok(dap::SetExceptionBreakpointsResponse { breakpoints: None })
-    });
 
     client.on_request::<dap::requests::Disconnect, _>(move |_, _| Ok(()));
 

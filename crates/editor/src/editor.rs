@@ -34,7 +34,6 @@ pub mod scroll;
 mod selections_collection;
 pub mod semantic_tokens;
 
-mod bookmarks;
 #[cfg(test)]
 mod editor_block_comment_tests;
 #[cfg(test)]
@@ -91,7 +90,7 @@ use futures::{
     future::{self, Shared},
 };
 use gpui::{
-    Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds, ClickEvent,
+    Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds,
     ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
     EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle,
     HighlightStyle, Hsla, KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
@@ -121,20 +120,11 @@ use multi_buffer::{
     ExcerptBoundaryInfo, ExpandExcerptDirection, MultiBufferDiffHunk, MultiBufferPoint,
     MultiBufferRow,
 };
-use parking_lot::Mutex;
 use persistence::EditorDb;
 use project::{
-    BreakpointWithPosition,
     DocumentHighlight,
     Location, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
     ProjectTransaction,
-    bookmark_store::BookmarkStore,
-    debugger::{
-        breakpoint_store::{
-            Breakpoint, BreakpointEditAction, BreakpointSessionState, BreakpointState,
-            BreakpointStore, BreakpointStoreEvent,
-        },
-    },
     lsp_store::{
         BufferSemanticTokens, FormatTrigger,
         LspFormatTarget, OpenLspBufferHandle, RefreshForServer,
@@ -174,8 +164,8 @@ use theme::{
 };
 use theme_settings::{ThemeSettings, observe_buffer_font_size_adjustment};
 use ui::{
-    ButtonStyle, ContextMenu, Disclosure, IconButton, IconButtonShape, IconName, IconSize,
-    Indicator, Tooltip, h_flex, prelude::*, scrollbars::ScrollbarAutoHide, utils::WithRemSize,
+    ContextMenu, Disclosure,
+    prelude::*, scrollbars::ScrollbarAutoHide,
 };
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
@@ -254,7 +244,6 @@ pub fn init(cx: &mut App) {
             workspace.register_action(Editor::new_file_horizontal);
             workspace.register_action(Editor::cancel_language_server_work);
             workspace.register_action(Editor::toggle_focus);
-            workspace.register_action(Editor::view_bookmarks);
         },
     )
     .detach();
@@ -811,8 +800,6 @@ pub struct Editor {
     use_relative_line_numbers: Option<bool>,
     show_git_diff_gutter: Option<bool>,
     show_runnables: Option<bool>,
-    show_bookmarks: Option<bool>,
-    show_breakpoints: Option<bool>,
     show_wrap_guides: Option<bool>,
     show_indent_guides: Option<bool>,
     buffers_with_disabled_indent_guides: HashSet<BufferId>,
@@ -882,8 +869,6 @@ pub struct Editor {
     last_position_map: Option<Rc<PositionMap>>,
     expect_bounds_change: Option<Bounds<Pixels>>,
     runnables: RunnableData,
-    bookmark_store: Option<Entity<BookmarkStore>>,
-    breakpoint_store: Option<Entity<BreakpointStore>>,
     gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
     in_project_search: bool,
     previous_search_ranges: Option<Arc<[Range<Anchor>]>>,
@@ -952,8 +937,6 @@ pub struct EditorSnapshot {
     number_deleted_lines: bool,
     show_git_diff_gutter: Option<bool>,
     show_runnables: Option<bool>,
-    show_breakpoints: Option<bool>,
-    show_bookmarks: Option<bool>,
     pub display_snapshot: DisplaySnapshot,
     pub placeholder_display_snapshot: Option<DisplaySnapshot>,
     is_focused: bool,
@@ -1772,22 +1755,6 @@ impl Editor {
                     },
                 ));
             };
-
-            project_subscriptions.push(cx.subscribe_in(
-                &project.read(cx).breakpoint_store(),
-                window,
-                |editor, _, event, window, cx| match event {
-                    BreakpointStoreEvent::ClearDebugLines => {
-                        editor.clear_row_highlights::<ActiveDebugLine>();
-                    }
-                    BreakpointStoreEvent::SetDebugLine => {
-                        if editor.go_to_active_debug_line(window, cx) {
-                            cx.stop_propagation();
-                        }
-                    }
-                    _ => {}
-                },
-            ));
         }
 
         let focus_handle = cx.focus_handle();
@@ -1810,16 +1777,6 @@ impl Editor {
             } else {
                 None
             };
-
-        let bookmark_store = match (&mode, project.as_ref()) {
-            (EditorMode::Full { .. }, Some(project)) => Some(project.read(cx).bookmark_store()),
-            _ => None,
-        };
-
-        let breakpoint_store = match (&mode, project.as_ref()) {
-            (EditorMode::Full { .. }, Some(project)) => Some(project.read(cx).breakpoint_store()),
-            _ => None,
-        };
 
         let mut editor = Self {
             focus_handle,
@@ -1867,8 +1824,6 @@ impl Editor {
             enable_mouse_wheel_zoom: full_mode,
             show_git_diff_gutter: None,
             show_runnables: None,
-            show_bookmarks: None,
-            show_breakpoints: None,
             show_wrap_guides: None,
             show_indent_guides,
             buffers_with_disabled_indent_guides: HashSet::default(),
@@ -1928,8 +1883,6 @@ impl Editor {
                 )
             }),
 
-            bookmark_store,
-            breakpoint_store,
             gutter_hover_button: (None, None),
             _subscriptions: (!is_minimap)
                 .then(|| {
@@ -2002,13 +1955,6 @@ impl Editor {
 
         editor.applicable_language_settings = editor.fetch_applicable_language_settings(cx);
 
-        if let Some(breakpoints) = editor.breakpoint_store.as_ref() {
-            editor
-                ._subscriptions
-                .push(cx.observe(breakpoints, |_, _, cx| {
-                    cx.notify();
-                }));
-        }
         editor._subscriptions.extend(project_subscriptions);
 
         editor._subscriptions.push(cx.subscribe_in(
@@ -2068,8 +2014,6 @@ impl Editor {
         if full_mode {
             let should_auto_hide_scrollbars = cx.should_auto_hide_scrollbars();
             cx.set_global(ScrollbarAutoHide(should_auto_hide_scrollbars));
-
-            editor.go_to_active_debug_line(window, cx);
 
             editor.minimap =
                 editor.create_minimap(EditorSettings::get_global(cx).minimap, window, cx);
@@ -2377,8 +2321,6 @@ impl Editor {
             show_git_diff_gutter: self.show_git_diff_gutter,
             semantic_tokens_enabled: self.semantic_token_state.enabled(),
             show_runnables: self.show_runnables,
-            show_bookmarks: self.show_bookmarks,
-            show_breakpoints: self.show_breakpoints,
             scroll_anchor: self.scroll_manager.shared_scroll_anchor(cx),
             display_snapshot,
             placeholder_display_snapshot: self
@@ -3266,583 +3208,6 @@ impl Editor {
         );
     }
 
-    fn active_run_indicators(
-        &mut self,
-        range: Range<DisplayRow>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> HashSet<DisplayRow> {
-        let snapshot = self.snapshot(window, cx);
-
-        let offset_range_start =
-            snapshot.display_point_to_point(DisplayPoint::new(range.start, 0), Bias::Left);
-
-        let offset_range_end =
-            snapshot.display_point_to_point(DisplayPoint::new(range.end, 0), Bias::Right);
-
-        self.runnables
-            .all_runnables()
-            .filter_map(|tasks| {
-                let multibuffer_point = tasks.offset.to_point(&snapshot.buffer_snapshot());
-                if multibuffer_point < offset_range_start || multibuffer_point > offset_range_end {
-                    return None;
-                }
-                let multibuffer_row = MultiBufferRow(multibuffer_point.row);
-                let buffer_folded = snapshot
-                    .buffer_snapshot()
-                    .buffer_line_for_row(multibuffer_row)
-                    .map(|(buffer_snapshot, _)| buffer_snapshot.remote_id())
-                    .map(|buffer_id| self.is_buffer_folded(buffer_id, cx))
-                    .unwrap_or(false);
-                if buffer_folded {
-                    return None;
-                }
-
-                if snapshot.is_line_folded(multibuffer_row) {
-                    // Skip folded indicators, unless it's the starting line of a fold.
-                    if multibuffer_row
-                        .0
-                        .checked_sub(1)
-                        .is_some_and(|previous_row| {
-                            snapshot.is_line_folded(MultiBufferRow(previous_row))
-                        })
-                    {
-                        return None;
-                    }
-                }
-
-                let display_row = multibuffer_point.to_display_point(&snapshot).row();
-                Some(display_row)
-            })
-            .collect()
-    }
-
-    fn active_bookmarks(
-        &self,
-        range: Range<DisplayRow>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> HashSet<DisplayRow> {
-        let mut bookmark_display_points = HashSet::default();
-
-        let Some(bookmark_store) = self.bookmark_store.clone() else {
-            return bookmark_display_points;
-        };
-
-        let snapshot = self.snapshot(window, cx);
-
-        let multi_buffer_snapshot = snapshot.buffer_snapshot();
-        let Some(project) = self.project() else {
-            return bookmark_display_points;
-        };
-
-        let range = snapshot.display_point_to_point(DisplayPoint::new(range.start, 0), Bias::Left)
-            ..snapshot.display_point_to_point(DisplayPoint::new(range.end, 0), Bias::Right);
-
-        for (buffer_snapshot, range, _excerpt_range) in
-            multi_buffer_snapshot.range_to_buffer_ranges(range.start..range.end)
-        {
-            let Some(buffer) = project
-                .read(cx)
-                .buffer_for_id(buffer_snapshot.remote_id(), cx)
-            else {
-                continue;
-            };
-            let bookmarks = bookmark_store.update(cx, |store, cx| {
-                store.bookmarks_for_buffer(
-                    buffer,
-                    buffer_snapshot.anchor_before(range.start)
-                        ..buffer_snapshot.anchor_after(range.end),
-                    &buffer_snapshot,
-                    cx,
-                )
-            });
-            for bookmark in bookmarks {
-                let Some(multi_buffer_anchor) =
-                    multi_buffer_snapshot.anchor_in_buffer(bookmark.anchor())
-                else {
-                    continue;
-                };
-                let position = multi_buffer_anchor
-                    .to_point(&multi_buffer_snapshot)
-                    .to_display_point(&snapshot);
-
-                bookmark_display_points.insert(position.row());
-            }
-        }
-
-        bookmark_display_points
-    }
-
-    fn render_bookmark(&self, row: DisplayRow, cx: &mut Context<Self>) -> IconButton {
-        let focus_handle = self.focus_handle.clone();
-        IconButton::new(("bookmark indicator", row.0 as usize), IconName::Bookmark)
-            .icon_size(IconSize::XSmall)
-            .size(ui::ButtonSize::None)
-            .icon_color(Color::Info)
-            .style(ButtonStyle::Transparent)
-            .on_click(cx.listener(move |editor, _, _, cx| {
-                editor.toggle_bookmark_at_row(row, cx);
-            }))
-            .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-                editor.set_gutter_context_menu(row, None, event.position(), window, cx);
-            }))
-            .tooltip(move |_window, cx| {
-                Tooltip::with_meta_in(
-                    "Remove Bookmark",
-                    Some(&ToggleBookmark),
-                    SharedString::from("Right-click for more options"),
-                    &focus_handle,
-                    cx,
-                )
-            })
-    }
-
-    /// Get all display points of breakpoints that will be rendered within editor
-    ///
-    /// This function is used to handle overlaps between breakpoints and Code action/runner symbol.
-    /// It's also used to set the color of line numbers with breakpoints to the breakpoint color.
-    /// TODO debugger: Use this function to color toggle symbols that house nested breakpoints
-    fn active_breakpoints(
-        &self,
-        range: Range<DisplayRow>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> HashMap<DisplayRow, (Anchor, Breakpoint, Option<BreakpointSessionState>)> {
-        let mut breakpoint_display_points = HashMap::default();
-
-        let Some(breakpoint_store) = self.breakpoint_store.clone() else {
-            return breakpoint_display_points;
-        };
-
-        let snapshot = self.snapshot(window, cx);
-
-        let multi_buffer_snapshot = snapshot.buffer_snapshot();
-
-        let range = snapshot.display_point_to_point(DisplayPoint::new(range.start, 0), Bias::Left)
-            ..snapshot.display_point_to_point(DisplayPoint::new(range.end, 0), Bias::Right);
-
-        for (buffer_snapshot, range, _) in
-            multi_buffer_snapshot.range_to_buffer_ranges(range.start..range.end)
-        {
-            let Some(buffer) = self.buffer().read(cx).buffer(buffer_snapshot.remote_id()) else {
-                continue;
-            };
-            let breakpoints = breakpoint_store.read(cx).breakpoints(
-                &buffer,
-                Some(
-                    buffer_snapshot.anchor_before(range.start)
-                        ..buffer_snapshot.anchor_after(range.end),
-                ),
-                &buffer_snapshot,
-                cx,
-            );
-            for (breakpoint, state) in breakpoints {
-                let Some(multi_buffer_anchor) =
-                    multi_buffer_snapshot.anchor_in_excerpt(breakpoint.position)
-                else {
-                    continue;
-                };
-                let position = multi_buffer_anchor
-                    .to_point(&multi_buffer_snapshot)
-                    .to_display_point(&snapshot);
-
-                breakpoint_display_points.insert(
-                    position.row(),
-                    (multi_buffer_anchor, breakpoint.bp.clone(), state),
-                );
-            }
-        }
-
-        breakpoint_display_points
-    }
-
-    fn gutter_context_menu(
-        &self,
-        anchor: Anchor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<ui::ContextMenu> {
-        let weak_editor = cx.weak_entity();
-        let focus_handle = self.focus_handle(cx);
-
-        let row = self
-            .buffer
-            .read(cx)
-            .snapshot(cx)
-            .summary_for_anchor::<Point>(&anchor)
-            .row;
-
-        let breakpoint = self
-            .breakpoint_at_row(row, window, cx)
-            .map(|(anchor, bp)| (anchor, Arc::from(bp)));
-
-        let log_breakpoint_msg = if breakpoint.as_ref().is_some_and(|bp| bp.1.message.is_some()) {
-            "Edit Log Breakpoint"
-        } else {
-            "Set Log Breakpoint"
-        };
-
-        let condition_breakpoint_msg = if breakpoint
-            .as_ref()
-            .is_some_and(|bp| bp.1.condition.is_some())
-        {
-            "Edit Condition Breakpoint"
-        } else {
-            "Set Condition Breakpoint"
-        };
-
-        let hit_condition_breakpoint_msg = if breakpoint
-            .as_ref()
-            .is_some_and(|bp| bp.1.hit_condition.is_some())
-        {
-            "Edit Hit Condition Breakpoint"
-        } else {
-            "Set Hit Condition Breakpoint"
-        };
-
-        let set_breakpoint_msg = if breakpoint.as_ref().is_some() {
-            "Unset Breakpoint"
-        } else {
-            "Set Breakpoint"
-        };
-
-        let bookmark = self.bookmark_at_row(row, window, cx);
-
-        let set_bookmark_msg = if bookmark.as_ref().is_some() {
-            "Remove Bookmark"
-        } else {
-            "Add Bookmark"
-        };
-
-        let run_to_cursor = window.is_action_available(&RunToCursor, cx);
-
-        let toggle_state_msg = breakpoint.as_ref().map_or(None, |bp| match bp.1.state {
-            BreakpointState::Enabled => Some("Disable"),
-            BreakpointState::Disabled => Some("Enable"),
-        });
-
-        let (anchor, breakpoint) =
-            breakpoint.unwrap_or_else(|| (anchor, Arc::new(Breakpoint::new_standard())));
-
-        ui::ContextMenu::build(window, cx, |menu, _, _cx| {
-            menu.on_blur_subscription(Subscription::new(|| {}))
-                .context(focus_handle)
-                .when(run_to_cursor, |this| {
-                    let weak_editor = weak_editor.clone();
-                    this.entry("Run to Cursor", None, move |window, cx| {
-                        weak_editor
-                            .update(cx, |editor, cx| {
-                                editor.change_selections(
-                                    SelectionEffects::no_scroll(),
-                                    window,
-                                    cx,
-                                    |s| s.select_ranges([Point::new(row, 0)..Point::new(row, 0)]),
-                                );
-                            })
-                            .ok();
-
-                        window.dispatch_action(Box::new(RunToCursor), cx);
-                    })
-                    .separator()
-                })
-                .when_some(toggle_state_msg, |this, msg| {
-                    this.entry(msg, None, {
-                        let weak_editor = weak_editor.clone();
-                        let breakpoint = breakpoint.clone();
-                        move |_window, cx| {
-                            weak_editor
-                                .update(cx, |this, cx| {
-                                    this.edit_breakpoint_at_anchor(
-                                        anchor,
-                                        breakpoint.as_ref().clone(),
-                                        BreakpointEditAction::InvertState,
-                                        cx,
-                                    );
-                                })
-                                .log_err();
-                        }
-                    })
-                })
-                .entry(set_breakpoint_msg, None, {
-                    let weak_editor = weak_editor.clone();
-                    let breakpoint = breakpoint.clone();
-                    move |_window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.edit_breakpoint_at_anchor(
-                                    anchor,
-                                    breakpoint.as_ref().clone(),
-                                    BreakpointEditAction::Toggle,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(log_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::Log,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(condition_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::Condition,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(hit_condition_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::HitCondition,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .separator()
-                .entry(set_bookmark_msg, None, move |_window, cx| {
-                    weak_editor
-                        .update(cx, |this, cx| {
-                            this.toggle_bookmark_at_anchor(anchor, cx);
-                        })
-                        .log_err();
-                })
-        })
-    }
-
-    fn render_breakpoint(
-        &self,
-        position: Anchor,
-        row: DisplayRow,
-        breakpoint: &Breakpoint,
-        state: Option<BreakpointSessionState>,
-        cx: &mut Context<Self>,
-    ) -> IconButton {
-        let is_rejected = state.is_some_and(|s| !s.verified);
-
-        let (color, icon) = {
-            let icon = match (&breakpoint.message.is_some(), breakpoint.is_disabled()) {
-                (false, false) => ui::IconName::DebugBreakpoint,
-                (true, false) => ui::IconName::DebugLogBreakpoint,
-                (false, true) => ui::IconName::DebugDisabledBreakpoint,
-                (true, true) => ui::IconName::DebugDisabledLogBreakpoint,
-            };
-
-            let color = if is_rejected {
-                Color::Disabled
-            } else {
-                Color::Debugger
-            };
-
-            (color, icon)
-        };
-
-        let breakpoint = Arc::from(breakpoint.clone());
-
-        let alt_as_text = gpui::Keystroke {
-            modifiers: Modifiers::secondary_key(),
-            ..Default::default()
-        };
-        let primary_action_text = "Unset breakpoint";
-        let focus_handle = self.focus_handle.clone();
-        let has_context_menu = self.has_mouse_context_menu();
-
-        let meta = if is_rejected {
-            SharedString::from("No executable code is associated with this line.")
-        } else if !breakpoint.is_disabled() {
-            SharedString::from(format!(
-                "{alt_as_text}-click to disable\nright-click for more options"
-            ))
-        } else {
-            SharedString::from("Right-click for more options")
-        };
-        IconButton::new(("breakpoint_indicator", row.0 as usize), icon)
-            .icon_size(IconSize::XSmall)
-            .size(ui::ButtonSize::None)
-            .when(is_rejected, |this| {
-                this.indicator(Indicator::icon(Icon::new(IconName::Warning)).color(Color::Warning))
-            })
-            .icon_color(color)
-            .style(ButtonStyle::Transparent)
-            .on_click(cx.listener({
-                move |editor, event: &ClickEvent, window, cx| {
-                    let edit_action = if event.modifiers().platform || breakpoint.is_disabled() {
-                        BreakpointEditAction::InvertState
-                    } else {
-                        BreakpointEditAction::Toggle
-                    };
-
-                    window.focus(&editor.focus_handle(cx), cx);
-                    editor.edit_breakpoint_at_anchor(
-                        position,
-                        breakpoint.as_ref().clone(),
-                        edit_action,
-                        cx,
-                    );
-                }
-            }))
-            .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-                editor.set_gutter_context_menu(row, Some(position), event.position(), window, cx);
-            }))
-            .when(!has_context_menu, |button| {
-                button.tooltip(move |_window, cx| {
-                    Tooltip::with_meta_in(
-                        primary_action_text,
-                        Some(&ToggleBreakpoint),
-                        meta.clone(),
-                        &focus_handle,
-                        cx,
-                    )
-                })
-            })
-    }
-
-    fn render_gutter_hover_button(
-        &self,
-        position: Anchor,
-        row: DisplayRow,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> IconButton {
-        #[derive(Clone, Copy)]
-        enum Intent {
-            SetBookmark,
-            SetBreakpoint,
-        }
-
-        impl Intent {
-            fn as_str(&self) -> &'static str {
-                match self {
-                    Intent::SetBookmark => "Set bookmark",
-                    Intent::SetBreakpoint => "Set breakpoint",
-                }
-            }
-
-            fn icon(&self) -> ui::IconName {
-                match self {
-                    Intent::SetBookmark => ui::IconName::Bookmark,
-                    Intent::SetBreakpoint => ui::IconName::DebugBreakpoint,
-                }
-            }
-
-            fn color(&self) -> Color {
-                match self {
-                    Intent::SetBookmark => Color::Info,
-                    Intent::SetBreakpoint => Color::Hint,
-                }
-            }
-
-            fn secondary_and_options(&self) -> String {
-                let alt_as_text = gpui::Keystroke {
-                    modifiers: Modifiers::secondary_key(),
-                    ..Default::default()
-                };
-                match self {
-                    Intent::SetBookmark => format!(
-                        "{alt_as_text}-click to add a breakpoint\nright-click for more options"
-                    ),
-                    Intent::SetBreakpoint => format!(
-                        "{alt_as_text}-click to add a bookmark\nright-click for more options"
-                    ),
-                }
-            }
-        }
-
-        let gutter_settings = EditorSettings::get_global(cx).gutter;
-        let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
-        let show_breakpoints = self.show_breakpoints.unwrap_or(gutter_settings.breakpoints);
-
-        let [primary, secondary] = match [show_breakpoints, show_bookmarks] {
-            [true, true] => [Intent::SetBreakpoint, Intent::SetBookmark],
-            [true, false] => [Intent::SetBreakpoint; 2],
-            [false, true] => [Intent::SetBookmark; 2],
-            [false, false] => {
-                log::error!("Trying to place gutter_hover without anything enabled!!");
-                [Intent::SetBookmark; 2]
-            }
-        };
-
-        let intent = if window.modifiers().secondary() {
-            secondary
-        } else {
-            primary
-        };
-
-        let focus_handle = self.focus_handle.clone();
-        let has_context_menu = self.has_mouse_context_menu();
-        IconButton::new(("add_breakpoint_button", row.0 as usize), intent.icon())
-            .icon_size(IconSize::XSmall)
-            .size(ui::ButtonSize::None)
-            .icon_color(intent.color())
-            .style(ButtonStyle::Transparent)
-            .on_click(cx.listener({
-                move |editor, _: &ClickEvent, window, cx| {
-                    window.focus(&editor.focus_handle(cx), cx);
-                    let intent = if window.modifiers().secondary() {
-                        secondary
-                    } else {
-                        primary
-                    };
-
-                    match intent {
-                        Intent::SetBookmark => editor.toggle_bookmark_at_row(row, cx),
-                        Intent::SetBreakpoint => editor.edit_breakpoint_at_anchor(
-                            position,
-                            Breakpoint::new_standard(),
-                            BreakpointEditAction::Toggle,
-                            cx,
-                        ),
-                    }
-                }
-            }))
-            .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-                editor.set_gutter_context_menu(row, Some(position), event.position(), window, cx);
-            }))
-            .when(!has_context_menu, |button| {
-                button.tooltip(move |_window, cx| {
-                    Tooltip::with_meta_in(
-                        intent.as_str(),
-                        Some(&ToggleBreakpoint),
-                        intent.secondary_and_options(),
-                        &focus_handle,
-                        cx,
-                    )
-                })
-            })
-    }
-
     fn build_tasks_context(
         project: &Entity<Project>,
         buffer: &Entity<Buffer>,
@@ -4715,282 +4080,6 @@ impl Editor {
         }
     }
 
-    fn set_gutter_context_menu(
-        &mut self,
-        display_row: DisplayRow,
-        position: Option<Anchor>,
-        clicked_point: gpui::Point<Pixels>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let source = self
-            .buffer
-            .read(cx)
-            .snapshot(cx)
-            .anchor_before(Point::new(display_row.0, 0u32));
-
-        let context_menu = self.gutter_context_menu(position.unwrap_or(source), window, cx);
-
-        self.mouse_context_menu = MouseContextMenu::pinned_to_editor(
-            self,
-            source,
-            clicked_point,
-            context_menu,
-            window,
-            cx,
-        );
-    }
-
-    fn add_edit_breakpoint_block(
-        &mut self,
-        anchor: Anchor,
-        breakpoint: &Breakpoint,
-        edit_action: BreakpointPromptEditAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let weak_editor = cx.weak_entity();
-        let bp_prompt = cx.new(|cx| {
-            BreakpointPromptEditor::new(
-                weak_editor,
-                anchor,
-                breakpoint.clone(),
-                edit_action,
-                window,
-                cx,
-            )
-        });
-
-        let height = bp_prompt.update(cx, |this, cx| {
-            this.prompt
-                .update(cx, |prompt, cx| prompt.max_point(cx).row().0 + 1 + 2)
-        });
-        let cloned_prompt = bp_prompt.clone();
-        let blocks = vec![BlockProperties {
-            style: BlockStyle::Sticky,
-            placement: BlockPlacement::Above(anchor),
-            height: Some(height),
-            render: Arc::new(move |cx| {
-                *cloned_prompt.read(cx).editor_margins.lock() = *cx.margins;
-                cloned_prompt.clone().into_any_element()
-            }),
-            priority: 0,
-        }];
-
-        let focus_handle = bp_prompt.focus_handle(cx);
-        window.focus(&focus_handle, cx);
-
-        let block_ids = self.insert_blocks(blocks, None, cx);
-        bp_prompt.update(cx, |prompt, _| {
-            prompt.add_block_ids(block_ids);
-        });
-    }
-
-    pub(crate) fn breakpoint_at_row(
-        &self,
-        row: u32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<(Anchor, Breakpoint)> {
-        let snapshot = self.snapshot(window, cx);
-        let breakpoint_position = snapshot.buffer_snapshot().anchor_before(Point::new(row, 0));
-
-        self.breakpoint_at_anchor(breakpoint_position, &snapshot, cx)
-    }
-
-    pub(crate) fn breakpoint_at_anchor(
-        &self,
-        breakpoint_position: Anchor,
-        snapshot: &EditorSnapshot,
-        cx: &mut Context<Self>,
-    ) -> Option<(Anchor, Breakpoint)> {
-        let (breakpoint_position, _) = snapshot
-            .buffer_snapshot()
-            .anchor_to_buffer_anchor(breakpoint_position)?;
-        let buffer = self.buffer.read(cx).buffer(breakpoint_position.buffer_id)?;
-
-        let buffer_snapshot = buffer.read(cx).snapshot();
-
-        let row = buffer_snapshot
-            .summary_for_anchor::<text::PointUtf16>(&breakpoint_position)
-            .row;
-
-        let line_len = buffer_snapshot.line_len(row);
-        let anchor_end = buffer_snapshot.anchor_after(Point::new(row, line_len));
-
-        self.breakpoint_store
-            .as_ref()?
-            .read_with(cx, |breakpoint_store, cx| {
-                breakpoint_store
-                    .breakpoints(
-                        &buffer,
-                        Some(breakpoint_position..anchor_end),
-                        &buffer_snapshot,
-                        cx,
-                    )
-                    .next()
-                    .and_then(|(bp, _)| {
-                        let breakpoint_row = buffer_snapshot
-                            .summary_for_anchor::<text::PointUtf16>(&bp.position)
-                            .row;
-
-                        if breakpoint_row == row {
-                            snapshot
-                                .buffer_snapshot()
-                                .anchor_in_excerpt(bp.position)
-                                .map(|position| (position, bp.bp.clone()))
-                        } else {
-                            None
-                        }
-                    })
-            })
-    }
-
-    pub(crate) fn bookmark_at_row(
-        &self,
-        row: u32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Anchor> {
-        let snapshot = self.snapshot(window, cx);
-        let bookmark_position = snapshot.buffer_snapshot().anchor_before(Point::new(row, 0));
-
-        self.bookmark_at_anchor(bookmark_position, &snapshot, cx)
-    }
-
-    pub(crate) fn bookmark_at_anchor(
-        &self,
-        bookmark_position: Anchor,
-        snapshot: &EditorSnapshot,
-        cx: &mut Context<Self>,
-    ) -> Option<Anchor> {
-        let (bookmark_position, _) = snapshot
-            .buffer_snapshot()
-            .anchor_to_buffer_anchor(bookmark_position)?;
-        let buffer = self.buffer.read(cx).buffer(bookmark_position.buffer_id)?;
-
-        let buffer_snapshot = buffer.read(cx).snapshot();
-
-        let row = buffer_snapshot
-            .summary_for_anchor::<text::PointUtf16>(&bookmark_position)
-            .row;
-
-        let line_len = buffer_snapshot.line_len(row);
-        let anchor_end = buffer_snapshot.anchor_after(Point::new(row, line_len));
-
-        self.bookmark_store
-            .as_ref()?
-            .update(cx, |bookmark_store, cx| {
-                bookmark_store
-                    .bookmarks_for_buffer(
-                        buffer,
-                        bookmark_position..anchor_end,
-                        &buffer_snapshot,
-                        cx,
-                    )
-                    .first()
-                    .and_then(|bookmark| {
-                        let bookmark_row = buffer_snapshot
-                            .summary_for_anchor::<text::PointUtf16>(&bookmark.anchor())
-                            .row;
-
-                        if bookmark_row == row {
-                            snapshot
-                                .buffer_snapshot()
-                                .anchor_in_excerpt(bookmark.anchor())
-                        } else {
-                            None
-                        }
-                    })
-            })
-    }
-
-    pub fn edit_log_breakpoint(
-        &mut self,
-        _: &EditLogBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let breakpoint = breakpoint.unwrap_or_else(|| Breakpoint {
-                message: None,
-                state: BreakpointState::Enabled,
-                condition: None,
-                hit_condition: None,
-            });
-
-            self.add_edit_breakpoint_block(
-                anchor,
-                &breakpoint,
-                BreakpointPromptEditAction::Log,
-                window,
-                cx,
-            );
-        }
-    }
-
-    fn breakpoints_at_cursors(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<(Anchor, Option<Breakpoint>)> {
-        let snapshot = self.snapshot(window, cx);
-        let cursors = self
-            .selections
-            .disjoint_anchors_arc()
-            .iter()
-            .map(|selection| {
-                let cursor_position: Point = selection.head().to_point(&snapshot.buffer_snapshot());
-
-                let breakpoint_position = self
-                    .breakpoint_at_row(cursor_position.row, window, cx)
-                    .map(|bp| bp.0)
-                    .unwrap_or_else(|| {
-                        snapshot
-                            .display_snapshot
-                            .buffer_snapshot()
-                            .anchor_after(Point::new(cursor_position.row, 0))
-                    });
-
-                let breakpoint = self
-                    .breakpoint_at_anchor(breakpoint_position, &snapshot, cx)
-                    .map(|(anchor, breakpoint)| (anchor, Some(breakpoint)));
-
-                breakpoint.unwrap_or_else(|| (breakpoint_position, None))
-            })
-            // There might be multiple cursors on the same line; all of them should have the same anchors though as their breakpoints positions, which makes it possible to sort and dedup the list.
-            .collect::<HashMap<Anchor, _>>();
-
-        cursors.into_iter().collect()
-    }
-
-    pub fn enable_breakpoint(
-        &mut self,
-        _: &crate::actions::EnableBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let Some(breakpoint) = breakpoint.filter(|breakpoint| breakpoint.is_disabled()) else {
-                continue;
-            };
-            self.edit_breakpoint_at_anchor(
-                anchor,
-                breakpoint,
-                BreakpointEditAction::InvertState,
-                cx,
-            );
-        }
-    }
-
     pub fn align_selections(
         &mut self,
         _: &crate::actions::AlignSelections,
@@ -5083,152 +4172,6 @@ impl Editor {
                 editor.edit(edits, cx);
             });
         }
-    }
-
-    pub fn disable_breakpoint(
-        &mut self,
-        _: &crate::actions::DisableBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let Some(breakpoint) = breakpoint.filter(|breakpoint| breakpoint.is_enabled()) else {
-                continue;
-            };
-            self.edit_breakpoint_at_anchor(
-                anchor,
-                breakpoint,
-                BreakpointEditAction::InvertState,
-                cx,
-            );
-        }
-    }
-
-    pub fn toggle_breakpoint(
-        &mut self,
-        _: &crate::actions::ToggleBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            if let Some(breakpoint) = breakpoint {
-                self.edit_breakpoint_at_anchor(
-                    anchor,
-                    breakpoint,
-                    BreakpointEditAction::Toggle,
-                    cx,
-                );
-            } else {
-                self.edit_breakpoint_at_anchor(
-                    anchor,
-                    Breakpoint::new_standard(),
-                    BreakpointEditAction::Toggle,
-                    cx,
-                );
-            }
-        }
-    }
-
-    pub fn edit_breakpoint_at_anchor(
-        &mut self,
-        breakpoint_position: Anchor,
-        breakpoint: Breakpoint,
-        edit_action: BreakpointEditAction,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(breakpoint_store) = &self.breakpoint_store else {
-            return;
-        };
-        let buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let Some((position, _)) = buffer_snapshot.anchor_to_buffer_anchor(breakpoint_position)
-        else {
-            return;
-        };
-        let Some(buffer) = self.buffer.read(cx).buffer(position.buffer_id) else {
-            return;
-        };
-
-        breakpoint_store.update(cx, |breakpoint_store, cx| {
-            breakpoint_store.toggle_breakpoint(
-                buffer,
-                BreakpointWithPosition {
-                    position,
-                    bp: breakpoint,
-                },
-                edit_action,
-                cx,
-            );
-        });
-
-        cx.notify();
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn breakpoint_store(&self) -> Option<Entity<BreakpointStore>> {
-        self.breakpoint_store.clone()
-    }
-
-    fn go_to_active_debug_line(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        maybe!({
-            let breakpoint_store = self.breakpoint_store.as_ref()?;
-
-            let (active_stack_frame, debug_line_pane_id) = {
-                let store = breakpoint_store.read(cx);
-                let active_stack_frame = store.active_position().cloned();
-                let debug_line_pane_id = store.active_debug_line_pane_id();
-                (active_stack_frame, debug_line_pane_id)
-            };
-
-            let Some(active_stack_frame) = active_stack_frame else {
-                self.clear_row_highlights::<ActiveDebugLine>();
-                return None;
-            };
-
-            if let Some(debug_line_pane_id) = debug_line_pane_id {
-                if let Some(workspace) = self
-                    .workspace
-                    .as_ref()
-                    .and_then(|(workspace, _)| workspace.upgrade())
-                {
-                    let editor_pane_id = workspace
-                        .read(cx)
-                        .pane_for_item_id(cx.entity_id())
-                        .map(|pane| pane.entity_id());
-
-                    if editor_pane_id.is_some_and(|id| id != debug_line_pane_id) {
-                        self.clear_row_highlights::<ActiveDebugLine>();
-                        return None;
-                    }
-                }
-            }
-
-            let position = active_stack_frame.position;
-
-            let snapshot = self.buffer.read(cx).snapshot(cx);
-            let multibuffer_anchor = snapshot.anchor_in_excerpt(position)?;
-
-            self.clear_row_highlights::<ActiveDebugLine>();
-
-            self.go_to_line::<ActiveDebugLine>(
-                multibuffer_anchor,
-                Some(cx.theme().colors().editor_debugger_active_line_background),
-                window,
-                cx,
-            );
-
-            cx.notify();
-
-            Some(())
-        })
-        .is_some()
     }
 
     pub fn reverse_lines(&mut self, _: &ReverseLines, window: &mut Window, cx: &mut Context<Self>) {
@@ -9618,8 +8561,6 @@ impl EditorSnapshot {
             };
 
             let show_runnables = self.show_runnables.unwrap_or(gutter_settings.runnables);
-            let show_breakpoints = self.show_breakpoints.unwrap_or(gutter_settings.breakpoints);
-            let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
 
             let is_singleton = self.buffer_snapshot().is_singleton();
 
@@ -9628,7 +8569,7 @@ impl EditorSnapshot {
                     ch_width * 4.0
                 // runnables, breakpoints and bookmarks are shown in the same place
                 // if all three are there only the runnable is shown
-                } else if show_runnables || show_breakpoints || show_bookmarks {
+                } else if show_runnables {
                     ch_width * 3.0
                 } else if show_git_gutter && show_line_numbers {
                     ch_width * 2.0
@@ -10162,237 +9103,6 @@ fn collapse_multiline_range(range: Range<Point>) -> Range<Point> {
 }
 
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
-
-enum BreakpointPromptEditAction {
-    Log,
-    Condition,
-    HitCondition,
-}
-
-struct BreakpointPromptEditor {
-    pub(crate) prompt: Entity<Editor>,
-    editor: WeakEntity<Editor>,
-    breakpoint_anchor: Anchor,
-    breakpoint: Breakpoint,
-    edit_action: BreakpointPromptEditAction,
-    block_ids: HashSet<CustomBlockId>,
-    editor_margins: Arc<Mutex<EditorMargins>>,
-    _subscriptions: Vec<Subscription>,
-}
-
-impl BreakpointPromptEditor {
-    const MAX_LINES: u8 = 4;
-
-    fn new(
-        editor: WeakEntity<Editor>,
-        breakpoint_anchor: Anchor,
-        breakpoint: Breakpoint,
-        edit_action: BreakpointPromptEditAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let base_text = match edit_action {
-            BreakpointPromptEditAction::Log => breakpoint.message.as_ref(),
-            BreakpointPromptEditAction::Condition => breakpoint.condition.as_ref(),
-            BreakpointPromptEditAction::HitCondition => breakpoint.hit_condition.as_ref(),
-        }
-        .map(|msg| msg.to_string())
-        .unwrap_or_default();
-
-        let buffer = cx.new(|cx| Buffer::local(base_text, cx));
-        let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
-
-        let prompt = cx.new(|cx| {
-            let mut prompt = Editor::new(
-                EditorMode::AutoHeight {
-                    min_lines: 1,
-                    max_lines: Some(Self::MAX_LINES as usize),
-                },
-                buffer,
-                None,
-                window,
-                cx,
-            );
-            prompt.set_soft_wrap_mode(language::language_settings::SoftWrap::EditorWidth, cx);
-            prompt.set_show_cursor_when_unfocused(false, cx);
-            prompt.set_placeholder_text(
-                match edit_action {
-                    BreakpointPromptEditAction::Log => "Message to log when a breakpoint is hit. Expressions within {} are interpolated.",
-                    BreakpointPromptEditAction::Condition => "Condition when a breakpoint is hit. Expressions within {} are interpolated.",
-                    BreakpointPromptEditAction::HitCondition => "How many breakpoint hits to ignore",
-                },
-                window,
-                cx,
-            );
-
-            prompt
-        });
-
-        Self {
-            prompt,
-            editor,
-            breakpoint_anchor,
-            breakpoint,
-            edit_action,
-            editor_margins: Arc::new(Mutex::new(EditorMargins::default())),
-            block_ids: Default::default(),
-            _subscriptions: vec![],
-        }
-    }
-
-    pub(crate) fn add_block_ids(&mut self, block_ids: Vec<CustomBlockId>) {
-        self.block_ids.extend(block_ids)
-    }
-
-    fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(editor) = self.editor.upgrade() {
-            let message = self
-                .prompt
-                .read(cx)
-                .buffer
-                .read(cx)
-                .as_singleton()
-                .expect("A multi buffer in breakpoint prompt isn't possible")
-                .read(cx)
-                .as_rope()
-                .to_string();
-
-            editor.update(cx, |editor, cx| {
-                editor.edit_breakpoint_at_anchor(
-                    self.breakpoint_anchor,
-                    self.breakpoint.clone(),
-                    match self.edit_action {
-                        BreakpointPromptEditAction::Log => {
-                            BreakpointEditAction::EditLogMessage(message.into())
-                        }
-                        BreakpointPromptEditAction::Condition => {
-                            BreakpointEditAction::EditCondition(message.into())
-                        }
-                        BreakpointPromptEditAction::HitCondition => {
-                            BreakpointEditAction::EditHitCondition(message.into())
-                        }
-                    },
-                    cx,
-                );
-
-                editor.remove_blocks(self.block_ids.clone(), None, cx);
-                cx.focus_self(window);
-            });
-        }
-    }
-
-    fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor
-            .update(cx, |editor, cx| {
-                editor.remove_blocks(self.block_ids.clone(), None, cx);
-                window.focus(&editor.focus_handle, cx);
-            })
-            .log_err();
-    }
-
-    fn render_prompt_editor(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let settings = ThemeSettings::get_global(cx);
-        let text_style = TextStyle {
-            color: if self.prompt.read(cx).read_only(cx) {
-                cx.theme().colors().text_disabled
-            } else {
-                cx.theme().colors().text
-            },
-            font_family: settings.buffer_font.family.clone(),
-            font_fallbacks: settings.buffer_font.fallbacks.clone(),
-            font_size: settings.buffer_font_size(cx).into(),
-            font_weight: settings.buffer_font.weight,
-            line_height: relative(settings.buffer_line_height.value()),
-            ..Default::default()
-        };
-        EditorElement::new(
-            &self.prompt,
-            EditorStyle {
-                background: cx.theme().colors().editor_background,
-                local_player: cx.theme().players().local(),
-                text: text_style,
-                ..Default::default()
-            },
-        )
-    }
-
-    fn render_close_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.prompt.focus_handle(cx);
-        IconButton::new("cancel", IconName::Close)
-            .icon_color(Color::Muted)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Cancel", &menu::Cancel, &focus_handle, cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.cancel(&menu::Cancel, window, cx);
-            }))
-    }
-
-    fn render_confirm_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.prompt.focus_handle(cx);
-        IconButton::new("confirm", IconName::Return)
-            .icon_color(Color::Muted)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Confirm", &menu::Confirm, &focus_handle, cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.confirm(&menu::Confirm, window, cx);
-            }))
-    }
-}
-
-impl Render for BreakpointPromptEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
-        let editor_margins = *self.editor_margins.lock();
-        let gutter_dimensions = editor_margins.gutter;
-        let left_gutter_width = gutter_dimensions.full_width() + (gutter_dimensions.margin / 2.0);
-        let right_padding = editor_margins.right + px(9.);
-        h_flex()
-            .key_context("Editor")
-            .bg(cx.theme().colors().editor_background)
-            .border_y_1()
-            .border_color(cx.theme().status().info_border)
-            .size_full()
-            .py(window.line_height() / 2.5)
-            .pr(right_padding)
-            .on_action(cx.listener(Self::confirm))
-            .on_action(cx.listener(Self::cancel))
-            .child(
-                WithRemSize::new(ui_font_size)
-                    .h_full()
-                    .w(left_gutter_width)
-                    .flex()
-                    .flex_row()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_center()
-                    .gap_1()
-                    .child(self.render_close_button(cx)),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .child(div().flex_1().child(self.render_prompt_editor(cx)))
-                    .child(
-                        WithRemSize::new(ui_font_size)
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(self.render_confirm_button(cx)),
-                    ),
-            )
-    }
-}
-
-impl Focusable for BreakpointPromptEditor {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.prompt.focus_handle(cx)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineHighlight {

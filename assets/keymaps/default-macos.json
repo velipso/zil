@@ -139,8 +139,6 @@
       "cmd-;": "editor::ToggleLineNumbers",
       "cmd-'": "editor::ToggleSelectedDiffHunks",
       "cmd-\"": "editor::ExpandAllDiffHunks",
-      "f9": "editor::ToggleBreakpoint",
-      "shift-f9": "editor::EditLogBreakpoint",
     },
   },
   {
@@ -511,7 +509,6 @@
       "cmd-shift-e": "pane::RevealInProjectPanel",
       "cmd-f8": "editor::GoToHunk",
       "cmd-shift-f8": "editor::GoToPreviousHunk",
-      "ctrl-:": "editor::ToggleInlayHints",
     },
   },
   {

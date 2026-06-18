@@ -7,10 +7,6 @@ pub struct DebuggerSettings {
     ///
     /// Default: line
     pub stepping_granularity: SteppingGranularity,
-    /// Whether the breakpoints should be reused across Zed sessions.
-    ///
-    /// Default: true
-    pub save_breakpoints: bool,
     /// Whether to show the debug button in the status bar.
     ///
     /// Default: true
@@ -40,7 +36,6 @@ impl Settings for DebuggerSettings {
             stepping_granularity: dap_granularity_from_settings(
                 content.stepping_granularity.unwrap(),
             ),
-            save_breakpoints: content.save_breakpoints.unwrap(),
             button: content.button.unwrap(),
             timeout: content.timeout.unwrap(),
             log_dap_communications: content.log_dap_communications.unwrap(),

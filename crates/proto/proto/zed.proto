@@ -286,9 +286,6 @@ message Envelope {
     GitDiffResponse git_diff_response = 320;
     GitInit git_init = 321;
 
-    ToggleBreakpoint toggle_breakpoint = 326;
-    BreakpointsForFile breakpoints_for_file = 327;
-
     UpdateRepository update_repository = 328;
     RemoveRepository remove_repository = 329;
 
