@@ -520,7 +520,6 @@ impl VsCodeSettings {
                 "auto" => Some(LineEndingSetting::Detect),
                 _ => None,
             }),
-            extend_comment_on_newline: None,
             extend_list_on_newline: None,
             indent_list_on_tab: None,
             format_on_save: self.read_bool("editor.guides.formatOnSave").map(|b| {

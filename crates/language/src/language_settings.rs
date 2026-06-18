@@ -111,8 +111,6 @@ pub struct LanguageSettings {
     pub show_whitespaces: settings::ShowWhitespaceSetting,
     /// Visible characters used to render whitespace when show_whitespaces is enabled.
     pub whitespace_map: WhitespaceMap,
-    /// Whether to start a new line with a comment when a previous line is a comment as well.
-    pub extend_comment_on_newline: bool,
     /// Whether to continue markdown lists when pressing enter.
     pub extend_list_on_newline: bool,
     /// Whether to indent list items when pressing tab after a list marker.
@@ -560,7 +558,6 @@ impl settings::Settings for AllLanguageSettings {
                     space: SharedString::new(whitespace_map.space.unwrap().to_string()),
                     tab: SharedString::new(whitespace_map.tab.unwrap().to_string()),
                 },
-                extend_comment_on_newline: settings.extend_comment_on_newline.unwrap(),
                 extend_list_on_newline: settings.extend_list_on_newline.unwrap(),
                 indent_list_on_tab: settings.indent_list_on_tab.unwrap(),
                 inlay_hints: InlayHintSettings {

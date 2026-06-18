@@ -7766,7 +7766,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn miscellaneous_section() -> [SettingsPageItem; 7] {
+    fn miscellaneous_section() -> [SettingsPageItem; 6] {
         [
             SettingsPageItem::SectionHeader("Miscellaneous"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -7826,25 +7826,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                 }),
                 metadata: None,
                 files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Extend Comment On Newline",
-                description: "Whether to start a new line with a comment when a previous line is a comment as well.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).extend_comment_on_newline"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.extend_comment_on_newline.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.extend_comment_on_newline = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
             }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Colorize Brackets",

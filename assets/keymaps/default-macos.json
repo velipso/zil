@@ -74,6 +74,7 @@
       "ctrl-w": ["editor::DeleteToPreviousWordStart", { "ignore_newlines": false }],
       "alt-delete": ["editor::DeleteToNextWordEnd", { "ignore_newlines": false }],
       "cmd-x": "editor::Cut",
+      "shift-delete": "editor::Cut",
       "cmd-c": "editor::Copy",
       "cmd-v": "editor::Paste",
       "cmd-z": "editor::Undo",

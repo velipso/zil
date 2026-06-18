@@ -4478,30 +4478,6 @@ impl MultiBufferSnapshot {
         }
     }
 
-    pub fn indent_and_comment_for_line(&self, row: MultiBufferRow, cx: &App) -> String {
-        let mut indent = self.indent_size_for_line(row).chars().collect::<String>();
-
-        if self.language_settings(cx).extend_comment_on_newline
-            && let Some(language_scope) = self.language_scope_at(Point::new(row.0, 0))
-        {
-            let delimiters = language_scope.line_comment_prefixes();
-            for delimiter in delimiters {
-                if *self
-                    .chars_at(Point::new(row.0, indent.len() as u32))
-                    .take(delimiter.chars().count())
-                    .collect::<String>()
-                    .as_str()
-                    == **delimiter
-                {
-                    indent.push_str(delimiter);
-                    break;
-                }
-            }
-        }
-
-        indent
-    }
-
     pub fn is_line_whitespace_upto<T>(&self, position: T) -> bool
     where
         T: ToOffset,
@@ -6036,14 +6012,6 @@ impl MultiBufferSnapshot {
     pub fn language_at<T: ToOffset>(&self, offset: T) -> Option<&Arc<Language>> {
         self.point_to_buffer_offset(offset)
             .and_then(|(buffer, offset)| buffer.language_at(offset))
-    }
-
-    fn language_settings<'a>(&'a self, cx: &'a App) -> Cow<'a, LanguageSettings> {
-        self.excerpts
-            .first()
-            .map(|excerpt| excerpt.buffer_snapshot(self))
-            .map(|buffer| LanguageSettings::for_buffer_snapshot(buffer, None, cx))
-            .unwrap_or_else(move || self.language_settings_at(MultiBufferOffset::ZERO, cx))
     }
 
     pub fn language_settings_at<'a, T: ToOffset>(

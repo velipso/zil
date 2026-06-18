@@ -278,10 +278,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: "•" for spaces, "→" for tabs.
     pub whitespace_map: Option<WhitespaceMapContent>,
-    /// Whether to start a new line with a comment when a previous line is a comment as well.
-    ///
-    /// Default: true
-    pub extend_comment_on_newline: Option<bool>,
     /// Whether to continue markdown lists when pressing enter.
     ///
     /// Default: true
