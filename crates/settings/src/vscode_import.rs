@@ -238,7 +238,6 @@ impl VsCodeSettings {
 
     fn editor_settings_content(&self) -> EditorSettingsContent {
         EditorSettingsContent {
-            auto_signature_help: self.read_bool("editor.parameterHints.enabled"),
             autoscroll_on_clicks: None,
             cursor_blink: self.read_enum("editor.cursorBlinking", |s| match s {
                 "blink" | "phase" | "expand" | "smooth" => Some(true),
@@ -303,7 +302,6 @@ impl VsCodeSettings {
                 },
             ),
             selection_highlight: self.read_bool("editor.selectionHighlight"),
-            show_signature_help_after_edits: self.read_bool("editor.parameterHints.enabled"),
             toolbar: None,
             use_smartcase_search: self.read_bool("search.smartCase"),
             vertical_scroll_margin: self.read_f32("editor.cursorSurroundingLines"),

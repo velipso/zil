@@ -49,8 +49,6 @@ pub struct EditorSettings {
     pub double_click_in_multibuffer: DoubleClickInMultibuffer,
     pub search_wrap: bool,
     pub search: SearchSettings,
-    pub auto_signature_help: bool,
-    pub show_signature_help_after_edits: bool,
     pub diagnostics_max_severity: Option<DiagnosticSeverity>,
     pub drag_and_drop_selection: DragAndDropSelection,
     pub lsp_document_colors: DocumentColorsRenderMode,
@@ -259,8 +257,6 @@ impl Settings for EditorSettings {
                 regex: search.regex.unwrap(),
                 center_on_match: search.center_on_match.unwrap(),
             },
-            auto_signature_help: editor.auto_signature_help.unwrap(),
-            show_signature_help_after_edits: editor.show_signature_help_after_edits.unwrap(),
             diagnostics_max_severity: editor.diagnostics_max_severity.map(Into::into),
             drag_and_drop_selection: DragAndDropSelection {
                 enabled: drag_and_drop_selection.enabled.unwrap(),

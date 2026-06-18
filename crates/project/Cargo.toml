@@ -63,7 +63,6 @@ indexmap.workspace = true
 language.workspace = true
 log.workspace = true
 lsp.workspace = true
-markdown.workspace = true
 node_runtime.workspace = true
 parking_lot.workspace = true
 paths.workspace = true

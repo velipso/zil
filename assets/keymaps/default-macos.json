@@ -139,7 +139,6 @@
       "cmd-;": "editor::ToggleLineNumbers",
       "cmd-'": "editor::ToggleSelectedDiffHunks",
       "cmd-\"": "editor::ExpandAllDiffHunks",
-      "cmd-i": "editor::ShowSignatureHelp",
       "f9": "editor::ToggleBreakpoint",
       "shift-f9": "editor::EditLogBreakpoint",
     },
@@ -493,13 +492,6 @@
       "ctrl-n": "editor::ContextMenuNext",
       "pageup": "editor::ContextMenuFirst",
       "pagedown": "editor::ContextMenuLast",
-    },
-  },
-  {
-    "context": "Editor && showing_signature_help && !showing_completions",
-    "bindings": {
-      "up": "editor::SignatureHelpPrevious",
-      "down": "editor::SignatureHelpNext",
     },
   },
   // Custom bindings

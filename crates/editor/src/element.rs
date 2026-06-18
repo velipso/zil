@@ -385,9 +385,6 @@ impl EditorElement {
         register_action(editor, window, Editor::restart_language_server);
         register_action(editor, window, Editor::stop_language_server);
         register_action(editor, window, Editor::show_character_palette);
-        register_action(editor, window, Editor::show_signature_help);
-        register_action(editor, window, Editor::signature_help_prev);
-        register_action(editor, window, Editor::signature_help_next);
         register_action(editor, window, Editor::display_cursor_names);
         register_action(editor, window, Editor::open_active_item_in_terminal);
         register_action(editor, window, Editor::spawn_nearest_task);
@@ -565,14 +562,12 @@ impl EditorElement {
     ) -> (
         Vec<(PlayerColor, Vec<SelectionLayout>)>,
         BTreeMap<DisplayRow, LineHighlightSpec>,
-        Option<DisplayPoint>,
     ) {
         let mut selections: Vec<(PlayerColor, Vec<SelectionLayout>)> = Vec::new();
         let mut active_rows = BTreeMap::new();
-        let mut newest_selection_head = None;
 
         let Some(editor_with_selections) = self.editor_with_selections(cx) else {
-            return (selections, active_rows, newest_selection_head);
+            return (selections, active_rows);
         };
 
         editor_with_selections.update(cx, |editor, cx| {
@@ -593,9 +588,6 @@ impl EditorElement {
                         editor.leader_id.is_none(),
                         None,
                     );
-                    if is_newest {
-                        newest_selection_head = Some(layout.head);
-                    }
 
                     for row in cmp::max(layout.active_rows.start.0, start_row.0)
                         ..=cmp::min(layout.active_rows.end.0, end_row.0)
@@ -739,7 +731,7 @@ impl EditorElement {
             cx,
         );
 
-        (selections, active_rows, newest_selection_head)
+        (selections, active_rows)
     }
 
     fn collect_cursors(
@@ -3167,91 +3159,6 @@ impl EditorElement {
                 cx,
             );
         }
-    }
-
-    fn layout_signature_help(
-        &self,
-        hitbox: &Hitbox,
-        content_origin: gpui::Point<Pixels>,
-        scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
-        newest_selection_head: Option<DisplayPoint>,
-        start_row: DisplayRow,
-        line_layouts: &[LineWithInvisibles],
-        line_height: Pixels,
-        em_width: Pixels,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        if !self.editor.focus_handle(cx).is_focused(window) {
-            return;
-        }
-        let Some(newest_selection_head) = newest_selection_head else {
-            return;
-        };
-
-        let max_size = size(
-            (120. * em_width) // Default size
-                .min(hitbox.size.width / 2.) // Shrink to half of the editor width
-                .max(MIN_POPOVER_CHARACTER_WIDTH * em_width), // Apply minimum width of 20 characters
-            (16. * line_height) // Default size
-                .min(hitbox.size.height / 2.) // Shrink to half of the editor height
-                .max(MIN_POPOVER_LINE_HEIGHT * line_height), // Apply minimum height of 4 lines
-        );
-
-        let maybe_element = self.editor.update(cx, |editor, cx| {
-            if let Some(popover) = editor.signature_help_state.popover_mut() {
-                let element = popover.render(max_size, window, cx);
-                Some(element)
-            } else {
-                None
-            }
-        });
-        let Some(mut element) = maybe_element else {
-            return;
-        };
-
-        let selection_row = newest_selection_head.row();
-        let Some(cursor_row_layout) = (selection_row >= start_row)
-            .then(|| line_layouts.get(selection_row.minus(start_row) as usize))
-            .flatten()
-        else {
-            return;
-        };
-
-        let target_x = cursor_row_layout.x_for_index(newest_selection_head.column() as usize)
-            - Pixels::from(scroll_pixel_position.x);
-        let target_y = Pixels::from(
-            selection_row.as_f64() * ScrollPixelOffset::from(line_height) - scroll_pixel_position.y,
-        );
-        let target_point = content_origin + point(target_x, target_y);
-
-        let actual_size = element.layout_as_root(Size::<AvailableSpace>::default(), window, cx);
-
-        let (popover_bounds_above, popover_bounds_below) = {
-            let horizontal_offset = (hitbox.top_right().x
-                - POPOVER_RIGHT_OFFSET
-                - (target_point.x + actual_size.width))
-                .min(Pixels::ZERO);
-            let initial_x = target_point.x + horizontal_offset;
-            (
-                Bounds::new(
-                    point(initial_x, target_point.y - actual_size.height),
-                    actual_size,
-                ),
-                Bounds::new(
-                    point(initial_x, target_point.y + line_height + HOVER_POPOVER_GAP),
-                    actual_size,
-                ),
-            )
-        };
-
-        let final_origin = if popover_bounds_above.is_contained_within(hitbox) {
-            popover_bounds_above.origin
-        } else {
-            popover_bounds_below.origin
-        };
-
-        window.defer_draw(element, final_origin, 2, None);
     }
 
     fn paint_background(&self, layout: &EditorLayout, window: &mut Window, cx: &mut App) {
@@ -6239,7 +6146,7 @@ impl Element for EditorElement {
                         })
                         .unwrap_or_else(|| (Vec::new(), Vec::new(), HashMap::default()));
 
-                    let (selections, mut active_rows, newest_selection_head) = self
+                    let (selections, mut active_rows) = self
                         .layout_selections(
                             start_anchor,
                             end_anchor,
@@ -6770,19 +6677,6 @@ impl Element for EditorElement {
                             self.layout_gutter_hover_button(&gutter, position, row, window, cx),
                         );
                     }
-
-                    self.layout_signature_help(
-                        &hitbox,
-                        content_origin,
-                        scroll_pixel_position,
-                        newest_selection_head,
-                        start_row,
-                        &line_layouts,
-                        line_height,
-                        em_width,
-                        window,
-                        cx,
-                    );
 
                     if !cx.has_active_drag() {
                         self.layout_hover_popovers(

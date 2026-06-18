@@ -181,30 +181,12 @@ impl EditorLspTestContext {
                     path_suffixes: vec!["ts".to_string()],
                     ..Default::default()
                 },
-                brackets: language::BracketPairConfig {
-                    pairs: vec![language::BracketPair {
-                        start: "{".to_string(),
-                        end: "}".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: true,
-                    }],
-                    disabled_scopes_by_bracket_ix: Default::default(),
-                },
                 word_characters,
                 ..Default::default()
             },
             Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
         )
         .with_queries(LanguageQueries {
-            brackets: Some(Cow::from(indoc! {r#"
-                ("(" @open ")" @close)
-                ("[" @open "]" @close)
-                ("{" @open "}" @close)
-                ("<" @open ">" @close)
-                ("'" @open "'" @close)
-                ("`" @open "`" @close)
-                ("\"" @open "\"" @close)"#})),
             indents: Some(Cow::from(indoc! {r#"
                 [
                     (call_expression)
@@ -286,33 +268,12 @@ impl EditorLspTestContext {
                     path_suffixes: vec!["tsx".to_string()],
                     ..Default::default()
                 },
-                brackets: language::BracketPairConfig {
-                    pairs: vec![language::BracketPair {
-                        start: "{".to_string(),
-                        end: "}".to_string(),
-                        close: true,
-                        surround: true,
-                        newline: true,
-                    }],
-                    disabled_scopes_by_bracket_ix: Default::default(),
-                },
                 word_characters,
                 ..Default::default()
             },
             Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         )
         .with_queries(LanguageQueries {
-            brackets: Some(Cow::from(indoc! {r#"
-                ("(" @open ")" @close)
-                ("[" @open "]" @close)
-                ("{" @open "}" @close)
-                ("<" @open ">" @close)
-                ("<" @open "/>" @close)
-                ("</" @open ">" @close)
-                ("\"" @open "\"" @close)
-                ("'" @open "'" @close)
-                ("`" @open "`" @close)
-                ((jsx_element (jsx_opening_element) @open (jsx_closing_element) @close) (#set! newline.only))"#})),
             indents: Some(Cow::from(indoc! {r#"
                 [
                     (call_expression)
@@ -406,11 +367,6 @@ impl EditorLspTestContext {
             Some(tree_sitter_html::LANGUAGE.into()),
         )
         .with_queries(LanguageQueries {
-            brackets: Some(Cow::from(indoc! {r#"
-                ("<" @open "/>" @close)
-                ("</" @open ">" @close)
-                ("<" @open ">" @close)
-                ("\"" @open "\"" @close)"#})),
             ..Default::default()
         })
         .expect("Could not parse queries");

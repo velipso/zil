@@ -877,20 +877,6 @@ impl LanguageServer {
                     range_formatting: Some(DynamicRegistrationClientCapabilities {
                         dynamic_registration: Some(true),
                     }),
-                    signature_help: Some(SignatureHelpClientCapabilities {
-                        signature_information: Some(SignatureInformationSettings {
-                            documentation_format: Some(vec![
-                                MarkupKind::Markdown,
-                                MarkupKind::PlainText,
-                            ]),
-                            parameter_information: Some(ParameterInformationSettings {
-                                label_offset_support: Some(true),
-                            }),
-                            active_parameter_support: Some(true),
-                        }),
-                        dynamic_registration: Some(true),
-                        ..SignatureHelpClientCapabilities::default()
-                    }),
                     synchronization: Some(TextDocumentSyncClientCapabilities {
                         did_save: Some(true),
                         dynamic_registration: Some(true),

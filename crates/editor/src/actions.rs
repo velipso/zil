@@ -730,16 +730,10 @@ actions!(
         ShowCharacterPalette,
         /// Shows edit prediction at cursor.
         ShowEditPrediction,
-        /// Shows signature help for the current function.
-        ShowSignatureHelp,
         /// Shows word completions.
         ShowWordCompletions,
         /// Randomly shuffles selected lines.
         ShuffleLines,
-        /// Navigates to the next signature in the signature help popup.
-        SignatureHelpNext,
-        /// Navigates to the previous signature in the signature help popup.
-        SignatureHelpPrevious,
         /// Sorts selected lines by length.
         SortLinesByLength,
         /// Sorts selected lines case-insensitively.
@@ -766,8 +760,6 @@ actions!(
         EnableBreakpoint,
         /// Edits the log message for a breakpoint.
         EditLogBreakpoint,
-        /// Toggles automatic signature help.
-        ToggleAutoSignatureHelp,
         /// Toggles inline git blame display.
         ToggleDiagnostics,
         /// Toggles indent guides display.

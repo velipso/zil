@@ -8577,7 +8577,6 @@ dependencies = [
  "language",
  "log",
  "lsp",
- "markdown",
  "node_runtime",
  "parking_lot",
  "paths",

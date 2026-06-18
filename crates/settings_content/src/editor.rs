@@ -159,15 +159,6 @@ pub struct EditorSettingsContent {
     /// Default: nothing is enabled
     pub search: Option<SearchSettingsContent>,
 
-    /// Whether to automatically show a signature help pop-up or not.
-    ///
-    /// Default: false
-    pub auto_signature_help: Option<bool>,
-
-    /// Whether to show the signature help pop-up after completions or bracket pairs inserted.
-    ///
-    /// Default: false
-    pub show_signature_help_after_edits: Option<bool>,
     /// The minimum APCA perceptual contrast to maintain when
     /// rendering text over highlight backgrounds in the editor.
     ///

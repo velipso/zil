@@ -1742,43 +1742,6 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn signature_help_section() -> [SettingsPageItem; 3] {
-        [
-            SettingsPageItem::SectionHeader("Signature Help"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Auto Signature Help",
-                description: "Automatically show a signature help pop-up.",
-                field: Box::new(SettingField {
-                    json_path: Some("auto_signature_help"),
-                    pick: |settings_content| settings_content.editor.auto_signature_help.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.auto_signature_help = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Signature Help After Edits",
-                description: "Show the signature help pop-up after completions or bracket pairs are inserted.",
-                field: Box::new(SettingField {
-                    json_path: Some("show_signature_help_after_edits"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .show_signature_help_after_edits
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.show_signature_help_after_edits = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn hover_popover_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader("Hover Popover"),
@@ -2785,7 +2748,6 @@ fn editor_page() -> SettingsPage {
         which_key_section(),
         multibuffer_section(),
         scrolling_section(),
-        signature_help_section(),
         hover_popover_section(),
         drag_and_drop_selection_section(),
         gutter_section(),

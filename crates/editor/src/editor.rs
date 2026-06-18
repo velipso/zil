@@ -42,7 +42,6 @@ mod bookmarks;
 mod editor_block_comment_tests;
 #[cfg(test)]
 mod editor_tests;
-mod signature_help;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test;
 
@@ -211,7 +210,6 @@ use crate::{
     scroll::ScrollOffset,
     selections_collection::resolve_selections_wrapping_blocks,
     semantic_tokens::SemanticTokenState,
-    signature_help::{SignatureHelpHiddenBy, SignatureHelpState},
 };
 
 pub const FILE_HEADER_HEIGHT: u32 = 2;
@@ -879,8 +877,6 @@ pub struct Editor {
     active_indent_guides_state: ActiveIndentGuidesState,
     nav_history: Option<ItemNavHistory>,
     mouse_context_menu: Option<MouseContextMenu>,
-    signature_help_state: SignatureHelpState,
-    auto_signature_help: Option<bool>,
     quick_selection_highlight_task: Option<(Range<Anchor>, Task<()>)>,
     debounced_selection_highlight_task: Option<(Range<Anchor>, Task<()>)>,
     debounced_selection_highlight_complete: bool,
@@ -1985,8 +1981,6 @@ impl Editor {
             active_indent_guides_state: ActiveIndentGuidesState::default(),
             nav_history: None,
             mouse_context_menu: None,
-            signature_help_state: SignatureHelpState::default(),
-            auto_signature_help: None,
             next_inlay_id: 0,
             quick_selection_highlight_task: None,
             debounced_selection_highlight_task: None,
@@ -2131,7 +2125,6 @@ impl Editor {
             |editor, _, e: &EditorEvent, window, cx| match e {
                 EditorEvent::ScrollPositionChanged { local, .. } => {
                     if *local {
-                        editor.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
                         let snapshot = editor.snapshot(window, cx);
                         let new_anchor = editor
                             .scroll_manager
@@ -2277,10 +2270,6 @@ impl Editor {
         key_context.set("mode", mode);
         if self.pending_rename.is_some() {
             key_context.add("renaming");
-        }
-
-        if self.signature_help_state.has_multiple_signatures() {
-            key_context.add("showing_signature_help");
         }
 
         // Disable vim contexts when a sub-editor (e.g. rename/inline assistant) is focused.
@@ -2828,7 +2817,6 @@ impl Editor {
         let mut dismissed = false;
         dismissed |= self.take_rename(false, window, cx).is_some();
         dismissed |= hide_hover(self, cx);
-        dismissed |= self.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
         dismissed |= self.mouse_context_menu.take().is_some();
         if self.mode.is_full() && self.has_active_diagnostic_group() {
             self.dismiss_diagnostics(cx);
@@ -6615,38 +6603,6 @@ impl Editor {
     pub fn group_until_transaction(&mut self, tx_id: TransactionId, cx: &mut Context<Self>) {
         self.buffer
             .update(cx, |buffer, cx| buffer.group_until_transaction(tx_id, cx));
-    }
-
-    pub fn signature_help_prev(
-        &mut self,
-        _: &SignatureHelpPrevious,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(popover) = self.signature_help_state.popover_mut() {
-            if popover.current_signature == 0 {
-                popover.current_signature = popover.signatures.len() - 1;
-            } else {
-                popover.current_signature -= 1;
-            }
-            cx.notify();
-        }
-    }
-
-    pub fn signature_help_next(
-        &mut self,
-        _: &SignatureHelpNext,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(popover) = self.signature_help_state.popover_mut() {
-            if popover.current_signature + 1 == popover.signatures.len() {
-                popover.current_signature = 0;
-            } else {
-                popover.current_signature += 1;
-            }
-            cx.notify();
-        }
     }
 
     pub fn rename(

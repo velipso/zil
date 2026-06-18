@@ -198,9 +198,6 @@ message Envelope {
     LinkedEditingRange linked_editing_range = 209;
     LinkedEditingRangeResponse linked_editing_range_response = 210;
 
-    GetSignatureHelp get_signature_help = 217;
-    GetSignatureHelpResponse get_signature_help_response = 218;
-
     ListRemoteDirectory list_remote_directory = 219;
     ListRemoteDirectoryResponse list_remote_directory_response = 220;
     AddWorktree add_worktree = 222;

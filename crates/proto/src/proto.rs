@@ -98,8 +98,6 @@ messages!(
     (GetPermalinkToLineResponse, Foreground),
     (GetProjectSymbols, Background),
     (GetProjectSymbolsResponse, Background),
-    (GetSignatureHelp, Background),
-    (GetSignatureHelpResponse, Background),
     (OpenUnstagedDiff, Foreground),
     (OpenUnstagedDiffResponse, Foreground),
     (OpenUncommittedDiff, Foreground),
@@ -378,7 +376,6 @@ request_messages!(
     (GetHover, GetHoverResponse),
     (GetNotifications, GetNotificationsResponse),
     (GetProjectSymbols, GetProjectSymbolsResponse),
-    (GetSignatureHelp, GetSignatureHelpResponse),
     (OpenUnstagedDiff, OpenUnstagedDiffResponse),
     (OpenUncommittedDiff, OpenUncommittedDiffResponse),
     (LinkedEditingRange, LinkedEditingRangeResponse),
@@ -548,7 +545,6 @@ lsp_messages!(
     (GetFoldingRanges, GetFoldingRangesResponse, true),
     (GetDocumentSymbols, GetDocumentSymbolsResponse, true),
     (GetHover, GetHoverResponse, true),
-    (GetSignatureHelp, GetSignatureHelpResponse, true),
     (GetDocumentDiagnostics, GetDocumentDiagnosticsResponse, true),
     (InlayHints, InlayHintsResponse, false),
     (SemanticTokens, SemanticTokensResponse, true)
@@ -582,7 +578,6 @@ entity_messages!(
     GetDocumentSymbols,
     GetHover,
     GetProjectSymbols,
-    GetSignatureHelp,
     OpenUnstagedDiff,
     OpenUncommittedDiff,
     InlayHints,
@@ -897,7 +892,6 @@ impl LspQuery {
     pub fn query_name_and_write_permissions(&self) -> (&str, bool) {
         match self.request {
             Some(lsp_query::Request::GetHover(_)) => ("GetHover", false),
-            Some(lsp_query::Request::GetSignatureHelp(_)) => ("GetSignatureHelp", false),
             Some(lsp_query::Request::GetDocumentDiagnostics(_)) => {
                 ("GetDocumentDiagnostics", false)
             }
