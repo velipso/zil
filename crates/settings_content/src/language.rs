@@ -320,10 +320,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: true
     pub word_diff_enabled: Option<bool>,
-    /// Whether to use tree-sitter bracket queries to detect and colorize the brackets in the editor.
-    ///
-    /// Default: false
-    pub colorize_brackets: Option<bool>,
 }
 
 /// Controls how whitespace should be displayedin the editor.

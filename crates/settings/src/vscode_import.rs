@@ -551,7 +551,6 @@ impl VsCodeSettings {
             preferred_line_length: self.read_u32("editor.wordWrapColumn"),
             prettier: None,
             remove_trailing_whitespace_on_save: self.read_bool("editor.trimAutoWhitespace"),
-            colorize_brackets: self.read_bool("editor.bracketPairColorization.enabled"),
             show_whitespaces: self.read_enum("editor.renderWhitespace", |s| {
                 Some(match s {
                     "boundary" => ShowWhitespaceSetting::Boundary,

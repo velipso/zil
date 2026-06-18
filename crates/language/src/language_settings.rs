@@ -134,8 +134,6 @@ pub struct LanguageSettings {
     ///
     /// Default: `true`
     pub word_diff_enabled: bool,
-    /// Whether to use tree-sitter bracket queries to detect and colorize the brackets in the editor.
-    pub colorize_brackets: bool,
 }
 
 /// The settings for indent guides.
@@ -581,7 +579,6 @@ impl settings::Settings for AllLanguageSettings {
                     enabled: tasks.enabled.unwrap(),
                     prefer_lsp: tasks.prefer_lsp.unwrap(),
                 },
-                colorize_brackets: settings.colorize_brackets.unwrap(),
                 debuggers: settings.debuggers.unwrap(),
                 word_diff_enabled: settings.word_diff_enabled.unwrap(),
             }
