@@ -95,7 +95,7 @@ use futures::{
 use gpui::{
     Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds, ClickEvent,
     ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
-    EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle, FontWeight, Global,
+    EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle, FontWeight,
     HighlightStyle, Hsla, KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
     PaintQuad, ParentElement, Pixels, PressureStage, Render, SharedString,
     Size, Styled, Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection,

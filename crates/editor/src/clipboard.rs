@@ -330,47 +330,6 @@ impl Editor {
         cx.write_to_clipboard(item);
     }
 
-    pub(super) fn kill_ring_cut(
-        &mut self,
-        _: &KillRingCut,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.read_only(cx) {
-            return;
-        }
-        self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-            s.move_with(&mut |snapshot, sel| {
-                if sel.is_empty() {
-                    sel.end = DisplayPoint::new(sel.end.row(), snapshot.line_len(sel.end.row()));
-                }
-                if sel.is_empty() {
-                    sel.end = DisplayPoint::new(sel.end.row() + 1_u32, 0);
-                }
-            });
-        });
-        let item = self.cut_common(false, window, cx);
-        cx.set_global(KillRing(item))
-    }
-
-    pub(super) fn kill_ring_yank(
-        &mut self,
-        _: &KillRingYank,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let (text, metadata) = if let Some(KillRing(item)) = cx.try_global() {
-            if let Some(ClipboardEntry::String(kill_ring)) = item.entries().first() {
-                (kill_ring.text().to_string(), kill_ring.metadata_json())
-            } else {
-                return;
-            }
-        } else {
-            return;
-        };
-        self.do_paste(&text, metadata, false, window, cx);
-    }
-
     pub(super) fn copy_and_trim(
         &mut self,
         _: &CopyAndTrim,
@@ -520,9 +479,6 @@ impl Editor {
         ));
     }
 }
-
-struct KillRing(ClipboardItem);
-impl Global for KillRing {}
 
 fn edit_for_markdown_paste<'a>(
     buffer: &MultiBufferSnapshot,

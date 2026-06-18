@@ -8269,10 +8269,6 @@ async fn test_cut_line_ends(cx: &mut TestAppContext) {
     cx.update_editor(|e, window, cx| e.cut_to_end_of_line(&CutToEndOfLine::default(), window, cx));
     cx.assert_editor_state(indoc! {"The quick brownˇ"});
 
-    cx.set_state(indoc! {"The emacs foxˇ"});
-    cx.update_editor(|e, window, cx| e.kill_ring_cut(&KillRingCut, window, cx));
-    cx.assert_editor_state(indoc! {"The emacs foxˇ"});
-
     cx.set_state(indoc! {"
         The quick« brownˇ»
         fox jumps overˇ
@@ -8308,15 +8304,6 @@ async fn test_cut_line_ends(cx: &mut TestAppContext) {
         The quickˇ
         fox jumps overˇ
         the lazy dog"});
-
-    cx.set_state(indoc! {"
-        The quick« brownˇ»
-        fox jumps overˇ
-        the lazy dog"});
-    cx.update_editor(|e, window, cx| e.kill_ring_cut(&KillRingCut, window, cx));
-    cx.assert_editor_state(indoc! {"
-        The quickˇ
-        fox jumps overˇthe lazy dog"});
 }
 
 #[gpui::test]

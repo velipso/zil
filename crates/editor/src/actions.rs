@@ -528,10 +528,6 @@ actions!(
         InsertUuidV7,
         /// Joins the current line with the next line.
         JoinLines,
-        /// Cuts to kill ring (Emacs-style).
-        KillRingCut,
-        /// Yanks from kill ring (Emacs-style).
-        KillRingYank,
         /// Moves cursor down one line.
         LineDown,
         /// Moves cursor up one line.
