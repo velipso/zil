@@ -19,7 +19,7 @@ use crate::{
     },
     editor_settings::{
         CurrentLineHighlight, DocumentColorsRenderMode, Minimap, MinimapThumb, MinimapThumbBorder,
-        ScrollBeyondLastLine, ScrollbarAxes, ScrollbarDiagnostics, ShowMinimap,
+        ScrollBeyondLastLine, ScrollbarAxes, ShowMinimap,
     },
     hover_popover::{
         self, HOVER_POPOVER_GAP, MIN_POPOVER_CHARACTER_WIDTH, MIN_POPOVER_LINE_HEIGHT,
@@ -52,10 +52,7 @@ use multi_buffer::{
     Anchor, ExpandExcerptDirection, ExpandInfo, MultiBufferRow, RowInfo,
 };
 
-use project::{
-    debugger::breakpoint_store::{Breakpoint, BreakpointSessionState},
-    project_settings::ProjectSettings,
-};
+use project::debugger::breakpoint_store::{Breakpoint, BreakpointSessionState};
 use settings::{
     IndentGuideBackgroundColoring, IndentGuideColoring,
     Settings,
@@ -207,7 +204,6 @@ impl EditorElement {
         });
 
         crate::rust_analyzer_ext::apply_related_actions(editor, window, cx);
-        crate::clangd_ext::apply_related_actions(editor, window, cx);
 
         register_action(editor, window, Editor::open_context_menu);
         register_action(editor, window, Editor::move_left);
@@ -321,8 +317,6 @@ impl EditorElement {
             register_action(editor, window, Editor::expand_excerpts_up);
             register_action(editor, window, Editor::expand_excerpts_down);
         }
-        register_action(editor, window, Editor::go_to_diagnostic);
-        register_action(editor, window, Editor::go_to_prev_diagnostic);
         register_action(editor, window, Editor::go_to_next_document_highlight);
         register_action(editor, window, Editor::go_to_prev_document_highlight);
         register_action(editor, window, Editor::open_url);
@@ -361,12 +355,6 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_indent_guides);
         register_action(editor, window, Editor::toggle_inlay_hints);
         register_action(editor, window, Editor::toggle_semantic_highlights);
-        if editor.read(cx).diagnostics_enabled() {
-            register_action(editor, window, Editor::toggle_diagnostics);
-        }
-        if editor.read(cx).inline_diagnostics_enabled() {
-            register_action(editor, window, Editor::toggle_inline_diagnostics);
-        }
         if editor.read(cx).supports_minimap(cx) {
             register_action(editor, window, Editor::toggle_minimap);
         }
@@ -1064,7 +1052,7 @@ impl EditorElement {
 
     fn layout_scrollbars(
         &self,
-        snapshot: &EditorSnapshot,
+        _snapshot: &EditorSnapshot,
         scrollbar_layout_information: &ScrollbarLayoutInformation,
         content_offset: gpui::Point<Pixels>,
         scroll_position: gpui::Point<ScrollOffset>,
@@ -1103,9 +1091,6 @@ impl EditorElement {
                 ||
                 // Selected Symbol Occurrences
                 (is_singleton && scrollbar_settings.selected_symbol && (editor.has_background_highlights(HighlightKey::DocumentHighlightRead) || editor.has_background_highlights(HighlightKey::DocumentHighlightWrite)))
-                ||
-                // Diagnostics
-                (is_singleton && scrollbar_settings.diagnostics != ScrollbarDiagnostics::None && snapshot.buffer_snapshot().has_diagnostics())
                 ||
                 // Cursors out of sight
                 non_visible_cursors
@@ -1418,172 +1403,9 @@ impl EditorElement {
                 element.prepaint_as_root(origin, available_space, window, cx);
                 Some(CreaseTrailerLayout {
                     element,
-                    bounds: Bounds::new(origin, size),
                 })
             })
             .collect()
-    }
-
-    fn layout_inline_diagnostics(
-        &self,
-        line_layouts: &[LineWithInvisibles],
-        crease_trailers: &[Option<CreaseTrailerLayout>],
-        row_block_types: &HashMap<DisplayRow, bool>,
-        content_origin: gpui::Point<Pixels>,
-        scroll_position: gpui::Point<ScrollOffset>,
-        scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
-        edit_prediction_popover_origin: Option<gpui::Point<Pixels>>,
-        start_row: DisplayRow,
-        end_row: DisplayRow,
-        line_height: Pixels,
-        em_width: Pixels,
-        style: &EditorStyle,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> HashMap<DisplayRow, AnyElement> {
-        let max_severity = match self
-            .editor
-            .read(cx)
-            .inline_diagnostics_enabled()
-            .then(|| {
-                ProjectSettings::get_global(cx)
-                    .diagnostics
-                    .inline
-                    .max_severity
-                    .unwrap_or_else(|| self.editor.read(cx).diagnostics_max_severity)
-                    .into_lsp()
-            })
-            .flatten()
-        {
-            Some(max_severity) => max_severity,
-            None => return HashMap::default(),
-        };
-
-        let active_diagnostics_group = self.editor.read(cx).active_diagnostic_group_id();
-
-        let diagnostics_by_rows = self.editor.update(cx, |editor, cx| {
-            let snapshot = editor.snapshot(window, cx);
-            editor
-                .inline_diagnostics
-                .iter()
-                .filter(|(_, diagnostic)| diagnostic.severity <= max_severity)
-                .filter(|(_, diagnostic)| match active_diagnostics_group {
-                    Some(active_diagnostics_group) => {
-                        // Active diagnostics are all shown in the editor already, no need to display them inline
-                        diagnostic.group_id != active_diagnostics_group
-                    }
-                    None => true,
-                })
-                .map(|(point, diag)| (point.to_display_point(&snapshot), diag.clone()))
-                .skip_while(|(point, _)| point.row() < start_row)
-                .take_while(|(point, _)| point.row() < end_row)
-                .filter(|(point, _)| !row_block_types.contains_key(&point.row()))
-                .fold(HashMap::default(), |mut acc, (point, diagnostic)| {
-                    acc.entry(point.row())
-                        .or_insert_with(Vec::new)
-                        .push(diagnostic);
-                    acc
-                })
-        });
-
-        if diagnostics_by_rows.is_empty() {
-            return HashMap::default();
-        }
-
-        let severity_to_color = |sev: &lsp::DiagnosticSeverity| match sev {
-            &lsp::DiagnosticSeverity::ERROR => Color::Error,
-            &lsp::DiagnosticSeverity::WARNING => Color::Warning,
-            &lsp::DiagnosticSeverity::INFORMATION => Color::Info,
-            &lsp::DiagnosticSeverity::HINT => Color::Hint,
-            _ => Color::Error,
-        };
-
-        let padding = ProjectSettings::get_global(cx).diagnostics.inline.padding as f32 * em_width;
-        let min_x = column_pixels(
-            &self.style,
-            ProjectSettings::get_global(cx)
-                .diagnostics
-                .inline
-                .min_column as usize,
-            window,
-        );
-
-        let mut elements = HashMap::default();
-        for (row, mut diagnostics) in diagnostics_by_rows {
-            diagnostics.sort_by_key(|diagnostic| {
-                (
-                    diagnostic.severity,
-                    std::cmp::Reverse(diagnostic.is_primary),
-                    diagnostic.start.row,
-                    diagnostic.start.column,
-                )
-            });
-
-            let Some(diagnostic_to_render) = diagnostics
-                .iter()
-                .find(|diagnostic| diagnostic.is_primary)
-                .or_else(|| diagnostics.first())
-            else {
-                continue;
-            };
-
-            let pos_y = content_origin.y + line_height * (row.0 as f64 - scroll_position.y) as f32;
-
-            let window_ix = row.0.saturating_sub(start_row.0) as usize;
-            let pos_x = {
-                let crease_trailer_layout = &crease_trailers[window_ix];
-                let line_layout = &line_layouts[window_ix];
-
-                let line_end = if let Some(crease_trailer) = crease_trailer_layout {
-                    crease_trailer.bounds.right()
-                } else {
-                    Pixels::from(
-                        ScrollPixelOffset::from(content_origin.x + line_layout.width)
-                            - scroll_pixel_position.x,
-                    )
-                };
-
-                let padded_line = line_end + padding;
-                let min_start = Pixels::from(
-                    ScrollPixelOffset::from(content_origin.x + min_x) - scroll_pixel_position.x,
-                );
-
-                cmp::max(padded_line, min_start)
-            };
-
-            let behind_edit_prediction_popover = edit_prediction_popover_origin
-                .as_ref()
-                .is_some_and(|edit_prediction_popover_origin| {
-                    (pos_y..pos_y + line_height).contains(&edit_prediction_popover_origin.y)
-                });
-            let opacity = if behind_edit_prediction_popover {
-                0.5
-            } else {
-                1.0
-            };
-
-            let mut element = h_flex()
-                .id(("diagnostic", row.0))
-                .h(line_height)
-                .w_full()
-                .px_1()
-                .rounded_xs()
-                .opacity(opacity)
-                .bg(severity_to_color(&diagnostic_to_render.severity)
-                    .color(cx)
-                    .opacity(0.05))
-                .text_color(severity_to_color(&diagnostic_to_render.severity).color(cx))
-                .text_sm()
-                .font(style.text.font())
-                .child(diagnostic_to_render.message.clone())
-                .into_any();
-
-            element.prepaint_as_root(point(pos_x, pos_y), AvailableSpace::min_size(), window, cx);
-
-            elements.insert(row, element);
-        }
-
-        elements
     }
 
     fn layout_indent_guides(
@@ -3597,7 +3419,6 @@ impl EditorElement {
                 self.paint_redactions(layout, window);
                 self.paint_navigation_overlays(layout, window, cx);
                 self.paint_cursors(layout, window, cx);
-                self.paint_inline_diagnostics(layout, window, cx);
                 window.with_element_namespace("crease_trailers", |window| {
                     for trailer in layout.crease_trailers.iter_mut().flatten() {
                         trailer.element.paint(window, cx);
@@ -4060,7 +3881,6 @@ impl EditorElement {
                     let scrollbar_size = scrollbar_layout.hitbox.size;
                     let scrollbar_markers = cx
                         .background_spawn(async move {
-                            let max_point = snapshot.display_snapshot.buffer_snapshot().max_point();
                             let mut marker_quads = Vec::new();
 
                             for (background_highlight_id, (_, background_ranges)) in
@@ -4099,67 +3919,6 @@ impl EditorElement {
                                             .marker_quads_for_ranges(marker_row_ranges, Some(1)),
                                     );
                                 }
-                            }
-
-                            if scrollbar_settings.diagnostics != ScrollbarDiagnostics::None {
-                                let diagnostics = snapshot
-                                    .buffer_snapshot()
-                                    .diagnostics_in_range::<Point>(Point::zero()..max_point)
-                                    // Don't show diagnostics the user doesn't care about
-                                    .filter(|diagnostic| {
-                                        match (
-                                            scrollbar_settings.diagnostics,
-                                            diagnostic.diagnostic.severity,
-                                        ) {
-                                            (ScrollbarDiagnostics::All, _) => true,
-                                            (
-                                                ScrollbarDiagnostics::Error,
-                                                lsp::DiagnosticSeverity::ERROR,
-                                            ) => true,
-                                            (
-                                                ScrollbarDiagnostics::Warning,
-                                                lsp::DiagnosticSeverity::ERROR
-                                                | lsp::DiagnosticSeverity::WARNING,
-                                            ) => true,
-                                            (
-                                                ScrollbarDiagnostics::Information,
-                                                lsp::DiagnosticSeverity::ERROR
-                                                | lsp::DiagnosticSeverity::WARNING
-                                                | lsp::DiagnosticSeverity::INFORMATION,
-                                            ) => true,
-                                            (_, _) => false,
-                                        }
-                                    })
-                                    // We want to sort by severity, in order to paint the most severe diagnostics last.
-                                    .sorted_by_key(|diagnostic| {
-                                        std::cmp::Reverse(diagnostic.diagnostic.severity)
-                                    });
-
-                                let marker_row_ranges = diagnostics.into_iter().map(|diagnostic| {
-                                    let start_display = diagnostic
-                                        .range
-                                        .start
-                                        .to_display_point(&snapshot.display_snapshot);
-                                    let end_display = diagnostic
-                                        .range
-                                        .end
-                                        .to_display_point(&snapshot.display_snapshot);
-                                    let color = match diagnostic.diagnostic.severity {
-                                        lsp::DiagnosticSeverity::ERROR => theme.status().error,
-                                        lsp::DiagnosticSeverity::WARNING => theme.status().warning,
-                                        lsp::DiagnosticSeverity::INFORMATION => theme.status().info,
-                                        _ => theme.status().hint,
-                                    };
-                                    ColoredRange {
-                                        start: start_display.row(),
-                                        end: end_display.row(),
-                                        color,
-                                    }
-                                });
-                                marker_quads.extend(
-                                    scrollbar_layout
-                                        .marker_quads_for_ranges(marker_row_ranges, Some(2)),
-                                );
                             }
 
                             Arc::from(marker_quads)
@@ -4251,17 +4010,6 @@ impl EditorElement {
             };
 
             highlighted_range.paint(fill, layout.position_map.text_hitbox.bounds, window);
-        }
-    }
-
-    fn paint_inline_diagnostics(
-        &mut self,
-        layout: &mut EditorLayout,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        for mut inline_diagnostic in layout.inline_diagnostics.drain() {
-            inline_diagnostic.1.paint(window, cx);
         }
     }
 
@@ -6524,23 +6272,6 @@ impl Element for EditorElement {
                             )
                         });
 
-                    let inline_diagnostics = self.layout_inline_diagnostics(
-                        &line_layouts,
-                        &crease_trailers,
-                        &row_block_types,
-                        content_origin,
-                        scroll_position,
-                        scroll_pixel_position,
-                        None,
-                        start_row,
-                        end_row,
-                        line_height,
-                        em_width,
-                        style,
-                        window,
-                        cx,
-                    );
-
                     let line_elements = self.prepaint_lines(
                         start_row,
                         &mut line_layouts,
@@ -6821,7 +6552,6 @@ impl Element for EditorElement {
                         document_colors,
                         line_elements,
                         line_numbers,
-                        inline_diagnostics,
                         blocks,
                         spacer_blocks,
                         cursors,
@@ -7020,7 +6750,6 @@ pub struct EditorLayout {
     highlighted_rows: BTreeMap<DisplayRow, LineHighlight>,
     line_elements: SmallVec<[AnyElement; 1]>,
     line_numbers: Arc<HashMap<MultiBufferRow, LineNumberLayout>>,
-    inline_diagnostics: HashMap<DisplayRow, AnyElement>,
     blocks: Vec<BlockLayout>,
     spacer_blocks: Vec<BlockLayout>,
     highlighted_ranges: Vec<(Range<DisplayPoint>, Hsla)>,
@@ -7472,7 +7201,6 @@ impl MinimapLayout {
 
 struct CreaseTrailerLayout {
     element: AnyElement,
-    bounds: Bounds<Pixels>,
 }
 
 pub(crate) struct PositionMap {

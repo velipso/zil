@@ -733,7 +733,6 @@ impl LanguageServer {
 
     pub fn default_initialize_params(
         &self,
-        pull_diagnostics: bool,
         augments_syntax_tokens: bool,
         cx: &App,
     ) -> InitializeParams {
@@ -791,10 +790,6 @@ impl LanguageServer {
                     inlay_hint: Some(InlayHintWorkspaceClientCapabilities {
                         refresh_support: Some(true),
                     }),
-                    diagnostics: Some(DiagnosticWorkspaceClientCapabilities {
-                        refresh_support: Some(true),
-                    })
-                    .filter(|_| pull_diagnostics),
                     workspace_edit: Some(WorkspaceEditClientCapabilities {
                         resource_operations: Some(vec![
                             ResourceOperationKind::Create,
@@ -862,15 +857,6 @@ impl LanguageServer {
                         server_cancel_support: Some(true),
                         augments_syntax_tokens: Some(augments_syntax_tokens),
                     }),
-                    publish_diagnostics: Some(PublishDiagnosticsClientCapabilities {
-                        related_information: Some(true),
-                        version_support: Some(true),
-                        data_support: Some(true),
-                        tag_support: Some(TagSupport {
-                            value_set: vec![DiagnosticTag::UNNECESSARY, DiagnosticTag::DEPRECATED],
-                        }),
-                        code_description_support: Some(true),
-                    }),
                     formatting: Some(DynamicRegistrationClientCapabilities {
                         dynamic_registration: Some(true),
                     }),
@@ -887,11 +873,6 @@ impl LanguageServer {
                         dynamic_registration: Some(true),
                         ..DocumentSymbolClientCapabilities::default()
                     }),
-                    diagnostic: Some(DiagnosticClientCapabilities {
-                        dynamic_registration: Some(true),
-                        related_document_support: Some(true),
-                    })
-                    .filter(|_| pull_diagnostics),
                     color_provider: Some(DocumentColorClientCapabilities {
                         dynamic_registration: Some(true),
                     }),
@@ -1973,92 +1954,6 @@ mod tests {
     #[ctor::ctor(unsafe)]
     fn init_logger() {
         zlog::init_test();
-    }
-
-    #[gpui::test]
-    async fn test_fake(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
-        });
-        let (server, mut fake) = FakeLanguageServer::new(
-            LanguageServerId(0),
-            LanguageServerBinary {
-                path: "path/to/language-server".into(),
-                arguments: vec![],
-                env: None,
-            },
-            "the-lsp".to_string(),
-            Default::default(),
-            &mut cx.to_async(),
-        );
-
-        let (message_tx, message_rx) = channel::unbounded();
-        let (diagnostics_tx, diagnostics_rx) = channel::unbounded();
-        server
-            .on_notification::<notification::ShowMessage, _>(move |params, _| {
-                message_tx.try_send(params).unwrap()
-            })
-            .detach();
-        server
-            .on_notification::<notification::PublishDiagnostics, _>(move |params, _| {
-                diagnostics_tx.try_send(params).unwrap()
-            })
-            .detach();
-
-        let server = cx
-            .update(|cx| {
-                let params = server.default_initialize_params(false, false, cx);
-                let configuration = DidChangeConfigurationParams {
-                    settings: Default::default(),
-                };
-                server.initialize(
-                    params,
-                    configuration.into(),
-                    DEFAULT_LSP_REQUEST_TIMEOUT,
-                    cx,
-                )
-            })
-            .await
-            .unwrap();
-        server
-            .notify::<notification::DidOpenTextDocument>(DidOpenTextDocumentParams {
-                text_document: TextDocumentItem::new(
-                    Uri::from_str("file://a/b").unwrap(),
-                    "rust".to_string(),
-                    0,
-                    "".to_string(),
-                ),
-            })
-            .unwrap();
-        assert_eq!(
-            fake.receive_notification::<notification::DidOpenTextDocument>()
-                .await
-                .text_document
-                .uri
-                .as_str(),
-            "file://a/b"
-        );
-
-        fake.notify::<notification::ShowMessage>(ShowMessageParams {
-            typ: MessageType::ERROR,
-            message: "ok".to_string(),
-        });
-        fake.notify::<notification::PublishDiagnostics>(PublishDiagnosticsParams {
-            uri: Uri::from_str("file://b/c").unwrap(),
-            version: Some(5),
-            diagnostics: vec![],
-        });
-        assert_eq!(message_rx.recv().await.unwrap().message, "ok");
-        assert_eq!(
-            diagnostics_rx.recv().await.unwrap().uri.as_str(),
-            "file://b/c"
-        );
-
-        fake.set_request_handler::<request::Shutdown, _, _>(|_, _| async move { Ok(()) });
-
-        drop(server);
-        cx.run_until_parked();
-        fake.receive_notification::<notification::Exit>().await;
     }
 
     #[gpui::test]

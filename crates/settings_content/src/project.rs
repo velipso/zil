@@ -705,69 +705,6 @@ pub enum GitPathStyle {
 }
 
 #[with_fallible_options]
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct DiagnosticsSettingsContent {
-    /// Whether to show the project diagnostics button in the status bar.
-    pub button: Option<bool>,
-
-    /// Whether or not to include warning diagnostics.
-    ///
-    /// Default: true
-    pub include_warnings: Option<bool>,
-
-    /// Settings for using LSP pull diagnostics mechanism in Zed.
-    pub lsp_pull_diagnostics: Option<LspPullDiagnosticsSettingsContent>,
-
-    /// Settings for showing inline diagnostics.
-    pub inline: Option<InlineDiagnosticsSettingsContent>,
-}
-
-#[with_fallible_options]
-#[derive(
-    Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq,
-)]
-pub struct LspPullDiagnosticsSettingsContent {
-    /// Whether to pull for diagnostics or not.
-    ///
-    /// Default: true
-    pub enabled: Option<bool>,
-    /// Minimum time to wait before pulling diagnostics from the language server(s).
-    /// 0 turns the debounce off.
-    ///
-    /// Default: 50
-    pub debounce_ms: Option<DelayMs>,
-}
-
-#[with_fallible_options]
-#[derive(
-    Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Eq,
-)]
-pub struct InlineDiagnosticsSettingsContent {
-    /// Whether or not to show inline diagnostics
-    ///
-    /// Default: false
-    pub enabled: Option<bool>,
-    /// Whether to only show the inline diagnostics after a delay after the
-    /// last editor event.
-    ///
-    /// Default: 150
-    pub update_debounce_ms: Option<DelayMs>,
-    /// The amount of padding between the end of the source line and the start
-    /// of the inline diagnostic in units of columns.
-    ///
-    /// Default: 4
-    pub padding: Option<u32>,
-    /// The minimum column to display inline diagnostics. This setting can be
-    /// used to horizontally align inline diagnostics at some position. Lines
-    /// longer than this value will still push diagnostics further to the right.
-    ///
-    /// Default: 0
-    pub min_column: Option<u32>,
-
-    pub max_severity: Option<DiagnosticSeverityContent>,
-}
-
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct NodeBinarySettings {
     /// The path to the Node binary.

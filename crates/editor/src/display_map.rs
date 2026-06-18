@@ -94,7 +94,7 @@ pub use wrap_map::{WrapPoint, WrapRow, WrapSnapshot};
 
 use collections::{HashMap, HashSet, IndexSet};
 use gpui::{
-    App, Context, Entity, EntityId, Font, HighlightStyle, Hsla, LineLayout, Pixels, UnderlineStyle,
+    App, Context, Entity, EntityId, Font, HighlightStyle, LineLayout, Pixels, UnderlineStyle,
     WeakEntity,
 };
 use language::{
@@ -106,14 +106,12 @@ use multi_buffer::{
     Anchor, AnchorRangeExt, MultiBuffer, MultiBufferOffset, MultiBufferOffsetUtf16,
     MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot, RowInfo, ToOffset, ToPoint,
 };
-use project::project_settings::DiagnosticSeverity;
 use project::{lsp_store::LspFoldingRange, lsp_store::TokenType};
 use serde::Deserialize;
 use settings::Settings;
 use smallvec::SmallVec;
 use sum_tree::{Bias};
 use text::{BufferId, LineIndent, Patch};
-use theme::StatusColors;
 use ui::{SharedString, px};
 use unicode_segmentation::UnicodeSegmentation;
 use ztracing::instrument;
@@ -232,7 +230,6 @@ pub struct DisplayMap {
     pub(crate) fold_placeholder: FoldPlaceholder,
     pub clip_at_line_ends: bool,
     pub(crate) masked: bool,
-    pub(crate) diagnostics_max_severity: DiagnosticSeverity,
     pub(crate) companion: Option<(WeakEntity<DisplayMap>, Entity<Companion>)>,
     lsp_folding_crease_ids: HashMap<BufferId, Vec<CreaseId>>,
 }
@@ -331,7 +328,6 @@ impl DisplayMap {
         buffer_header_height: u32,
         excerpt_header_height: u32,
         fold_placeholder: FoldPlaceholder,
-        diagnostics_max_severity: DiagnosticSeverity,
         cx: &mut Context<Self>,
     ) -> Self {
         let tab_size = Self::tab_size(&buffer, cx);
@@ -361,7 +357,6 @@ impl DisplayMap {
             block_map,
             crease_map,
             fold_placeholder,
-            diagnostics_max_severity,
             text_highlights: Default::default(),
             semantic_token_highlights: Default::default(),
             clip_at_line_ends: false,
@@ -475,7 +470,6 @@ impl DisplayMap {
             display_map_id: self.entity_id,
             companion_display_snapshot,
             block_snapshot,
-            diagnostics_max_severity: self.diagnostics_max_severity,
             crease_snapshot: self.crease_map.snapshot(),
             text_highlights: self.text_highlights.clone(),
             semantic_token_highlights: self.semantic_token_highlights.clone(),
@@ -498,7 +492,6 @@ impl DisplayMap {
             display_map_id: self.entity_id,
             companion_display_snapshot: None,
             block_snapshot,
-            diagnostics_max_severity: self.diagnostics_max_severity,
             crease_snapshot: self.crease_map.snapshot(),
             text_highlights: self.text_highlights.clone(),
             semantic_token_highlights: self.semantic_token_highlights.clone(),
@@ -1234,7 +1227,6 @@ pub struct DisplaySnapshot {
     semantic_token_highlights: SemanticTokensHighlights,
     clip_at_line_ends: bool,
     masked: bool,
-    diagnostics_max_severity: DiagnosticSeverity,
     pub(crate) fold_placeholder: FoldPlaceholder,
     /// When true, LSP folding ranges are used via the crease map and the
     /// indent-based fallback in `crease_for_buffer_row` is skipped.
@@ -1530,10 +1522,6 @@ impl DisplaySnapshot {
             },
         )
         .flat_map({
-            // track the current underline style so that we can apply it to
-            // inlay hints within the diagnostic's span
-            let mut current_diagnostic_underline: Option<UnderlineStyle> = None;
-
             move |chunk| {
                 let syntax_highlight_style = chunk
                     .syntax_highlight_id
@@ -1550,54 +1538,14 @@ impl DisplaySnapshot {
                                 color
                             }
                         }),
-                        underline: chunk_highlight
-                            .underline
-                            .filter(|_| editor_style.show_underlines),
+                        underline: None,
                         ..chunk_highlight
                     }
                 });
 
-                let diagnostic_highlight = if chunk.is_inlay {
-                    current_diagnostic_underline.map(|underline| HighlightStyle {
-                        underline: Some(underline),
-                        ..Default::default()
-                    })
-                } else {
-                    let highlight = chunk
-                        .diagnostic_severity
-                        .filter(|severity| {
-                            self.diagnostics_max_severity
-                                .into_lsp()
-                                .is_some_and(|max_severity| severity <= &max_severity)
-                        })
-                        .map(|severity| HighlightStyle {
-                            fade_out: chunk
-                                .is_unnecessary
-                                .then_some(editor_style.unnecessary_code_fade),
-                            underline: (chunk.underline
-                                && editor_style.show_underlines
-                                && !(chunk.is_unnecessary
-                                    && severity > lsp::DiagnosticSeverity::WARNING))
-                                .then(|| {
-                                    let diagnostic_color =
-                                        diagnostic_style(severity, &editor_style.status);
-                                    UnderlineStyle {
-                                        color: Some(diagnostic_color),
-                                        thickness: 1.0.into(),
-                                        wavy: true,
-                                    }
-                                }),
-                            ..Default::default()
-                        });
-
-                    current_diagnostic_underline = highlight.as_ref().and_then(|h| h.underline);
-                    highlight
-                };
-
                 let style = [
                     syntax_highlight_style,
                     chunk_highlight,
-                    diagnostic_highlight,
                 ]
                 .into_iter()
                 .flatten()
@@ -2139,16 +2087,6 @@ impl DisplaySnapshot {
     }
 }
 
-fn diagnostic_style(severity: lsp::DiagnosticSeverity, colors: &StatusColors) -> Hsla {
-    match severity {
-        lsp::DiagnosticSeverity::ERROR => colors.error,
-        lsp::DiagnosticSeverity::WARNING => colors.warning,
-        lsp::DiagnosticSeverity::INFORMATION => colors.info,
-        lsp::DiagnosticSeverity::HINT => colors.hint,
-        _ => colors.ignored,
-    }
-}
-
 impl std::ops::Deref for DisplaySnapshot {
     type Target = BlockSnapshot;
 
@@ -2375,7 +2313,6 @@ pub mod tests {
                 buffer_start_excerpt_header_height,
                 excerpt_header_height,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -2628,7 +2565,6 @@ pub mod tests {
                     1,
                     1,
                     FoldPlaceholder::test(),
-                    DiagnosticSeverity::Warning,
                     cx,
                 )
             });
@@ -2738,7 +2674,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -2837,7 +2772,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -2938,7 +2872,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -2995,134 +2928,6 @@ pub mod tests {
     }
 
     #[gpui::test]
-    async fn test_chunks_with_diagnostics_across_blocks(cx: &mut gpui::TestAppContext) {
-        cx.background_executor
-            .set_block_on_ticks(usize::MAX..=usize::MAX);
-
-        let text = r#"
-            struct A {
-                b: usize;
-            }
-            const c: usize = 1;
-        "#
-        .unindent();
-
-        cx.update(|cx| init_test(cx, &|_| {}));
-
-        let buffer = cx.new(|cx| Buffer::local(text, cx));
-
-        buffer.update(cx, |buffer, cx| {
-            buffer.update_diagnostics(
-                LanguageServerId(0),
-                DiagnosticSet::new(
-                    [DiagnosticEntry {
-                        range: PointUtf16::new(0, 0)..PointUtf16::new(2, 1),
-                        diagnostic: Diagnostic {
-                            severity: lsp::DiagnosticSeverity::ERROR,
-                            group_id: 1,
-                            message: "hi".into(),
-                            ..Default::default()
-                        },
-                    }],
-                    buffer,
-                ),
-                cx,
-            )
-        });
-
-        let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
-        let buffer_snapshot = buffer.read_with(cx, |buffer, cx| buffer.snapshot(cx));
-
-        let map = cx.new(|cx| {
-            DisplayMap::new(
-                buffer,
-                font("Courier"),
-                px(16.0),
-                None,
-                1,
-                1,
-                FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
-                cx,
-            )
-        });
-
-        let black = gpui::black().to_rgb();
-        let red = gpui::red().to_rgb();
-
-        // Insert a block in the middle of a multi-line diagnostic.
-        map.update(cx, |map, cx| {
-            map.highlight_text(
-                HighlightKey::Editor,
-                vec![
-                    buffer_snapshot.anchor_before(Point::new(3, 9))
-                        ..buffer_snapshot.anchor_after(Point::new(3, 14)),
-                    buffer_snapshot.anchor_before(Point::new(3, 17))
-                        ..buffer_snapshot.anchor_after(Point::new(3, 18)),
-                ],
-                red.into(),
-                false,
-                cx,
-            );
-            map.insert_blocks(
-                [BlockProperties {
-                    placement: BlockPlacement::Below(
-                        buffer_snapshot.anchor_before(Point::new(1, 0)),
-                    ),
-                    height: Some(1),
-                    style: BlockStyle::Sticky,
-                    render: Arc::new(|_| div().into_any()),
-                    priority: 0,
-                }],
-                cx,
-            )
-        });
-
-        let snapshot = map.update(cx, |map, cx| map.snapshot(cx));
-        let mut chunks = Vec::<(String, Option<lsp::DiagnosticSeverity>, Rgba)>::new();
-        for chunk in snapshot.chunks(
-            DisplayRow(0)..DisplayRow(5),
-            LanguageAwareStyling {
-                tree_sitter: true,
-                diagnostics: true,
-            },
-            Default::default(),
-        ) {
-            let color = chunk
-                .highlight_style
-                .and_then(|style| style.color)
-                .map_or(black, |color| color.to_rgb());
-            if let Some((last_chunk, last_severity, last_color)) = chunks.last_mut()
-                && *last_severity == chunk.diagnostic_severity
-                && *last_color == color
-            {
-                last_chunk.push_str(chunk.text);
-                continue;
-            }
-
-            chunks.push((chunk.text.to_string(), chunk.diagnostic_severity, color));
-        }
-
-        assert_eq!(
-            chunks,
-            [
-                (
-                    "struct A {\n    b: usize;\n".into(),
-                    Some(lsp::DiagnosticSeverity::ERROR),
-                    black
-                ),
-                ("\n".into(), None, black),
-                ("}".into(), Some(lsp::DiagnosticSeverity::ERROR), black),
-                ("\nconst c: ".into(), None, black),
-                ("usize".into(), None, red),
-                (" = ".into(), None, black),
-                ("1".into(), None, red),
-                (";\n".into(), None, black),
-            ]
-        );
-    }
-
-    #[gpui::test]
     async fn test_point_translation_with_replace_blocks(cx: &mut gpui::TestAppContext) {
         cx.background_executor
             .set_block_on_ticks(usize::MAX..=usize::MAX);
@@ -3140,7 +2945,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -3281,7 +3085,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -3369,7 +3172,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -3495,7 +3297,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             );
             let snapshot = map.buffer.read(cx).snapshot(cx);
@@ -3533,7 +3334,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -3609,7 +3409,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });
@@ -3742,7 +3541,6 @@ pub mod tests {
                 1,
                 1,
                 FoldPlaceholder::test(),
-                DiagnosticSeverity::Warning,
                 cx,
             )
         });

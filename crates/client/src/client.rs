@@ -541,13 +541,12 @@ pub struct TelemetrySettings {
     pub anthropic_retention: bool,
 }
 
-impl settings::Settings for TelemetrySettings {
-    fn from_settings(content: &SettingsContent) -> Self {
-        let telemetry = content.telemetry.as_ref().unwrap();
+impl settings::Settings for TelemetrySettings { // VELIPSO: remove
+    fn from_settings(_content: &SettingsContent) -> Self {
         Self {
-            diagnostics: telemetry.diagnostics.unwrap(),
-            metrics: telemetry.metrics.unwrap(),
-            anthropic_retention: telemetry.anthropic_retention.unwrap(),
+            diagnostics: false,
+            metrics: false,
+            anthropic_retention: false,
         }
     }
 }

@@ -242,7 +242,6 @@ messages!(
     (UpdateChannelMessage, Foreground),
     (UpdateChannels, Foreground),
     (UpdateContacts, Foreground),
-    (UpdateDiagnosticSummary, Foreground),
     (UpdateDiffBases, Foreground),
     (UpdateFollowers, Foreground),
     (UpdateGitBranch, Background),
@@ -299,9 +298,6 @@ messages!(
     (RunDebugLocators, Background),
     (DebugRequest, Background),
     (LogToDebugConsole, Background),
-    (GetDocumentDiagnostics, Background),
-    (GetDocumentDiagnosticsResponse, Background),
-    (PullWorkspaceDiagnostics, Background),
     (GetDefaultBranch, Background),
     (GetDefaultBranchResponse, Background),
     (GetTreeDiff, Background),
@@ -510,8 +506,6 @@ request_messages!(
     (ToggleBreakpoint, Ack),
     (GetDebugAdapterBinary, DebugAdapterBinary),
     (RunDebugLocators, DebugRequest),
-    (GetDocumentDiagnostics, GetDocumentDiagnosticsResponse),
-    (PullWorkspaceDiagnostics, Ack),
     (GetDefaultBranch, GetDefaultBranchResponse),
     (GetBlobContent, GetBlobContentResponse),
     (GetTreeDiff, GetTreeDiffResponse),
@@ -545,7 +539,6 @@ lsp_messages!(
     (GetFoldingRanges, GetFoldingRangesResponse, true),
     (GetDocumentSymbols, GetDocumentSymbolsResponse, true),
     (GetHover, GetHoverResponse, true),
-    (GetDocumentDiagnostics, GetDocumentDiagnosticsResponse, true),
     (InlayHints, InlayHintsResponse, false),
     (SemanticTokens, SemanticTokensResponse, true)
 );
@@ -619,7 +612,6 @@ entity_messages!(
     StashDrop,
     UpdateBuffer,
     UpdateBufferFile,
-    UpdateDiagnosticSummary,
     UpdateDiffBases,
     UpdateLanguageServer,
     UpdateProject,
@@ -683,8 +675,6 @@ entity_messages!(
     RunDebugLocators,
     GetDebugAdapterBinary,
     LogToDebugConsole,
-    GetDocumentDiagnostics,
-    PullWorkspaceDiagnostics,
     GetDefaultBranch,
     GetTreeDiff,
     GetBlobContent,
@@ -892,9 +882,6 @@ impl LspQuery {
     pub fn query_name_and_write_permissions(&self) -> (&str, bool) {
         match self.request {
             Some(lsp_query::Request::GetHover(_)) => ("GetHover", false),
-            Some(lsp_query::Request::GetDocumentDiagnostics(_)) => {
-                ("GetDocumentDiagnostics", false)
-            }
             Some(lsp_query::Request::GetDocumentColor(_)) => ("GetDocumentColor", false),
             Some(lsp_query::Request::GetFoldingRanges(_)) => ("GetFoldingRanges", false),
             Some(lsp_query::Request::GetDocumentSymbols(_)) => ("GetDocumentSymbols", false),

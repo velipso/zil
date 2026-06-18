@@ -166,9 +166,6 @@ pub struct SettingsContent {
 
     pub debugger: Option<DebuggerSettingsContent>,
 
-    /// Configuration for Diagnostics-related features.
-    pub diagnostics: Option<DiagnosticsSettingsContent>,
-
     /// Configuration for Git-related features
     pub git: Option<GitSettings>,
 
@@ -228,8 +225,6 @@ pub struct SettingsContent {
 
     /// Configuration for session-related features
     pub session: Option<SessionSettingsContent>,
-    /// Control what info is collected by Zed.
-    pub telemetry: Option<TelemetrySettingsContent>,
 
     /// Configuration of the terminal in Zed.
     pub terminal: Option<TerminalSettingsContent>,

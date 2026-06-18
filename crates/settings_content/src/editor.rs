@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 
 use crate::{
-    DelayMs, DiagnosticSeverityContent, ShowScrollbar, serialize_f32_with_two_decimal_places,
+    DelayMs, ShowScrollbar, serialize_f32_with_two_decimal_places,
 };
 
 #[with_fallible_options]
@@ -167,18 +167,6 @@ pub struct EditorSettingsContent {
     #[schemars(range(min = 0, max = 106))]
     pub minimum_contrast_for_highlights: Option<MinimumContrast>,
 
-    /// Which level to use to filter out diagnostics displayed in the editor.
-    ///
-    /// Affects the editor rendering only, and does not interrupt
-    /// the functionality of diagnostics fetching and project diagnostics editor.
-    /// Which files containing diagnostic errors/warnings to mark in the tabs.
-    /// Diagnostics are only shown when file icons are also active.
-    ///
-    /// Shows all diagnostics if not specified.
-    ///
-    /// Default: warning
-    pub diagnostics_max_severity: Option<DiagnosticSeverityContent>,
-
     /// Drag and drop related settings
     pub drag_and_drop_selection: Option<DragAndDropSelectionContent>,
 
@@ -295,10 +283,6 @@ pub struct ScrollbarContent {
     ///
     /// Default: true
     pub selected_symbol: Option<bool>,
-    /// Which diagnostic indicators to show in the scrollbar:
-    ///
-    /// Default: all
-    pub diagnostics: Option<ScrollbarDiagnostics>,
     /// Whether to show cursor positions in the scrollbar.
     ///
     /// Default: true
@@ -554,36 +538,6 @@ pub enum MinimapThumbBorder {
     /// Displays a border only on the left side of the thumb.
     LeftOnly,
     /// Displays the thumb without any border.
-    None,
-}
-
-/// Which diagnostic indicators to show in the scrollbar.
-///
-/// Default: all
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum ScrollbarDiagnostics {
-    /// Show all diagnostic levels: hint, information, warnings, error.
-    All,
-    /// Show only the following diagnostic levels: information, warning, error.
-    Information,
-    /// Show only the following diagnostic levels: warning, error.
-    Warning,
-    /// Show only the following diagnostic level: error.
-    Error,
-    /// Do not show diagnostics.
     None,
 }
 

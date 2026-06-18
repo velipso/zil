@@ -151,11 +151,6 @@ pub struct ItemSettingsContent {
     ///
     /// Default: history
     pub activate_on_close: Option<ActivateOnClose>,
-    /// Which files containing diagnostic errors/warnings to mark in the tabs.
-    /// This setting can take the following three values:
-    ///
-    /// Default: off
-    pub show_diagnostics: Option<ShowDiagnostics>,
     /// Whether to always show the close button on tabs.
     ///
     /// Default: false
@@ -236,28 +231,6 @@ pub enum ShowCloseButton {
     #[default]
     Hover,
     Hidden,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ShowDiagnostics {
-    #[default]
-    Off,
-    Errors,
-    All,
 }
 
 #[derive(
@@ -749,10 +722,6 @@ pub struct ProjectPanelSettingsContent {
     pub starts_open: Option<bool>,
     /// Scrollbar-related settings
     pub scrollbar: Option<ProjectPanelScrollbarSettingsContent>,
-    /// Which files containing diagnostic errors/warnings to mark in the project panel.
-    ///
-    /// Default: all
-    pub show_diagnostics: Option<ShowDiagnostics>,
     /// Settings related to indent guides in the project panel.
     pub indent_guides: Option<ProjectPanelIndentGuidesSettings>,
     /// Whether to hide the root entry when only one folder is open in the window.
@@ -783,10 +752,6 @@ pub struct ProjectPanelSettingsContent {
     ///
     /// Default: default
     pub sort_order: Option<ProjectPanelSortOrder>,
-    /// Whether to show error and warning count badges next to file names in the project panel.
-    ///
-    /// Default: false
-    pub diagnostic_badges: Option<bool>,
     /// Whether to show a git status indicator next to file names in the project panel.
     ///
     /// Default: false

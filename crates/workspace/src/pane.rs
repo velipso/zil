@@ -6,7 +6,7 @@ use crate::{
     invalid_item_view::InvalidItemView,
     item::{
         ActivateOnClose, ClosePosition, Item, ItemBufferKind, ItemHandle, ItemSettings,
-        PreviewTabsSettings, ProjectItemKind, SaveOptions, ShowCloseButton, ShowDiagnostics,
+        PreviewTabsSettings, ProjectItemKind, SaveOptions, ShowCloseButton,
         TabContentParams, TabTooltipContent, WeakItemHandle,
     },
     move_item,
@@ -25,7 +25,7 @@ use gpui::{
     anchored, deferred, prelude::*,
 };
 use itertools::Itertools;
-use language::{Capability, DiagnosticSeverity};
+use language::Capability;
 use parking_lot::Mutex;
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, WorktreeId};
 use schemars::JsonSchema;
@@ -41,12 +41,10 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 use theme_settings::ThemeSettings;
 use ui::{
-    ContextMenu, ContextMenuEntry, ContextMenuItem, DecoratedIcon, IconButtonShape, IconDecoration,
-    IconDecorationKind, Indicator, PopoverMenu, PopoverMenuHandle, Tab, TabBar, TabPosition,
+    ContextMenu, ContextMenuEntry, ContextMenuItem, IconButtonShape, Indicator, PopoverMenu, PopoverMenuHandle, Tab, TabBar, TabPosition,
     Tooltip, prelude::*, right_click_menu,
 };
 use util::{
@@ -444,10 +442,8 @@ pub struct Pane {
     pub new_item_context_menu_handle: PopoverMenuHandle<ContextMenu>,
     pub split_item_context_menu_handle: PopoverMenuHandle<ContextMenu>,
     pinned_tab_count: usize,
-    diagnostics: HashMap<ProjectPath, DiagnosticSeverity>,
     zoom_out_on_close: bool,
     focus_follows_mouse: FocusFollowsMouse,
-    diagnostic_summary_update: Task<()>,
     /// If a certain project item wants to get recreated with specific data, it can persist its data before the recreation here.
     pub project_item_restoration_data: HashMap<ProjectItemKind, Box<dyn Any + Send>>,
     welcome_page: Option<Entity<crate::welcome::WelcomePage>>,
@@ -563,7 +559,6 @@ impl Pane {
             cx.on_focus_in(&focus_handle, window, Pane::focus_in),
             cx.on_focus_out(&focus_handle, window, Pane::focus_out),
             cx.observe_global_in::<SettingsStore>(window, Self::settings_changed),
-            cx.subscribe(&project, Self::project_events),
         ];
 
         let handle = cx.entity().downgrade();
@@ -617,10 +612,8 @@ impl Pane {
             split_item_context_menu_handle: Default::default(),
             new_item_context_menu_handle: Default::default(),
             pinned_tab_count: 0,
-            diagnostics: Default::default(),
             zoom_out_on_close: true,
             focus_follows_mouse: WorkspaceSettings::get_global(cx).focus_follows_mouse,
-            diagnostic_summary_update: Task::ready(()),
             project_item_restoration_data: HashMap::default(),
             welcome_page: None,
             in_center_group: false,
@@ -733,58 +726,6 @@ impl Pane {
         cx.notify();
     }
 
-    fn project_events(
-        &mut self,
-        _project: Entity<Project>,
-        event: &project::Event,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            project::Event::DiskBasedDiagnosticsFinished { .. }
-            | project::Event::DiagnosticsUpdated { .. } => {
-                if ItemSettings::get_global(cx).show_diagnostics != ShowDiagnostics::Off {
-                    self.diagnostic_summary_update = cx.spawn(async move |this, cx| {
-                        cx.background_executor()
-                            .timer(Duration::from_millis(30))
-                            .await;
-                        this.update(cx, |this, cx| {
-                            this.update_diagnostics(cx);
-                            cx.notify();
-                        })
-                        .log_err();
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn update_diagnostics(&mut self, cx: &mut Context<Self>) {
-        let Some(project) = self.project.upgrade() else {
-            return;
-        };
-        let show_diagnostics = ItemSettings::get_global(cx).show_diagnostics;
-        self.diagnostics = if show_diagnostics != ShowDiagnostics::Off {
-            project
-                .read(cx)
-                .diagnostic_summaries(false, cx)
-                .filter_map(|(project_path, _, diagnostic_summary)| {
-                    if diagnostic_summary.error_count > 0 {
-                        Some((project_path, DiagnosticSeverity::ERROR))
-                    } else if diagnostic_summary.warning_count > 0
-                        && show_diagnostics != ShowDiagnostics::Errors
-                    {
-                        Some((project_path, DiagnosticSeverity::WARNING))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            HashMap::default()
-        }
-    }
-
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let tab_bar_settings = TabBarSettings::get_global(cx);
 
@@ -810,7 +751,6 @@ impl Pane {
             self.close_items_on_settings_change(window, cx);
         }
 
-        self.update_diagnostics(cx);
         cx.notify();
     }
 
@@ -2791,54 +2731,11 @@ impl Pane {
             cx,
         );
 
-        let item_diagnostic = item
-            .project_path(cx)
-            .map_or(None, |project_path| self.diagnostics.get(&project_path));
 
-        let decorated_icon = item_diagnostic.map_or(None, |diagnostic| {
-            let icon = match item.tab_icon(window, cx) {
-                Some(icon) => icon,
-                None => return None,
-            };
-
-            let knockout_item_color = if is_active {
-                cx.theme().colors().tab_active_background
-            } else {
-                cx.theme().colors().tab_bar_background
-            };
-
-            let (icon_decoration, icon_color) = if matches!(diagnostic, &DiagnosticSeverity::ERROR)
-            {
-                (IconDecorationKind::X, Color::Error)
-            } else {
-                (IconDecorationKind::Triangle, Color::Warning)
-            };
-
-            Some(DecoratedIcon::new(
-                icon.size(IconSize::Small).color(Color::Muted),
-                Some(
-                    IconDecoration::new(icon_decoration, knockout_item_color, cx)
-                        .color(icon_color.color(cx))
-                        .position(Point {
-                            x: px(-2.),
-                            y: px(-2.),
-                        }),
-                ),
-            ))
-        });
-
-        let icon = if decorated_icon.is_none() {
-            match item_diagnostic {
-                Some(&DiagnosticSeverity::ERROR) => None,
-                Some(&DiagnosticSeverity::WARNING) => None,
-                _ => item
-                    .tab_icon(window, cx)
-                    .map(|icon| icon.color(Color::Muted)),
-            }
-            .map(|icon| icon.size(IconSize::Small))
-        } else {
-            None
-        };
+        let icon = item
+            .tab_icon(window, cx)
+            .map(|icon| icon.color(Color::Muted))
+            .map(|icon| icon.size(IconSize::Small));
 
         let settings = ItemSettings::get_global(cx);
         let close_side = &settings.close_position;
@@ -2877,7 +2774,7 @@ impl Pane {
                 }))
         };
 
-        let has_file_icon = icon.is_some() | decorated_icon.is_some();
+        let has_file_icon = icon.is_some();
 
         let capability = item.capability(cx);
         let tab = Tab::new(ix)
@@ -3029,9 +2926,7 @@ impl Pane {
                 h_flex()
                     .id(("pane-tab-content", ix))
                     .gap_1()
-                    .children(if let Some(decorated_icon) = decorated_icon {
-                        Some(decorated_icon.into_any_element())
-                    } else if let Some(icon) = icon {
+                    .children(if let Some(icon) = icon {
                         Some(icon.into_any_element())
                     } else if !capability.editable() {
                         Some(read_only_toggle(capability == Capability::Read).into_any_element())

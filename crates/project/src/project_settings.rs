@@ -65,9 +65,6 @@ pub struct ProjectSettings {
     /// Default timeout for context server requests in seconds.
     pub context_server_timeout: u64,
 
-    /// Configuration for Diagnostics-related features.
-    pub diagnostics: DiagnosticsSettings,
-
     /// Configuration for Git-related features
     pub git: GitSettings,
 
@@ -587,66 +584,9 @@ impl Default for BranchPickerSettings {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct DiagnosticsSettings {
-    /// Whether to show the project diagnostics button in the status bar.
-    pub button: bool,
-
-    /// Whether or not to include warning diagnostics.
-    pub include_warnings: bool,
-
-    /// Settings for using LSP pull diagnostics mechanism in Zed.
-    pub lsp_pull_diagnostics: LspPullDiagnosticsSettings,
-
-    /// Settings for showing inline diagnostics.
-    pub inline: InlineDiagnosticsSettings,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InlineDiagnosticsSettings {
-    /// Whether or not to show inline diagnostics
-    ///
-    /// Default: false
-    pub enabled: bool,
-    /// Whether to only show the inline diagnostics after a delay after the
-    /// last editor event.
-    ///
-    /// Default: 150
-    pub update_debounce_ms: u64,
-    /// The amount of padding between the end of the source line and the start
-    /// of the inline diagnostic in units of columns.
-    ///
-    /// Default: 4
-    pub padding: u32,
-    /// The minimum column to display inline diagnostics. This setting can be
-    /// used to horizontally align inline diagnostics at some position. Lines
-    /// longer than this value will still push diagnostics further to the right.
-    ///
-    /// Default: 0
-    pub min_column: u32,
-
-    pub max_severity: Option<DiagnosticSeverity>,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct LspPullDiagnosticsSettings {
-    /// Whether to pull for diagnostics or not.
-    ///
-    /// Default: true
-    pub enabled: bool,
-    /// Minimum time to wait before pulling diagnostics from the language server(s).
-    /// 0 turns the debounce off.
-    ///
-    /// Default: 50
-    pub debounce_ms: u64,
-}
-
 impl Settings for ProjectSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let project = &content.project.clone();
-        let diagnostics = content.diagnostics.as_ref().unwrap();
-        let lsp_pull_diagnostics = diagnostics.lsp_pull_diagnostics.as_ref().unwrap();
-        let inline_diagnostics = diagnostics.inline.as_ref().unwrap();
 
         let git = content.git.as_ref().unwrap();
         let git_enabled = {
@@ -741,21 +681,6 @@ impl Settings for ProjectSettings {
                 .into_iter()
                 .map(|(key, value)| (DebugAdapterName(key.into()), DapSettings::from(value)))
                 .collect(),
-            diagnostics: DiagnosticsSettings {
-                button: diagnostics.button.unwrap(),
-                include_warnings: diagnostics.include_warnings.unwrap(),
-                lsp_pull_diagnostics: LspPullDiagnosticsSettings {
-                    enabled: lsp_pull_diagnostics.enabled.unwrap(),
-                    debounce_ms: lsp_pull_diagnostics.debounce_ms.unwrap().0,
-                },
-                inline: InlineDiagnosticsSettings {
-                    enabled: inline_diagnostics.enabled.unwrap(),
-                    update_debounce_ms: inline_diagnostics.update_debounce_ms.unwrap().0,
-                    padding: inline_diagnostics.padding.unwrap(),
-                    min_column: inline_diagnostics.min_column.unwrap(),
-                    max_severity: inline_diagnostics.max_severity.map(Into::into),
-                },
-            },
             git: git_settings,
             node: content.node.clone().unwrap().into(),
             load_direnv: project.load_direnv.clone().unwrap(),

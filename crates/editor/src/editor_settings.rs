@@ -2,12 +2,11 @@ use core::num;
 
 use gpui::App;
 use language::CursorShape;
-use project::project_settings::DiagnosticSeverity;
 pub use settings::{
     CurrentLineHighlight, DelayMs,
     DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
     MinimapThumb, MinimapThumbBorder,
-    MultiCursorModifier, ScrollBeyondLastLine, ScrollbarDiagnostics, SeedQuerySetting, ShowMinimap,
+    MultiCursorModifier, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
 use ui::scrollbars::ShowScrollbar;
@@ -49,7 +48,6 @@ pub struct EditorSettings {
     pub double_click_in_multibuffer: DoubleClickInMultibuffer,
     pub search_wrap: bool,
     pub search: SearchSettings,
-    pub diagnostics_max_severity: Option<DiagnosticSeverity>,
     pub drag_and_drop_selection: DragAndDropSelection,
     pub lsp_document_colors: DocumentColorsRenderMode,
     pub minimum_contrast_for_highlights: f32,
@@ -76,7 +74,6 @@ pub struct Scrollbar {
     pub selected_text: bool,
     pub selected_symbol: bool,
     pub search_results: bool,
-    pub diagnostics: ScrollbarDiagnostics,
     pub cursors: bool,
     pub axes: ScrollbarAxes,
 }
@@ -206,7 +203,6 @@ impl Settings for EditorSettings {
                 selected_text: scrollbar.selected_text.unwrap(),
                 selected_symbol: scrollbar.selected_symbol.unwrap(),
                 search_results: scrollbar.search_results.unwrap(),
-                diagnostics: scrollbar.diagnostics.unwrap(),
                 cursors: scrollbar.cursors.unwrap(),
                 axes: ScrollbarAxes {
                     horizontal: axes.horizontal.unwrap(),
@@ -257,7 +253,6 @@ impl Settings for EditorSettings {
                 regex: search.regex.unwrap(),
                 center_on_match: search.center_on_match.unwrap(),
             },
-            diagnostics_max_severity: editor.diagnostics_max_severity.map(Into::into),
             drag_and_drop_selection: DragAndDropSelection {
                 enabled: drag_and_drop_selection.enabled.unwrap(),
                 delay: drag_and_drop_selection.delay.unwrap(),

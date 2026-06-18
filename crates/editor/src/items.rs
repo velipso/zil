@@ -21,7 +21,6 @@ use language::{
     Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, Point,
     SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
 };
-use lsp::DiagnosticSeverity;
 use multi_buffer::{BufferOffset, MultiBufferOffset, PathKey};
 use project::{
     File, Project, ProjectItem as _, ProjectPath, lsp_store::FormatTrigger,
@@ -40,7 +39,7 @@ use std::{
     sync::Arc,
 };
 use text::{BufferId, BufferSnapshot, OffsetRangeExt, Selection};
-use ui::{IconDecorationKind, prelude::*};
+use ui::{prelude::*};
 use util::{ResultExt, TryFutureExt, paths::PathExt, rel_path::RelPath};
 use workspace::item::{Dedup, ItemSettings, SerializableItem, TabContentParams};
 use workspace::{
@@ -1997,26 +1996,6 @@ pub fn entry_label_color(selected: bool) -> Color {
         Color::Default
     } else {
         Color::Muted
-    }
-}
-
-pub fn entry_diagnostic_aware_icon_name_and_color(
-    diagnostic_severity: Option<DiagnosticSeverity>,
-) -> Option<(IconName, Color)> {
-    match diagnostic_severity {
-        Some(DiagnosticSeverity::ERROR) => Some((IconName::Close, Color::Error)),
-        Some(DiagnosticSeverity::WARNING) => Some((IconName::Triangle, Color::Warning)),
-        _ => None,
-    }
-}
-
-pub fn entry_diagnostic_aware_icon_decoration_and_color(
-    diagnostic_severity: Option<DiagnosticSeverity>,
-) -> Option<(IconDecorationKind, Color)> {
-    match diagnostic_severity {
-        Some(DiagnosticSeverity::ERROR) => Some((IconDecorationKind::X, Color::Error)),
-        Some(DiagnosticSeverity::WARNING) => Some((IconDecorationKind::Triangle, Color::Warning)),
-        _ => None,
     }
 }
 

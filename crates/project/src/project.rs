@@ -154,7 +154,7 @@ pub use task_inventory::{
 
 pub use buffer_store::ProjectTransaction;
 pub use lsp_store::{
-    DiagnosticSummary, InvalidationStrategy, LanguageServerLogType, LanguageServerProgress,
+    InvalidationStrategy, LanguageServerLogType, LanguageServerProgress,
     LanguageServerPromptRequest, LanguageServerStatus, LanguageServerToQuery, LspStore,
     LspStoreEvent, ProgressToken, SERVER_PROGRESS_THROTTLE_TIMEOUT,
 };
@@ -358,16 +358,6 @@ pub enum Event {
     WorktreeUpdatedRootRepoCommonDir(WorktreeId),
     WorktreePathsChanged {
         old_worktree_paths: WorktreePaths,
-    },
-    DiskBasedDiagnosticsStarted {
-        language_server_id: LanguageServerId,
-    },
-    DiskBasedDiagnosticsFinished {
-        language_server_id: LanguageServerId,
-    },
-    DiagnosticsUpdated {
-        paths: Vec<ProjectPath>,
-        language_server_id: LanguageServerId,
     },
     RemoteIdChanged(Option<u64>),
     DisconnectedFromHost,
@@ -794,36 +784,6 @@ impl DirectoryLister {
 }
 
 pub const CURRENT_PROJECT_FEATURES: &[&str] = &["new-style-anchors"];
-
-/// An LSP diagnostics associated with a certain language server.
-#[derive(Clone, Debug, Default)]
-pub enum LspPullDiagnostics {
-    #[default]
-    Default,
-    Response {
-        /// The id of the language server that produced diagnostics.
-        server_id: LanguageServerId,
-        /// URI of the resource,
-        uri: lsp::Uri,
-        /// The ID provided by the dynamic registration that produced diagnostics.
-        registration_id: Option<SharedString>,
-        /// The diagnostics produced by this language server.
-        diagnostics: PulledDiagnostics,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub enum PulledDiagnostics {
-    Unchanged {
-        /// An ID the current pulled batch for this file.
-        /// If given, can be used to query workspace diagnostics partially.
-        result_id: SharedString,
-    },
-    Changed {
-        result_id: Option<SharedString>,
-        diagnostics: Vec<lsp::Diagnostic>,
-    },
-}
 
 /// Whether to disable all AI features in Zed.
 ///
@@ -3216,12 +3176,6 @@ impl Project {
         cx: &mut Context<Self>,
     ) {
         match event {
-            LspStoreEvent::DiagnosticsUpdated { server_id, paths } => {
-                cx.emit(Event::DiagnosticsUpdated {
-                    paths: paths.clone(),
-                    language_server_id: *server_id,
-                })
-            }
             LspStoreEvent::LanguageServerAdded(server_id, name, worktree_id) => cx.emit(
                 Event::LanguageServerAdded(*server_id, name.clone(), *worktree_id),
             ),
@@ -3256,16 +3210,6 @@ impl Project {
             }),
             LspStoreEvent::LanguageServerPrompt(prompt) => {
                 cx.emit(Event::LanguageServerPrompt(prompt.clone()))
-            }
-            LspStoreEvent::DiskBasedDiagnosticsStarted { language_server_id } => {
-                cx.emit(Event::DiskBasedDiagnosticsStarted {
-                    language_server_id: *language_server_id,
-                });
-            }
-            LspStoreEvent::DiskBasedDiagnosticsFinished { language_server_id } => {
-                cx.emit(Event::DiskBasedDiagnosticsFinished {
-                    language_server_id: *language_server_id,
-                });
             }
             LspStoreEvent::LanguageServerUpdate {
                 language_server_id,
@@ -4418,38 +4362,6 @@ impl Project {
             });
             cx.emit(Event::ActiveEntryChanged(new_active_entry));
         }
-    }
-
-    pub fn language_servers_running_disk_based_diagnostics<'a>(
-        &'a self,
-        cx: &'a App,
-    ) -> impl Iterator<Item = LanguageServerId> + 'a {
-        self.lsp_store
-            .read(cx)
-            .language_servers_running_disk_based_diagnostics()
-    }
-
-    pub fn diagnostic_summary(&self, include_ignored: bool, cx: &App) -> DiagnosticSummary {
-        self.lsp_store
-            .read(cx)
-            .diagnostic_summary(include_ignored, cx)
-    }
-
-    /// Returns a summary of the diagnostics for the provided project path only.
-    pub fn diagnostic_summary_for_path(&self, path: &ProjectPath, cx: &App) -> DiagnosticSummary {
-        self.lsp_store
-            .read(cx)
-            .diagnostic_summary_for_path(path, cx)
-    }
-
-    pub fn diagnostic_summaries<'a>(
-        &'a self,
-        include_ignored: bool,
-        cx: &'a App,
-    ) -> impl Iterator<Item = (ProjectPath, LanguageServerId, DiagnosticSummary)> + 'a {
-        self.lsp_store
-            .read(cx)
-            .diagnostic_summaries(include_ignored, cx)
     }
 
     pub fn active_entry(&self) -> Option<ProjectEntryId> {

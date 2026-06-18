@@ -76,7 +76,6 @@ message Envelope {
     ExpandProjectEntryResponse expand_project_entry_response = 52;
     ExpandAllForProjectEntry expand_all_for_project_entry = 291;
     ExpandAllForProjectEntryResponse expand_all_for_project_entry_response = 292;
-    UpdateDiagnosticSummary update_diagnostic_summary = 53;
     StartLanguageServer start_language_server = 54;
     UpdateLanguageServer update_language_server = 55;
 
@@ -322,10 +321,6 @@ message Envelope {
     LspExtClearFlycheck lsp_ext_clear_flycheck = 347;
 
     LogToDebugConsole log_to_debug_console = 348;
-
-    GetDocumentDiagnostics get_document_diagnostics = 350;
-    GetDocumentDiagnosticsResponse get_document_diagnostics_response = 351;
-    PullWorkspaceDiagnostics pull_workspace_diagnostics = 352;
 
     GetDocumentColor get_document_color = 353;
     GetDocumentColorResponse get_document_color_response = 354;

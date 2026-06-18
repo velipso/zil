@@ -338,72 +338,6 @@ fn general_page(cx: &App) -> SettingsPage {
         ]
     }
 
-    fn privacy_section() -> [SettingsPageItem; 4] {
-        [
-            SettingsPageItem::SectionHeader("Privacy"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Telemetry Diagnostics",
-                description: "Send debug information like crash reports.",
-                field: Box::new(SettingField {
-                    json_path: Some("telemetry.diagnostics"),
-                    pick: |settings_content| {
-                        settings_content
-                            .telemetry
-                            .as_ref()
-                            .and_then(|telemetry| telemetry.diagnostics.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .telemetry
-                            .get_or_insert_default()
-                            .diagnostics = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Telemetry Metrics",
-                description: "Send anonymized usage data like what languages you're using Zed with.",
-                field: Box::new(SettingField {
-                    json_path: Some("telemetry.metrics"),
-                    pick: |settings_content| {
-                        settings_content
-                            .telemetry
-                            .as_ref()
-                            .and_then(|telemetry| telemetry.metrics.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.telemetry.get_or_insert_default().metrics = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Anthropic Data Retention",
-                description: "Allow sending requests to Anthropic models that cannot be offered with Zero Data Retention.",
-                field: Box::new(SettingField {
-                    json_path: Some("telemetry.anthropic_retention"),
-                    pick: |settings_content| {
-                        settings_content
-                            .telemetry
-                            .as_ref()
-                            .and_then(|telemetry| telemetry.anthropic_retention.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .telemetry
-                            .get_or_insert_default()
-                            .anthropic_retention = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn auto_update_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("Auto Update"),
@@ -431,7 +365,6 @@ fn general_page(cx: &App) -> SettingsPage {
             security_section(),
             workspace_restoration_section(),
             scoped_settings_section(),
-            privacy_section(),
             auto_update_section(),
         )
         .into(),
@@ -2009,7 +1942,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn scrollbar_section() -> [SettingsPageItem; 10] {
+    fn scrollbar_section() -> [SettingsPageItem; 9] {
         [
             SettingsPageItem::SectionHeader("Scrollbar"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2141,30 +2074,6 @@ fn editor_page() -> SettingsPage {
                             .scrollbar
                             .get_or_insert_default()
                             .selected_symbol = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Diagnostics",
-                description: "Which diagnostic indicators to show in the scrollbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("scrollbar.diagnostics"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .as_ref()?
-                            .diagnostics
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .get_or_insert_default()
-                            .diagnostics = value;
                     },
                 }),
                 metadata: None,
@@ -2789,218 +2698,6 @@ fn languages_and_tools_page(cx: &App) -> SettingsPage {
         ]
     }
 
-    fn diagnostics_section() -> [SettingsPageItem; 3] {
-        [
-            SettingsPageItem::SectionHeader("Diagnostics"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Max Severity",
-                description: "Which level to use to filter out diagnostics displayed in the editor.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics_max_severity"),
-                    pick: |settings_content| {
-                        settings_content.editor.diagnostics_max_severity.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.diagnostics_max_severity = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Include Warnings",
-                description: "Whether to show warnings or not by default.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.include_warnings"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .include_warnings
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .include_warnings = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
-    fn inline_diagnostics_section() -> [SettingsPageItem; 5] {
-        [
-            SettingsPageItem::SectionHeader("Inline Diagnostics"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enabled",
-                description: "Whether to show diagnostics inline or not.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.inline.enabled"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .inline
-                            .as_ref()?
-                            .enabled
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .inline
-                            .get_or_insert_default()
-                            .enabled = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Update Debounce",
-                description: "The delay in milliseconds to show inline diagnostics after the last diagnostic update.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.inline.update_debounce_ms"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .inline
-                            .as_ref()?
-                            .update_debounce_ms
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .inline
-                            .get_or_insert_default()
-                            .update_debounce_ms = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Padding",
-                description: "The amount of padding between the end of the source line and the start of the inline diagnostic.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.inline.padding"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .inline
-                            .as_ref()?
-                            .padding
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .inline
-                            .get_or_insert_default()
-                            .padding = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Minimum Column",
-                description: "The minimum column at which to display inline diagnostics.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.inline.min_column"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .inline
-                            .as_ref()?
-                            .min_column
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .inline
-                            .get_or_insert_default()
-                            .min_column = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
-    fn lsp_pull_diagnostics_section() -> [SettingsPageItem; 3] {
-        [
-            SettingsPageItem::SectionHeader("LSP Pull Diagnostics"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enabled",
-                description: "Whether to pull for language server-powered diagnostics or not.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.lsp_pull_diagnostics.enabled"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .lsp_pull_diagnostics
-                            .as_ref()?
-                            .enabled
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .lsp_pull_diagnostics
-                            .get_or_insert_default()
-                            .enabled = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            // todo(settings_ui): Needs unit
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Debounce",
-                description: "Minimum time to wait before pulling diagnostics from the language server(s).",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.lsp_pull_diagnostics.debounce_ms"),
-                    pick: |settings_content| {
-                        settings_content
-                            .diagnostics
-                            .as_ref()?
-                            .lsp_pull_diagnostics
-                            .as_ref()?
-                            .debounce_ms
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .diagnostics
-                            .get_or_insert_default()
-                            .lsp_pull_diagnostics
-                            .get_or_insert_default()
-                            .debounce_ms = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn lsp_highlights_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("LSP Highlights"),
@@ -3059,9 +2756,6 @@ fn languages_and_tools_page(cx: &App) -> SettingsPage {
             concat_sections!(
                 non_editor_language_settings_data(),
                 file_types_section(),
-                diagnostics_section(),
-                inline_diagnostics_section(),
-                lsp_pull_diagnostics_section(),
                 lsp_highlights_section(),
                 languages_list_section(cx),
             )
@@ -3418,7 +3112,7 @@ fn search_and_files_page() -> SettingsPage {
 }
 
 fn window_and_layout_page() -> SettingsPage {
-    fn status_bar_section() -> [SettingsPageItem; 11] {
+    fn status_bar_section() -> [SettingsPageItem; 10] {
         [
             SettingsPageItem::SectionHeader("Status Bar"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -3535,19 +3229,6 @@ fn window_and_layout_page() -> SettingsPage {
                     pick: |settings_content| settings_content.terminal.as_ref()?.button.as_ref(),
                     write: |settings_content, value, _| {
                         settings_content.terminal.get_or_insert_default().button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Diagnostics Button",
-                description: "Show the project diagnostics button in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("diagnostics.button"),
-                    pick: |settings_content| settings_content.diagnostics.as_ref()?.button.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.diagnostics.get_or_insert_default().button = value;
                     },
                 }),
                 metadata: None,
@@ -4040,7 +3721,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn tab_settings_section() -> [SettingsPageItem; 4] {
+    fn tab_settings_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Tab Settings"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -4056,24 +3737,6 @@ fn window_and_layout_page() -> SettingsPage {
                             .tabs
                             .get_or_insert_default()
                             .activate_on_close = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Tab Show Diagnostics",
-                description: "Which files containing diagnostic errors/warnings to mark in the tabs.",
-                field: Box::new(SettingField {
-                    json_path: Some("tabs.show_diagnostics"),
-                    pick: |settings_content| {
-                        settings_content.tabs.as_ref()?.show_diagnostics.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .tabs
-                            .get_or_insert_default()
-                            .show_diagnostics = value;
                     },
                 }),
                 metadata: None,
@@ -4530,7 +4193,7 @@ fn window_and_layout_page() -> SettingsPage {
 }
 
 fn panels_page() -> SettingsPage {
-    fn project_panel_section() -> [SettingsPageItem; 29] {
+    fn project_panel_section() -> [SettingsPageItem; 27] {
         [
             SettingsPageItem::SectionHeader("Project Panel"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -4829,50 +4492,6 @@ fn panels_page() -> SettingsPage {
                             .scrollbar
                             .get_or_insert_default()
                             .horizontal_scroll = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Diagnostics",
-                description: "Which files containing diagnostic errors/warnings to mark in the project panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("project_panel.show_diagnostics"),
-                    pick: |settings_content| {
-                        settings_content
-                            .project_panel
-                            .as_ref()?
-                            .show_diagnostics
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .project_panel
-                            .get_or_insert_default()
-                            .show_diagnostics = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Diagnostic Badges",
-                description: "Show error and warning count badges next to file names in the project panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("project_panel.diagnostic_badges"),
-                    pick: |settings_content| {
-                        settings_content
-                            .project_panel
-                            .as_ref()?
-                            .diagnostic_badges
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .project_panel
-                            .get_or_insert_default()
-                            .diagnostic_badges = value;
                     },
                 }),
                 metadata: None,

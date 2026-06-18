@@ -181,7 +181,6 @@ impl VsCodeSettings {
             collaboration_panel: None,
             credentials_url: None,
             debugger: None,
-            diagnostics: None,
             editor: self.editor_settings_content(),
             extension: ExtensionSettingsContent::default(),
             file_finder: None,
@@ -213,7 +212,6 @@ impl VsCodeSettings {
             status_bar: self.status_bar_settings_content(),
             tab_bar: self.tab_bar_settings_content(),
             tabs: self.item_settings_content(),
-            telemetry: self.telemetry_settings_content(),
             terminal: self.terminal_settings_content(),
             theme: Box::new(self.theme_settings_content()),
             title_bar: None,
@@ -257,7 +255,6 @@ impl VsCodeSettings {
                 "all" => Some(CurrentLineHighlight::All),
                 _ => None,
             }),
-            diagnostics_max_severity: None,
             double_click_in_multibuffer: None,
             drag_and_drop_selection: None,
             excerpt_context_lines: None,
@@ -683,7 +680,6 @@ impl VsCodeSettings {
                         ActivateOnClose::LeftNeighbour
                     }
                 }),
-            show_diagnostics: None,
             show_close_button: self
                 .read_bool("workbench.editor.tabActionCloseVisibility")
                 .map(|b| {
@@ -760,9 +756,6 @@ impl VsCodeSettings {
                     horizontal_scroll: Some(horizontal_scrolling),
                 },
             ),
-            show_diagnostics: self
-                .read_bool("problems.decorations.enabled")
-                .and_then(|b| if b { Some(ShowDiagnostics::Off) } else { None }),
             sort_mode: self.read_enum("explorer.sortOrder", |s| match s {
                 "default" | "foldersNestsFiles" => Some(ProjectPanelSortMode::DirectoriesFirst),
                 "mixed" => Some(ProjectPanelSortMode::Mixed),
@@ -779,7 +772,6 @@ impl VsCodeSettings {
             starts_open: None,
             sticky_scroll: None,
             auto_open: None,
-            diagnostic_badges: None,
             git_status_indicator: None,
         };
 
@@ -788,26 +780,9 @@ impl VsCodeSettings {
             self.read_bool("explorer.decorations.colors"),
         ) {
             project_panel_settings.git_status = Some(false);
-            project_panel_settings.show_diagnostics = Some(ShowDiagnostics::Off);
         }
 
         skip_default(project_panel_settings)
-    }
-
-    fn telemetry_settings_content(&self) -> Option<TelemetrySettingsContent> {
-        self.read_enum("telemetry.telemetryLevel", |level| {
-            let (metrics, diagnostics) = match level {
-                "all" => (true, true),
-                "error" | "crash" => (false, true),
-                "off" => (false, false),
-                _ => return None,
-            };
-            Some(TelemetrySettingsContent {
-                metrics: Some(metrics),
-                diagnostics: Some(diagnostics),
-                anthropic_retention: None,
-            })
-        })
     }
 
     fn terminal_settings_content(&self) -> Option<TerminalSettingsContent> {

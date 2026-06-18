@@ -378,9 +378,6 @@ impl AnyProtoClient {
                             Response::GetHoverResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }
-                            Response::GetDocumentDiagnosticsResponse(response) => {
-                                to_any_envelope(&envelope, response)
-                            }
                             Response::InlayHintsResponse(response) => {
                                 to_any_envelope(&envelope, response)
                             }

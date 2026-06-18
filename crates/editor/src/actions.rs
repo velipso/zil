@@ -1,7 +1,6 @@
 //! This module contains all actions supported by [`Editor`].
 use super::*;
 use gpui::{Action, actions};
-use project::project_settings::GoToDiagnosticSeverityFilter;
 use schemars::JsonSchema;
 use util::serde::default_true;
 
@@ -278,26 +277,6 @@ pub struct SplitSelectionIntoLines {
     /// Keep the text selected after splitting instead of collapsing to cursors.
     #[serde(default)]
     pub keep_selections: bool,
-}
-
-/// Expands the diagnostic under the cursor, if any, in case diagnostics are not
-/// yet active. Otherwise, goes to the next diagnostic in the file.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct GoToDiagnostic {
-    #[serde(default)]
-    pub severity: GoToDiagnosticSeverityFilter,
-}
-
-/// Expands the diagnostic under the cursor, if any, in case diagnostics are not
-/// yet active. Otherwise, goes to the previous diagnostic in the file.
-#[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct GoToPreviousDiagnostic {
-    #[serde(default)]
-    pub severity: GoToDiagnosticSeverityFilter,
 }
 
 /// Adds a cursor above the current selection.

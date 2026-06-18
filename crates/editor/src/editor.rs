@@ -13,7 +13,6 @@
 //! If you're looking to improve Vim mode, you should check out Vim crate that wraps Editor and overrides its behavior.
 pub mod actions;
 pub mod blink_manager;
-mod clangd_ext;
 pub mod display_map;
 mod document_colors;
 mod document_symbols;
@@ -47,7 +46,6 @@ pub mod test;
 
 mod clipboard;
 mod config;
-mod diagnostics;
 mod input;
 mod navigation;
 mod rewrap;
@@ -55,8 +53,6 @@ mod selection;
 
 pub(crate) use actions::*;
 pub use clipboard::ClipboardSelection;
-use diagnostics::{ActiveDiagnostic, GlobalDiagnosticRenderer, InlineDiagnostic};
-pub use diagnostics::{DiagnosticRenderer, set_diagnostic_renderer};
 pub use display_map::{
     ChunkRenderer, ChunkRendererContext, DisplayPoint, FoldPlaceholder, HighlightKey,
     NavigationOverlayKey, SemanticTokenHighlight,
@@ -115,8 +111,8 @@ use itertools::{Either, Itertools};
 use language::{
     AutoindentMode, BlockCommentConfig, Buffer, BufferRow,
     BufferSnapshot, Capability, CharKind, CodeLabel, CursorShape,
-    DiagnosticEntryRef, DiffOptions, HighlightedText, IndentKind, IndentSize, Language,
-    LanguageAwareStyling, LanguageName, LanguageRegistry, LanguageScope, LocalFile, OffsetRangeExt,
+    DiffOptions, HighlightedText, IndentKind, IndentSize, Language,
+    LanguageAwareStyling, LanguageName, LanguageScope, LocalFile, OffsetRangeExt,
     OutlineItem, Point, Selection, SelectionGoal, TextObject, TransactionId, TreeSitterOptions,
     language_settings::{
         self, AllLanguageSettings, LanguageSettings, RewrapBehavior,
@@ -148,7 +144,7 @@ use project::{
         BufferSemanticTokens, CacheInlayHints, FormatTrigger,
         LspFormatTarget, OpenLspBufferHandle, RefreshForServer,
     },
-    project_settings::{DiagnosticSeverity, GoToDiagnosticSeverityFilter, ProjectSettings},
+    project_settings::{ProjectSettings},
 };
 use rand::seq::SliceRandom;
 use regex::Regex;
@@ -424,7 +420,6 @@ pub struct EditorStyle {
     pub status: StatusColors,
     pub inlay_hints_style: HighlightStyle,
     pub unnecessary_code_fade: f32,
-    pub show_underlines: bool,
 }
 
 impl Default for EditorStyle {
@@ -442,7 +437,6 @@ impl Default for EditorStyle {
             status: StatusColors::dark(),
             inlay_hints_style: HighlightStyle::default(),
             unnecessary_code_fade: Default::default(),
-            show_underlines: true,
         }
     }
 }
@@ -830,13 +824,6 @@ pub struct Editor {
     deferred_selection_effects_state: Option<DeferredSelectionEffectsState>,
     select_syntax_node_history: SelectSyntaxNodeHistory,
     ime_transaction: Option<TransactionId>,
-    pub diagnostics_max_severity: DiagnosticSeverity,
-    active_diagnostics: ActiveDiagnostic,
-    show_inline_diagnostics: bool,
-    inline_diagnostics_update: Task<()>,
-    inline_diagnostics_enabled: bool,
-    diagnostics_enabled: bool,
-    inline_diagnostics: Vec<(Anchor, InlineDiagnostic)>,
     soft_wrap_mode_override: Option<language_settings::SoftWrap>,
     hard_wrap: Option<usize>,
     project: Option<Entity<Project>>,
@@ -940,7 +927,6 @@ pub struct Editor {
     bookmark_store: Option<Entity<BookmarkStore>>,
     breakpoint_store: Option<Entity<BreakpointStore>>,
     gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
-    pull_diagnostics_task: Task<()>,
     in_project_search: bool,
     previous_search_ranges: Option<Arc<[Range<Anchor>]>>,
     breadcrumb_header: Option<String>,
@@ -1667,13 +1653,6 @@ impl Editor {
 
         let full_mode = mode.is_full();
         let is_minimap = mode.is_minimap();
-        let diagnostics_max_severity = if full_mode {
-            EditorSettings::get_global(cx)
-                .diagnostics_max_severity
-                .unwrap_or(DiagnosticSeverity::Hint)
-        } else {
-            DiagnosticSeverity::Off
-        };
         let style = window.text_style();
         let font_size = style.font_size.to_pixels(window.rem_size());
         let editor = cx.entity().downgrade();
@@ -1713,7 +1692,6 @@ impl Editor {
                     FILE_HEADER_HEIGHT,
                     MULTI_BUFFER_EXCERPT_HEADER_HEIGHT,
                     fold_placeholder,
-                    diagnostics_max_severity,
                     cx,
                 )
             })
@@ -1934,12 +1912,7 @@ impl Editor {
             deferred_selection_effects_state: None,
             select_syntax_node_history: SelectSyntaxNodeHistory::default(),
             ime_transaction: None,
-            active_diagnostics: ActiveDiagnostic::None,
-            show_inline_diagnostics: ProjectSettings::get_global(cx).diagnostics.inline.enabled,
-            inline_diagnostics_update: Task::ready(()),
-            inline_diagnostics: Vec::new(),
             soft_wrap_mode_override,
-            diagnostics_max_severity,
             hard_wrap: None,
             semantics_provider: project
                 .as_ref()
@@ -2009,8 +1982,6 @@ impl Editor {
             pending_mouse_down: None,
             prev_pressure_stage: None,
             hovered_link_state: None,
-            inline_diagnostics_enabled: full_mode,
-            diagnostics_enabled: full_mode,
             inline_value_cache: InlineValueCache::new(inlay_hint_settings.show_value_hints),
             gutter_hovered: false,
             pixel_position_of_newest_cursor: None,
@@ -2061,7 +2032,6 @@ impl Editor {
                 })
                 .unwrap_or_default(),
             runnables: RunnableData::new(),
-            pull_diagnostics_task: Task::ready(()),
             colors: None,
             refresh_colors_task: Task::ready(()),
             use_document_folding_ranges: false,
@@ -2634,7 +2604,6 @@ impl Editor {
                 FILE_HEADER_HEIGHT,
                 MULTI_BUFFER_EXCERPT_HEADER_HEIGHT,
                 Default::default(),
-                DiagnosticSeverity::Off,
                 cx,
             )
         }));
@@ -2818,10 +2787,6 @@ impl Editor {
         dismissed |= self.take_rename(false, window, cx).is_some();
         dismissed |= hide_hover(self, cx);
         dismissed |= self.mouse_context_menu.take().is_some();
-        if self.mode.is_full() && self.has_active_diagnostic_group() {
-            self.dismiss_diagnostics(cx);
-            dismissed = true;
-        }
         dismissed
     }
 
@@ -8360,7 +8325,6 @@ impl Editor {
             } => {
                 self.scrollbar_marker_state.dirty = true;
                 self.active_indent_guides_state.dirty = true;
-                self.refresh_active_diagnostics(cx);
                 self.refresh_single_line_folds(window, cx);
                 let snapshot = self.snapshot(window, cx);
                 self.refresh_matching_bracket_highlights(&snapshot, cx);
@@ -8476,9 +8440,6 @@ impl Editor {
             multi_buffer::Event::Reloaded | multi_buffer::Event::BufferDiffChanged => {
                 cx.emit(EditorEvent::TitleChanged)
             }
-            multi_buffer::Event::DiagnosticsUpdated => {
-                self.update_diagnostics_state(window, cx);
-            }
             _ => {}
         };
     }
@@ -8518,12 +8479,6 @@ impl Editor {
         let language_settings_changed = new_language_settings != self.applicable_language_settings;
         self.applicable_language_settings = new_language_settings;
 
-        if self.diagnostics_enabled() {
-            let new_severity = EditorSettings::get_global(cx)
-                .diagnostics_max_severity
-                .unwrap_or(DiagnosticSeverity::Hint);
-            self.set_max_diagnostics_severity(new_severity, cx);
-        }
         self.refresh_runnables(None, window, cx);
         self.refresh_inline_values(cx);
 
@@ -8550,23 +8505,15 @@ impl Editor {
             cx.emit(EditorEvent::BreadcrumbsChanged);
         }
 
-        let (restore_unsaved_buffers, show_inline_diagnostics) = {
+        let restore_unsaved_buffers = {
             let project_settings = ProjectSettings::get_global(cx);
-            (
-                project_settings.session.restore_unsaved_buffers,
-                project_settings.diagnostics.inline.enabled,
-            )
+            project_settings.session.restore_unsaved_buffers
         };
         self.buffer_serialization = self
             .should_serialize_buffer()
             .then(|| BufferSerialization::new(restore_unsaved_buffers));
 
         if self.mode.is_full() {
-            if self.show_inline_diagnostics != show_inline_diagnostics {
-                self.show_inline_diagnostics = show_inline_diagnostics;
-                self.refresh_inline_diagnostics(false, window, cx);
-            }
-
             let minimap_settings = EditorSettings::get_global(cx).minimap;
             if self.minimap_visibility != MinimapVisibility::Disabled {
                 if self.minimap_visibility.settings_visibility()
@@ -9426,9 +9373,6 @@ impl Editor {
             return;
         }
 
-        if let Some(buffer_id) = for_buffer {
-            self.pull_diagnostics(buffer_id, window, cx);
-        }
         self.refresh_semantic_tokens(for_buffer, None, cx);
         self.refresh_document_colors(for_buffer, window, cx);
         self.refresh_folding_ranges(for_buffer, window, cx);
@@ -9516,7 +9460,6 @@ impl Editor {
             status: cx.theme().status().clone(),
             inlay_hints_style: make_inlay_hints_style(cx),
             unnecessary_code_fade: settings.unnecessary_code_fade,
-            show_underlines: self.diagnostics_enabled(),
         }
     }
 

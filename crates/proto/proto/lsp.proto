@@ -343,20 +343,6 @@ message StartLanguageServer {
   string capabilities = 3;
 }
 
-message UpdateDiagnosticSummary {
-  uint64 project_id = 1;
-  uint64 worktree_id = 2;
-  DiagnosticSummary summary = 3;
-  repeated DiagnosticSummary more_summaries = 4;
-}
-
-message DiagnosticSummary {
-  string path = 1;
-  uint64 language_server_id = 2;
-  uint32 error_count = 3;
-  uint32 warning_count = 4;
-}
-
 message UpdateLanguageServer {
   uint64 project_id = 1;
   uint64 language_server_id = 2;
@@ -365,8 +351,6 @@ message UpdateLanguageServer {
     LspWorkStart work_start = 3;
     LspWorkProgress work_progress = 4;
     LspWorkEnd work_end = 5;
-    LspDiskBasedDiagnosticsUpdating disk_based_diagnostics_updating = 6;
-    LspDiskBasedDiagnosticsUpdated disk_based_diagnostics_updated = 7;
     StatusUpdate status_update = 9;
     RegisteredForBuffer registered_for_buffer = 10;
     ServerMetadataUpdated metadata_updated = 11;
@@ -402,10 +386,6 @@ message LspWorkEnd {
   reserved 1;
   ProgressToken token = 2;
 }
-
-message LspDiskBasedDiagnosticsUpdating {}
-
-message LspDiskBasedDiagnosticsUpdated {}
 
 message ServerRemoved {}
 
@@ -616,7 +596,6 @@ message LspQuery {
   oneof request {
     GetDocumentColor get_document_color = 4;
     GetHover get_hover = 5;
-    GetDocumentDiagnostics get_document_diagnostics = 9;
     InlayHints inlay_hints = 14;
     SemanticTokens semantic_tokens = 16;
     GetFoldingRanges get_folding_ranges = 17;
@@ -633,7 +612,6 @@ message LspQueryResponse {
 message LspResponse {
   oneof response {
     GetHoverResponse get_hover_response = 1;
-    GetDocumentDiagnosticsResponse get_document_diagnostics_response = 5;
     GetDocumentColorResponse get_document_color_response = 6;
     InlayHintsResponse inlay_hints_response = 13;
     SemanticTokensResponse semantic_tokens_response = 14;
@@ -696,64 +674,6 @@ message LspExtRunFlycheck {
 message LspExtClearFlycheck {
   uint64 project_id = 1;
   uint64 language_server_id = 2;
-}
-
-message LspDiagnosticRelatedInformation {
-  optional string location_url = 1;
-  PointUtf16 location_range_start = 2;
-  PointUtf16 location_range_end = 3;
-  string message = 4;
-}
-
-enum LspDiagnosticTag {
-  None = 0;
-  Unnecessary = 1;
-  Deprecated = 2;
-}
-
-message LspDiagnostic {
-  PointUtf16 start = 1;
-  PointUtf16 end = 2;
-  Severity severity = 3;
-  optional string code = 4;
-  optional string code_description = 5;
-  optional string source = 6;
-  string message = 7;
-  repeated LspDiagnosticRelatedInformation related_information = 8;
-  repeated LspDiagnosticTag tags = 9;
-  optional string data = 10;
-
-  enum Severity {
-    None = 0;
-    Error = 1;
-    Warning = 2;
-    Information = 3;
-    Hint = 4;
-  }
-}
-
-message GetDocumentDiagnostics {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  repeated VectorClockEntry version = 3;
-}
-
-message GetDocumentDiagnosticsResponse {
-  repeated PulledDiagnostics pulled_diagnostics = 1;
-}
-
-message PulledDiagnostics {
-  uint64 server_id = 1;
-  string uri = 2;
-  optional string result_id = 3;
-  bool changed = 4;
-  repeated LspDiagnostic diagnostics = 5;
-  optional string registration_id = 6;
-}
-
-message PullWorkspaceDiagnostics {
-  uint64 project_id = 1;
-  uint64 server_id = 2;
 }
 
 message ToggleLspLogs {
