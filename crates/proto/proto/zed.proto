@@ -297,9 +297,6 @@ message Envelope {
 
     StopLanguageServers stop_language_servers = 336;
 
-    LspExtRunnables lsp_ext_runnables = 337;
-    LspExtRunnablesResponse lsp_ext_runnables_response = 338;
-
     GetDebugAdapterBinary get_debug_adapter_binary = 339;
     DebugAdapterBinary debug_adapter_binary = 340;
     RunDebugLocators run_debug_locators = 341;

@@ -64,38 +64,4 @@ impl Editor {
             })
         })
     }
-
-    pub fn lsp_task_sources(&self, cx: &App) -> HashMap<LanguageServerName, Vec<BufferId>> {
-        let lsp_settings = &ProjectSettings::get_global(cx).lsp;
-
-        self.buffer()
-            .read(cx)
-            .all_buffers()
-            .into_iter()
-            .filter_map(|buffer| {
-                let lsp_tasks_source = buffer
-                    .read(cx)
-                    .language()?
-                    .context_provider()?
-                    .lsp_task_source()?;
-                if lsp_settings
-                    .get(&lsp_tasks_source)
-                    .is_none_or(|s| s.enable_lsp_tasks)
-                {
-                    let buffer_id = buffer.read(cx).remote_id();
-                    Some((lsp_tasks_source, buffer_id))
-                } else {
-                    None
-                }
-            })
-            .fold(
-                HashMap::default(),
-                |mut acc, (lsp_task_source, buffer_id)| {
-                    acc.entry(lsp_task_source)
-                        .or_insert_with(Vec::new)
-                        .push(buffer_id);
-                    acc
-                },
-            )
-    }
 }

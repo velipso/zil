@@ -176,11 +176,6 @@ pub struct LspSettings {
     ///
     /// Consult the documentation for the specific language server to see which settings are supported.
     pub settings: Option<serde_json::Value>,
-    /// If the server supports sending tasks over LSP extensions,
-    /// this setting can be used to enable or disable them in Zed.
-    /// Default: true
-    #[serde(default = "default_true")]
-    pub enable_lsp_tasks: bool,
     pub fetch: Option<FetchSettings>,
 }
 
@@ -190,7 +185,6 @@ impl Default for LspSettings {
             binary: None,
             initialization_options: None,
             settings: None,
-            enable_lsp_tasks: true,
             fetch: None,
         }
     }

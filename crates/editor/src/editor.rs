@@ -25,11 +25,9 @@ pub mod hover_links;
 mod indent_guides;
 mod inlays;
 pub mod items;
-mod lsp_ext;
 mod mouse_context_menu;
 pub mod movement;
 mod persistence;
-mod runnables;
 pub mod scroll;
 mod selections_collection;
 pub mod semantic_tokens;
@@ -65,7 +63,6 @@ pub use element::{
 };
 pub use inlays::Inlay;
 pub use items::MAX_TAB_TITLE_LEN;
-pub use lsp_ext::lsp_tasks;
 pub use multi_buffer::{
     Anchor, AnchorRangeExt, BufferOffset, ExcerptRange, MBTextSummary, MultiBuffer,
     MultiBufferOffset, MultiBufferOffsetUtf16, MultiBufferSnapshot, PathKey, RowInfo, ToOffset,
@@ -157,7 +154,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use task::TaskVariables;
 use text::{BufferId, FromAnchor, OffsetUtf16, Rope, ToPoint as _};
 use theme::{
     ActiveTheme, GlobalTheme, PlayerColor, StatusColors, SyntaxTheme, Theme,
@@ -183,7 +179,6 @@ use zed_actions::editor::{MoveDown, MoveUp};
 use crate::{
     editor_settings::MultiCursorModifier,
     hover_links::{find_url, find_url_from_range},
-    runnables::{RunnableData, RunnableTasks},
     scroll::ScrollOffset,
     selections_collection::resolve_selections_wrapping_blocks,
     semantic_tokens::SemanticTokenState,
@@ -794,12 +789,10 @@ pub struct Editor {
     delegate_open_excerpts: bool,
     enable_lsp_data: bool,
     needs_initial_data_update: bool,
-    enable_runnables: bool,
     enable_mouse_wheel_zoom: bool,
     show_line_numbers: Option<bool>,
     use_relative_line_numbers: Option<bool>,
     show_git_diff_gutter: Option<bool>,
-    show_runnables: Option<bool>,
     show_wrap_guides: Option<bool>,
     show_indent_guides: Option<bool>,
     buffers_with_disabled_indent_guides: HashSet<BufferId>,
@@ -868,7 +861,6 @@ pub struct Editor {
     last_bounds: Option<Bounds<Pixels>>,
     last_position_map: Option<Rc<PositionMap>>,
     expect_bounds_change: Option<Bounds<Pixels>>,
-    runnables: RunnableData,
     gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
     in_project_search: bool,
     previous_search_ranges: Option<Arc<[Range<Anchor>]>>,
@@ -936,7 +928,6 @@ pub struct EditorSnapshot {
     show_line_numbers: Option<bool>,
     number_deleted_lines: bool,
     show_git_diff_gutter: Option<bool>,
-    show_runnables: Option<bool>,
     pub display_snapshot: DisplaySnapshot,
     pub placeholder_display_snapshot: Option<DisplaySnapshot>,
     is_focused: bool,
@@ -1486,7 +1477,6 @@ impl Editor {
         clone.enable_mouse_wheel_zoom = self.enable_mouse_wheel_zoom;
         clone.enable_lsp_data = self.enable_lsp_data;
         clone.needs_initial_data_update = self.enable_lsp_data;
-        clone.enable_runnables = self.enable_runnables;
         clone
     }
 
@@ -1668,14 +1658,12 @@ impl Editor {
                         editor.registered_buffers.clear();
                         editor.register_visible_buffers(cx);
                         editor.invalidate_semantic_tokens(None);
-                        editor.refresh_runnables(None, window, cx);
                         editor.update_lsp_data(None, window, cx);
                     }
                     project::Event::LanguageServerBufferRegistered { buffer_id, .. } => {
                         let buffer_id = *buffer_id;
                         if editor.buffer().read(cx).buffer(buffer_id).is_some() {
                             editor.register_buffer(buffer_id, cx);
-                            editor.refresh_runnables(Some(buffer_id), window, cx);
                             editor.update_lsp_data(Some(buffer_id), window, cx);
                             editor.refresh_document_highlights(cx);
                         }
@@ -1740,21 +1728,6 @@ impl Editor {
                     _ => {}
                 },
             ));
-            if let Some(task_inventory) = project
-                .read(cx)
-                .task_store()
-                .read(cx)
-                .task_inventory()
-                .cloned()
-            {
-                project_subscriptions.push(cx.observe_in(
-                    &task_inventory,
-                    window,
-                    |editor, _, window, cx| {
-                        editor.refresh_runnables(None, window, cx);
-                    },
-                ));
-            };
         }
 
         let focus_handle = cx.focus_handle();
@@ -1820,10 +1793,8 @@ impl Editor {
             delegate_open_excerpts: false,
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
-            enable_runnables: full_mode,
             enable_mouse_wheel_zoom: full_mode,
             show_git_diff_gutter: None,
-            show_runnables: None,
             show_wrap_guides: None,
             show_indent_guides,
             buffers_with_disabled_indent_guides: HashSet::default(),
@@ -1907,7 +1878,6 @@ impl Editor {
                     ]
                 })
                 .unwrap_or_default(),
-            runnables: RunnableData::new(),
             colors: None,
             refresh_colors_task: Task::ready(()),
             use_document_folding_ranges: false,
@@ -2320,7 +2290,6 @@ impl Editor {
             number_deleted_lines: self.number_deleted_lines,
             show_git_diff_gutter: self.show_git_diff_gutter,
             semantic_tokens_enabled: self.semantic_token_state.enabled(),
-            show_runnables: self.show_runnables,
             scroll_anchor: self.scroll_manager.shared_scroll_anchor(cx),
             display_snapshot,
             placeholder_display_snapshot: self
@@ -3206,34 +3175,6 @@ impl Editor {
             window,
             cx,
         );
-    }
-
-    fn build_tasks_context(
-        project: &Entity<Project>,
-        buffer: &Entity<Buffer>,
-        buffer_row: u32,
-        tasks: &Arc<RunnableTasks>,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Option<task::TaskContext>>> {
-        let position = Point::new(buffer_row, tasks.column);
-        let range_start = buffer.read(cx).anchor_at(position, Bias::Right);
-        let location = Location {
-            buffer: buffer.clone(),
-            range: range_start..range_start,
-        };
-        // Fill in the environmental variables from the tree-sitter captures
-        let mut captured_task_variables = TaskVariables::default();
-        for (capture_name, value) in tasks.extra_variables.clone() {
-            captured_task_variables.insert(
-                task::VariableName::Custom(capture_name.into()),
-                value.clone(),
-            );
-        }
-        project.update(cx, |project, cx| {
-            project.task_store().update(cx, |task_store, cx| {
-                task_store.task_context_for_location(captured_task_variables, location, cx)
-            })
-        })
     }
 
     fn current_user_player_color(&self, cx: &mut App) -> PlayerColor {
@@ -7083,7 +7024,6 @@ impl Editor {
                 let buffer_id = buffer.read(cx).remote_id();
                 self.register_visible_buffers(cx);
                 self.update_lsp_data(Some(buffer_id), window, cx);
-                self.refresh_runnables(None, window, cx);
                 self.bracket_fetched_tree_sitter_chunks
                     .retain(|range, _| range.start.buffer_id != buffer_id);
                 self.refresh_selected_text_highlights(&self.display_snapshot(cx), true, window, cx);
@@ -7097,7 +7037,6 @@ impl Editor {
             multi_buffer::Event::BuffersRemoved { removed_buffer_ids } => {
                 for buffer_id in removed_buffer_ids {
                     self.registered_buffers.remove(buffer_id);
-                    self.clear_runnables(Some(*buffer_id));
                     self.semantic_token_state.invalidate_buffer(buffer_id);
                     self.lsp_document_symbols.remove(buffer_id);
                     self.display_map.update(cx, |display_map, cx| {
@@ -7123,13 +7062,9 @@ impl Editor {
                 });
             }
             multi_buffer::Event::Reparsed(buffer_id) => {
-                self.refresh_runnables(Some(*buffer_id), window, cx);
                 self.refresh_selected_text_highlights(&self.display_snapshot(cx), true, window, cx);
 
                 cx.emit(EditorEvent::Reparsed(*buffer_id));
-            }
-            multi_buffer::Event::DiffHunksToggled => {
-                self.refresh_runnables(None, window, cx);
             }
             multi_buffer::Event::LanguageChanged(buffer_id, is_fresh_language) => {
                 if !is_fresh_language {
@@ -7185,8 +7120,6 @@ impl Editor {
         let new_language_settings = self.fetch_applicable_language_settings(cx);
         let language_settings_changed = new_language_settings != self.applicable_language_settings;
         self.applicable_language_settings = new_language_settings;
-
-        self.refresh_runnables(None, window, cx);
 
         let old_cursor_shape = self.cursor_shape;
         let old_breadcrumbs_visible = self.breadcrumbs_visible();
@@ -8233,7 +8166,6 @@ impl Editor {
         if !self.buffer().read(cx).is_singleton() || self.needs_initial_data_update {
             self.needs_initial_data_update = false;
             self.update_lsp_data(None, window, cx);
-            self.refresh_runnables(None, window, cx);
         }
     }
 
@@ -8560,17 +8492,11 @@ impl EditorSnapshot {
                 0.0.into()
             };
 
-            let show_runnables = self.show_runnables.unwrap_or(gutter_settings.runnables);
-
             let is_singleton = self.buffer_snapshot().is_singleton();
 
             let left_padding = Pixels::ZERO
                 + if !is_singleton {
                     ch_width * 4.0
-                // runnables, breakpoints and bookmarks are shown in the same place
-                // if all three are there only the runnable is shown
-                } else if show_runnables {
-                    ch_width * 3.0
                 } else if show_git_gutter && show_line_numbers {
                     ch_width * 2.0
                 } else if show_git_gutter || show_line_numbers {
@@ -9101,8 +9027,6 @@ fn collapse_multiline_range(range: Range<Point>) -> Range<Point> {
         range.start..range.start
     }
 }
-
-const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineHighlight {

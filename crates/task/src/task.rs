@@ -10,7 +10,6 @@ mod vscode_format;
 
 use anyhow::Context as _;
 use collections::{HashMap, HashSet, hash_map};
-use gpui::SharedString;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -176,8 +175,6 @@ pub enum VariableName {
     SelectedText,
     /// The language of the currently opened buffer (e.g., "Rust", "Python").
     Language,
-    /// The symbol selected by the symbol tagging system, specifically the @run capture in a runnables.scm
-    RunnableSymbol,
     /// Open a Picker to select a process ID to use in place
     /// Can only be used to debug configurations
     PickProcessId,
@@ -223,7 +220,6 @@ impl FromStr for VariableName {
             "STEM" => Self::Stem,
             "WORKTREE_ROOT" => Self::WorktreeRoot,
             "SYMBOL" => Self::Symbol,
-            "RUNNABLE_SYMBOL" => Self::RunnableSymbol,
             "SELECTED_TEXT" => Self::SelectedText,
             "LANGUAGE" => Self::Language,
             "ROW" => Self::Row,
@@ -266,7 +262,6 @@ impl std::fmt::Display for VariableName {
             Self::Column => write!(f, "{ZED_VARIABLE_NAME_PREFIX}COLUMN"),
             Self::SelectedText => write!(f, "{ZED_VARIABLE_NAME_PREFIX}SELECTED_TEXT"),
             Self::Language => write!(f, "{ZED_VARIABLE_NAME_PREFIX}LANGUAGE"),
-            Self::RunnableSymbol => write!(f, "{ZED_VARIABLE_NAME_PREFIX}RUNNABLE_SYMBOL"),
             Self::PickProcessId => write!(f, "{ZED_VARIABLE_NAME_PREFIX}PICK_PID"),
             Self::MainGitWorktree => write!(f, "{ZED_VARIABLE_NAME_PREFIX}MAIN_GIT_WORKTREE"),
             Self::GitSha => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_SHA"),
@@ -362,10 +357,6 @@ impl From<TaskContext> for SharedTaskContext {
         Self(Arc::new(context))
     }
 }
-
-/// This is a new type representing a 'tag' on a 'runnable symbol', typically a test of main() function, found via treesitter.
-#[derive(Clone, Debug)]
-pub struct RunnableTag(pub SharedString);
 
 pub fn shell_from_proto(proto: proto::Shell) -> anyhow::Result<Shell> {
     let shell_type = proto.shell_type.context("invalid shell type")?;

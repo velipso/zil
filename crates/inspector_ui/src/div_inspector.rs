@@ -459,7 +459,6 @@ impl DivInspector {
             );
             editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
             editor.set_show_line_numbers(false, cx);
-            editor.set_show_runnables(false, cx);
             editor.disable_mouse_wheel_zoom();
             editor.set_minimap_visibility(MinimapVisibility::Disabled, window, cx);
             editor

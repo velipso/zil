@@ -11027,32 +11027,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tasks_ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collections",
- "editor",
- "file_icons",
- "fuzzy",
- "gpui",
- "itertools 0.14.0",
- "language",
- "menu",
- "picker",
- "project",
- "serde",
- "serde_json",
- "task",
- "tree-sitter-rust",
- "tree-sitter-typescript",
- "ui",
- "util",
- "workspace",
- "zed_actions",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15122,7 +15096,6 @@ dependencies = [
  "system_specs",
  "tab_switcher",
  "task",
- "tasks_ui",
  "tempfile",
  "terminal_view",
  "theme",

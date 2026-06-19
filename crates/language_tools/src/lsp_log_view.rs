@@ -1258,7 +1258,6 @@ fn initialize_new_editor(
         let mut editor = Editor::multi_line(window, cx);
         editor.hide_minimap_by_default(window, cx);
         editor.set_text(content, window, cx);
-        editor.set_show_runnables(false, cx);
         editor.set_read_only(true);
         editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
         if move_to_end {

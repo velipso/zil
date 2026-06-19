@@ -17,7 +17,6 @@ mod manifest;
 pub mod modeline;
 mod outline;
 pub mod proto;
-mod runnable;
 mod syntax_map;
 mod task_context;
 mod text_diff;
@@ -44,7 +43,7 @@ pub use language_core::{
     DecreaseIndentConfig, Grammar, GrammarId, HighlightsConfig, IndentConfig, InjectionConfig,
     InjectionPatternConfig, LanguageConfig, LanguageConfigOverride,
     LanguageId, LanguageMatcher, OrderedListConfig, OutlineConfig, Override, OverrideConfig,
-    OverrideEntry, PromptResponseContext, RedactionConfig, RunnableCapture, RunnableConfig,
+    OverrideEntry, PromptResponseContext, RedactionConfig,
     SoftWrap, Symbol, TaskListConfig, TextObject, TextObjectConfig, ToLspPosition,
     WrapCharactersConfig, auto_indent_using_last_non_empty_line_default, deserialize_regex,
     deserialize_regex_vec, regex_json_schema, regex_vec_json_schema, serialize_regex,
@@ -59,7 +58,6 @@ pub use manifest::{ManifestDelegate, ManifestName, ManifestProvider, ManifestQue
 pub use modeline::{ModelineSettings, parse_modeline};
 use parking_lot::Mutex;
 use regex::Regex;
-pub use runnable::{ResolvedRunnable, RunnableMatchCapture, RunnableRange, RunnableResolver};
 use semver::Version;
 use serde_json::Value;
 use settings::WorktreeId;
@@ -74,7 +72,6 @@ use std::{
     sync::{Arc, LazyLock},
 };
 use syntax_map::{QueryCursorHandle, SyntaxSnapshot};
-use task::RunnableTag;
 pub use task_context::{ContextLocation, ContextProvider};
 pub use text_diff::{
     DiffOptions, apply_diff_patch, apply_reversed_diff_patch, char_diff, line_diff, text_diff,
@@ -858,10 +855,6 @@ impl Language {
         self.with_grammar_query(|grammar| grammar.with_highlights_query(source))
     }
 
-    pub fn with_runnable_query(self, source: &str) -> Result<Self> {
-        self.with_grammar_query(|grammar| grammar.with_runnable_query(source))
-    }
-
     pub fn with_outline_query(self, source: &str) -> Result<Self> {
         self.with_grammar_query_and_name(|grammar, name| grammar.with_outline_query(source, name))
     }
@@ -1459,9 +1452,6 @@ pub fn rust_lang() -> Arc<Language> {
             "../../grammars/src/rust/overrides.scm"
         ))),
         redactions: None,
-        runnables: Some(Cow::from(include_str!(
-            "../../grammars/src/rust/runnables.scm"
-        ))),
         debugger: Some(Cow::from(include_str!(
             "../../grammars/src/rust/debugger.scm"
         ))),

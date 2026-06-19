@@ -141,7 +141,6 @@ smol.workspace = true
 sysinfo.workspace = true
 tab_switcher.workspace = true
 task.workspace = true
-tasks_ui.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
 theme_settings.workspace = true

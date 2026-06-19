@@ -3123,9 +3123,6 @@ impl LspStore {
             Self::handle_lsp_command::<lsp_ext_command::GoToParentModule>,
         );
         client.add_entity_request_handler(
-            Self::handle_lsp_command::<lsp_ext_command::GetLspRunnables>,
-        );
-        client.add_entity_request_handler(
             Self::handle_lsp_command::<lsp_ext_command::SwitchSourceHeader>,
         );
     }

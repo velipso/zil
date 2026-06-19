@@ -4,7 +4,6 @@ use crate::{
     code_context_menus::CodeContextMenu,
     element::{StickyHeader, header_jump_data},
     linked_editing_ranges::LinkedEditingRanges,
-    runnables::RunnableTasks,
     scroll::scroll_amount::ScrollAmount,
     test::{
         assert_text_with_selections, build_editor, editor_content_with_blocks,
@@ -16178,7 +16177,6 @@ async fn test_language_server_restart_due_to_settings_change(cx: &mut TestAppCon
                 initialization_options: Some(json!({
                     "some other init value": false
                 })),
-                enable_lsp_tasks: false,
                 fetch: None,
             },
         );
@@ -16199,7 +16197,6 @@ async fn test_language_server_restart_due_to_settings_change(cx: &mut TestAppCon
                 initialization_options: Some(json!({
                     "anotherInitValue": false
                 })),
-                enable_lsp_tasks: false,
                 fetch: None,
             },
         );
@@ -16220,7 +16217,6 @@ async fn test_language_server_restart_due_to_settings_change(cx: &mut TestAppCon
                 initialization_options: Some(json!({
                     "anotherInitValue": false
                 })),
-                enable_lsp_tasks: false,
                 fetch: None,
             },
         );
@@ -16239,7 +16235,6 @@ async fn test_language_server_restart_due_to_settings_change(cx: &mut TestAppCon
                 binary: None,
                 settings: None,
                 initialization_options: None,
-                enable_lsp_tasks: false,
                 fetch: None,
             },
         );
@@ -19698,187 +19693,6 @@ let foo = 15;"#,
             NextScrollCursorCenterTopBottom::Center,
             "If scrolling is not triggered fast enough, it should reset"
         );
-    });
-}
-
-#[gpui::test]
-async fn test_find_enclosing_node_with_task(cx: &mut TestAppContext) {
-    init_test(cx, |_| {});
-
-    let language = Arc::new(Language::new(
-        LanguageConfig::default(),
-        Some(tree_sitter_rust::LANGUAGE.into()),
-    ));
-
-    let text = r#"
-        #[cfg(test)]
-        mod tests() {
-            #[test]
-            fn runnable_1() {
-                let a = 1;
-            }
-
-            #[test]
-            fn runnable_2() {
-                let a = 1;
-                let b = 2;
-            }
-        }
-    "#
-    .unindent();
-
-    let fs = FakeFs::new(cx.executor());
-    fs.insert_file("/file.rs", Default::default()).await;
-
-    let project = Project::test(fs, ["/a".as_ref()], cx).await;
-    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
-    let cx = &mut VisualTestContext::from_window(*window, cx);
-    let buffer = cx.new(|cx| Buffer::local(text, cx).with_language(language, cx));
-    let multi_buffer = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
-
-    let editor = cx.new_window_entity(|window, cx| {
-        Editor::new(
-            EditorMode::full(),
-            multi_buffer,
-            Some(project.clone()),
-            window,
-            cx,
-        )
-    });
-
-    editor.update_in(cx, |editor, window, cx| {
-        let snapshot = editor.buffer().read(cx).snapshot(cx);
-        editor.runnables.insert(
-            buffer.read(cx).remote_id(),
-            3,
-            buffer.read(cx).version(),
-            RunnableTasks {
-                templates: Vec::new(),
-                offset: snapshot.anchor_before(MultiBufferOffset(43)),
-                column: 0,
-                extra_variables: HashMap::default(),
-                context_range: BufferOffset(43)..BufferOffset(85),
-            },
-        );
-        editor.runnables.insert(
-            buffer.read(cx).remote_id(),
-            8,
-            buffer.read(cx).version(),
-            RunnableTasks {
-                templates: Vec::new(),
-                offset: snapshot.anchor_before(MultiBufferOffset(86)),
-                column: 0,
-                extra_variables: HashMap::default(),
-                context_range: BufferOffset(86)..BufferOffset(191),
-            },
-        );
-
-        // Test finding task when cursor is inside function body
-        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-            s.select_ranges([Point::new(4, 5)..Point::new(4, 5)])
-        });
-        let (_, row, _) = editor.find_enclosing_node_task(cx).unwrap();
-        assert_eq!(row, 3, "Should find task for cursor inside runnable_1");
-
-        // Test finding task when cursor is on function name
-        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-            s.select_ranges([Point::new(8, 4)..Point::new(8, 4)])
-        });
-        let (_, row, _) = editor.find_enclosing_node_task(cx).unwrap();
-        assert_eq!(row, 8, "Should find task when cursor is on function name");
-    });
-}
-
-#[gpui::test]
-async fn test_toggle_code_actions_build_tasks_context_error_notifies(cx: &mut TestAppContext) {
-    init_test(cx, |_| {});
-
-    struct FailingContextProvider;
-    impl ContextProvider for FailingContextProvider {
-        fn build_context(
-            &self,
-            _: &TaskVariables,
-            _: ContextLocation<'_>,
-            _: Option<HashMap<String, String>>,
-            _: Arc<dyn LanguageToolchainStore>,
-            _: &mut gpui::App,
-        ) -> Task<anyhow::Result<TaskVariables>> {
-            Task::ready(Err(anyhow::anyhow!("Task context provider failed")))
-        }
-    }
-
-    let language = Arc::new(
-        Arc::try_unwrap(rust_lang())
-            .unwrap()
-            .with_context_provider(Some(Arc::new(FailingContextProvider))),
-    );
-
-    let fs = FakeFs::new(cx.executor());
-    fs.insert_tree(path!("/a"), json!({ "main.rs": "fn main() {}" }))
-        .await;
-
-    let project = Project::test(fs, [path!("/a").as_ref()], cx).await;
-    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
-    language_registry.add(language.clone());
-
-    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
-    let mut cx = VisualTestContext::from_window(*window, cx);
-    let workspace = window
-        .read_with(&mut cx, |mw, _| mw.workspace().clone())
-        .unwrap();
-
-    let worktree_id = workspace.update_in(&mut cx, |workspace, _, cx| {
-        workspace.project().update(cx, |project, cx| {
-            project.worktrees(cx).next().unwrap().read(cx).id()
-        })
-    });
-
-    let editor = workspace
-        .update_in(&mut cx, |workspace, window, cx| {
-            workspace.open_path((worktree_id, rel_path("main.rs")), None, true, window, cx)
-        })
-        .await
-        .unwrap()
-        .downcast::<Editor>()
-        .unwrap();
-
-    editor.update_in(&mut cx, |editor, window, cx| {
-        let buffer = editor.buffer().read(cx).as_singleton().unwrap();
-        buffer.update(cx, |buffer, cx| {
-            buffer.set_language(Some(language.clone()), cx)
-        });
-
-        let snapshot = editor.buffer().read(cx).snapshot(cx);
-        editor.runnables.insert(
-            buffer.read(cx).remote_id(),
-            0,
-            buffer.read(cx).version(),
-            RunnableTasks {
-                templates: Vec::new(),
-                offset: snapshot.anchor_before(MultiBufferOffset(0)),
-                column: 0,
-                extra_variables: HashMap::default(),
-                context_range: BufferOffset(0)..BufferOffset(0),
-            },
-        );
-        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-            s.select_ranges([Point::new(0, 0)..Point::new(0, 0)])
-        });
-
-        editor.toggle_code_actions(
-            &ToggleCodeActions {
-                deployed_from: None,
-                quick_launch: false,
-            },
-            window,
-            cx,
-        );
-    });
-
-    cx.run_until_parked();
-
-    workspace.update_in(&mut cx, |workspace, _, _| {
-        assert!(!workspace.notification_ids().is_empty());
     });
 }
 
