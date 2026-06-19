@@ -64,16 +64,8 @@ actions!(
         About,
         /// Opens the documentation website.
         OpenDocs,
-        /// Views open source licenses.
-        OpenLicenses,
-        /// Opens the Zed status page.
-        OpenStatusPage,
         /// Opens the performance profiler.
         OpenPerformanceProfiler,
-        /// Opens the onboarding view.
-        OpenOnboarding,
-        /// Shows the auto-update notification for testing.
-        ShowUpdateNotification,
     ]
 );
 

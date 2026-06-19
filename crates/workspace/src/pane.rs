@@ -1,6 +1,6 @@
 use crate::{
-    CloseWindow, NewCenterTerminal, NewFile, NewTerminal, OpenInTerminal, OpenOptions,
-    OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols,
+    CloseWindow, OpenOptions,
+    OpenVisible, SplitDirection,
     Workspace, WorkspaceItemBuilder,
     focus_follows_mouse::FocusFollowsMouse as _,
     invalid_item_view::InvalidItemView,
@@ -391,7 +391,6 @@ pub struct Pane {
         Option<Arc<dyn Fn(&mut Self, &dyn Any, &mut Window, &mut Context<Self>) -> bool>>,
     can_toggle_zoom: bool,
     should_display_tab_bar: Rc<dyn Fn(&Window, &mut Context<Pane>) -> bool>,
-    should_display_welcome_page: bool,
     render_tab_bar_buttons: Rc<
         dyn Fn(
             &mut Pane,
@@ -421,7 +420,6 @@ pub struct Pane {
     focus_follows_mouse: FocusFollowsMouse,
     /// If a certain project item wants to get recreated with specific data, it can persist its data before the recreation here.
     pub project_item_restoration_data: HashMap<ProjectItemKind, Box<dyn Any + Send>>,
-    welcome_page: Option<Entity<crate::welcome::WelcomePage>>,
 
     pub in_center_group: bool,
 }
@@ -567,7 +565,6 @@ impl Pane {
             can_split_predicate: None,
             can_toggle_zoom: true,
             should_display_tab_bar: Rc::new(|_, cx| TabBarSettings::get_global(cx).show),
-            should_display_welcome_page: false,
             render_tab_bar_buttons: Rc::new(default_render_tab_bar_buttons),
             render_tab_bar: Rc::new(Self::render_tab_bar),
             show_tab_bar_buttons: TabBarSettings::get_global(cx).show_tab_bar_buttons,
@@ -584,7 +581,6 @@ impl Pane {
             zoom_out_on_close: true,
             focus_follows_mouse: WorkspaceSettings::get_global(cx).focus_follows_mouse,
             project_item_restoration_data: HashMap::default(),
-            welcome_page: None,
             in_center_group: false,
         }
     }
@@ -672,12 +668,6 @@ impl Pane {
                 self.last_focus_handle_by_item
                     .insert(active_item.item_id(), focused.downgrade());
             }
-        } else if self.should_display_welcome_page
-            && let Some(welcome_page) = self.welcome_page.as_ref()
-        {
-            if self.focus_handle.is_focused(window) {
-                welcome_page.read(cx).focus_handle(cx).focus(window, cx);
-            }
         }
     }
 
@@ -737,10 +727,6 @@ impl Pane {
         F: 'static + Fn(&Window, &mut Context<Pane>) -> bool,
     {
         self.should_display_tab_bar = Rc::new(should_display_tab_bar);
-    }
-
-    pub fn set_should_display_welcome_page(&mut self, should_display_welcome_page: bool) {
-        self.should_display_welcome_page = should_display_welcome_page;
     }
 
     pub fn set_can_split(
@@ -2698,10 +2684,6 @@ impl Pane {
             .flatten();
 
         let total_items = self.items.len();
-        let has_multibuffer_items = self
-            .items
-            .iter()
-            .any(|item| item.buffer_kind(cx) == ItemBufferKind::Multibuffer);
         let has_items_to_left = ix > 0;
         let has_items_to_right = ix < total_items - 1;
         let has_clean_items = self.items.iter().any(|item| !item.is_dirty(cx));
@@ -2721,9 +2703,6 @@ impl Pane {
                         save_intent: None,
                     };
                     let close_inactive_items_action = CloseOtherItems {
-                        save_intent: None,
-                    };
-                    let close_multibuffers_action = CloseMultibufferItems {
                         save_intent: None,
                     };
                     let close_items_to_the_left_action = CloseItemsToTheLeft {};
@@ -2756,24 +2735,6 @@ impl Pane {
                                         .detach_and_log_err(cx);
                                     })),
                             ))
-                            // We make this optional, instead of using disabled as to not overwhelm the context menu unnecessarily
-                            .extend(has_multibuffer_items.then(|| {
-                                ContextMenuItem::Entry(
-                                    ContextMenuEntry::new("Close Multibuffers")
-                                        .action(Box::new(close_multibuffers_action.clone()))
-                                        .handler(window.handler_for(
-                                            &pane,
-                                            move |pane, window, cx| {
-                                                pane.close_multibuffer_items(
-                                                    &close_multibuffers_action,
-                                                    window,
-                                                    cx,
-                                                )
-                                                .detach_and_log_err(cx);
-                                            },
-                                        )),
-                                )
-                            }))
                             .separator()
                             .item(ContextMenuItem::Entry(
                                 ContextMenuEntry::new("Close Left")
@@ -2844,46 +2805,8 @@ impl Pane {
                         }
 
                         if let Some(entry) = single_entry_to_resolve {
-                            let project_path = pane
-                                .read(cx)
-                                .item_for_entry(entry, cx)
-                                .and_then(|item| item.project_path(cx));
-                            let worktree = project_path.as_ref().and_then(|project_path| {
-                                pane.read(cx)
-                                    .project
-                                    .upgrade()?
-                                    .read(cx)
-                                    .worktree_for_id(project_path.worktree_id, cx)
-                            });
-                            let has_relative_path = worktree.as_ref().is_some_and(|worktree| {
-                                worktree
-                                    .read(cx)
-                                    .root_entry()
-                                    .is_some_and(|entry| entry.is_dir())
-                            });
-
                             let entry_abs_path = pane.read(cx).entry_abs_path(entry, cx);
                             let reveal_path = entry_abs_path.clone();
-                            let parent_abs_path = entry_abs_path
-                                .as_deref()
-                                .and_then(|abs_path| Some(abs_path.parent()?.to_path_buf()));
-                            let relative_path = project_path
-                                .map(|project_path| project_path.path)
-                                .filter(|_| has_relative_path);
-
-                            let visible_in_project_panel = relative_path.is_some()
-                                && worktree.is_some_and(|worktree| worktree.read(cx).is_visible());
-                            let is_local = pane.read(cx).project.upgrade().is_some_and(|project| {
-                                let project = project.read(cx);
-                                project.is_local() || project.is_via_wsl_with_host_interop(cx)
-                            });
-                            let is_remote = pane
-                                .read(cx)
-                                .project
-                                .upgrade()
-                                .is_some_and(|project| project.read(cx).is_remote());
-
-                            let entry_id = entry.to_proto();
 
                             menu = menu
                                 .separator()
@@ -2898,69 +2821,20 @@ impl Pane {
                                         }),
                                     )
                                 })
-                                .when_some(relative_path, |menu, relative_path| {
-                                    menu.entry(
-                                        "Copy Relative Path",
-                                        Some(Box::new(zed_actions::workspace::CopyRelativePath)),
-                                        window.handler_for(&pane, move |this, _, cx| {
-                                            let Some(project) = this.project.upgrade() else {
-                                                return;
-                                            };
-                                            let path_style = project
-                                                .update(cx, |project, cx| project.path_style(cx));
-                                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                                relative_path.display(path_style).to_string(),
-                                            ));
-                                        }),
-                                    )
-                                })
-                                .when(is_local, |menu| {
-                                    menu.when_some(reveal_path, |menu, reveal_path| {
-                                        menu.separator().entry(
-                                            ui::utils::reveal_in_file_manager_label(is_remote),
-                                            Some(Box::new(
-                                                zed_actions::editor::RevealInFileManager,
-                                            )),
-                                            window.handler_for(&pane, move |pane, _, cx| {
-                                                if let Some(project) = pane.project.upgrade() {
-                                                    project.update(cx, |project, cx| {
-                                                        project.reveal_path(&reveal_path, cx);
-                                                    });
-                                                } else {
-                                                    cx.reveal_path(&reveal_path);
-                                                }
-                                            }),
-                                        )
-                                    })
-                                })
-                                .when(visible_in_project_panel, |menu| {
-                                    menu.entry(
-                                        "Reveal In Project Panel",
-                                        Some(Box::new(RevealInProjectPanel::default())),
+                                .when_some(reveal_path, |menu, reveal_path| {
+                                    menu.separator().entry(
+                                        ui::utils::reveal_in_file_manager_label(),
+                                        Some(Box::new(
+                                            zed_actions::editor::RevealInFileManager,
+                                        )),
                                         window.handler_for(&pane, move |pane, _, cx| {
-                                            pane.project
-                                                .update(cx, |_, cx| {
-                                                    cx.emit(project::Event::RevealInProjectPanel(
-                                                        ProjectEntryId::from_proto(entry_id),
-                                                    ))
-                                                })
-                                                .ok();
-                                        }),
-                                    )
-                                })
-                                .when_some(parent_abs_path, |menu, parent_abs_path| {
-                                    menu.entry(
-                                        "Open in Terminal",
-                                        Some(Box::new(OpenInTerminal)),
-                                        window.handler_for(&pane, move |_, window, cx| {
-                                            window.dispatch_action(
-                                                OpenTerminal {
-                                                    working_directory: parent_abs_path.clone(),
-                                                    local: false,
-                                                }
-                                                .boxed_clone(),
-                                                cx,
-                                            );
+                                            if let Some(project) = pane.project.upgrade() {
+                                                project.update(cx, |project, cx| {
+                                                    project.reveal_path(&reveal_path, cx);
+                                                });
+                                            } else {
+                                                cx.reveal_path(&reveal_path);
+                                            }
                                         }),
                                     )
                                 });
@@ -3537,30 +3411,6 @@ fn default_render_tab_bar_buttons(
         // Instead we need to replicate the spacing from the [TabBar]'s `end_slot` here.
         .gap(DynamicSpacing::Base04.rems(cx))
         .child(
-            PopoverMenu::new("pane-tab-bar-popover-menu")
-                .trigger_with_tooltip(
-                    IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
-                    Tooltip::text("New..."),
-                )
-                .anchor(Anchor::TopRight)
-                .with_handle(pane.new_item_context_menu_handle.clone())
-                .menu(move |window, cx| {
-                    Some(ContextMenu::build(window, cx, |menu, _, _| {
-                        menu.action("New File", NewFile.boxed_clone())
-                            .action("Open File", ToggleFileFinder::default().boxed_clone())
-                            .separator()
-                            .action("Search Project", DeploySearch::default().boxed_clone())
-                            .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
-                            .separator()
-                            .action("New Terminal", NewTerminal::default().boxed_clone())
-                            .action(
-                                "New Center Terminal",
-                                NewCenterTerminal::default().boxed_clone(),
-                            )
-                    }))
-                }),
-        )
-        .child(
             PopoverMenu::new("pane-tab-bar-split")
                 .trigger_with_tooltip(
                     IconButton::new("split", IconName::Split)
@@ -3777,7 +3627,6 @@ impl Render for Pane {
                 pane.child((self.render_tab_bar.clone())(self, window, cx))
             })
             .child({
-                let has_worktrees = project.read(cx).visible_worktrees(cx).next().is_some();
                 // main content
                 div()
                     .flex_1()
@@ -3798,8 +3647,7 @@ impl Render for Pane {
                                 .child(self.toolbar.clone())
                                 .child(item.to_any_view())
                         } else {
-                            let placeholder = div
-                                .id("pane_placeholder")
+                            div.id("pane_placeholder")
                                 .h_flex()
                                 .size_full()
                                 .justify_center()
@@ -3812,20 +3660,7 @@ impl Render for Pane {
                                             );
                                         }
                                     },
-                                ));
-                            if has_worktrees || !self.should_display_welcome_page {
-                                placeholder
-                            } else {
-                                if self.welcome_page.is_none() {
-                                    let workspace = self.workspace.clone();
-                                    self.welcome_page = Some(cx.new(|cx| {
-                                        crate::welcome::WelcomePage::new(
-                                            workspace, true, window, cx,
-                                        )
-                                    }));
-                                }
-                                placeholder.child(self.welcome_page.clone().unwrap())
-                            }
+                                ))
                         }
                         .focus_follows_mouse(self.focus_follows_mouse, cx)
                     })

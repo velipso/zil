@@ -19,7 +19,6 @@ use assets::Assets;
 
 use breadcrumbs::Breadcrumbs;
 use client::zed_urls;
-use collections::VecDeque;
 use editor::{Editor, MultiBuffer};
 use extension_host::ExtensionStore;
 use feature_flags::{FeatureFlagAppExt as _, PanicFeatureFlag};
@@ -68,26 +67,26 @@ use theme_settings::{ThemeSettings, load_user_theme};
 use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
 use util::markdown::MarkdownString;
 use util::rel_path::RelPath;
-use util::{ResultExt, asset_str, maybe};
+use util::{ResultExt, asset_str};
 use uuid::Uuid;
 use workspace::notifications::{NotificationId, dismiss_app_notification, show_app_notification};
 
 use workspace::{
-    AppState, MultiWorkspace, NewFile, NewWindow, OpenLog, Workspace, WorkspaceSettings,
+    AppState, MultiWorkspace, NewFile, NewWindow, Workspace, WorkspaceSettings,
     create_and_open_local_file, notifications::simple_message_notification::MessageNotification,
     open_new,
 };
 use workspace::{
     CloseIntent, CloseProject, CloseWindow, RestoreBanner, with_active_or_new_workspace,
+    with_any_workspace,
 };
 use workspace::{Pane};
 use zed_actions::{
     About, OpenAccountSettings, OpenBrowser, OpenDocs, OpenServerSettings, OpenSettingsFile,
-    OpenStatusPage, OpenZedUrl, Quit,
+    OpenZedUrl, Quit,
 };
 
 const DOCS_URL: &str = "https://zed.dev/docs/";
-const STATUS_URL: &str = "https://status.zed.dev";
 
 pub struct CrashHandler(pub Arc<crashes::Client>);
 
@@ -169,27 +168,7 @@ pub fn init(cx: &mut App) {
         }
     })
     .detach();
-    cx.on_action(|_: &OpenLog, cx| {
-        with_active_or_new_workspace(cx, |workspace, window, cx| {
-            open_log_file(workspace, window, cx);
-        });
-    })
-    .on_action(|_: &workspace::RevealLogInFileManager, cx| {
-        cx.reveal_path(paths::log_file().as_path());
-    })
-    .on_action(|_: &zed_actions::OpenLicenses, cx| {
-        with_active_or_new_workspace(cx, |workspace, window, cx| {
-            open_bundled_file(
-                workspace,
-                asset_str::<Assets>("licenses.md"),
-                "Open Source License Attribution",
-                "Markdown",
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|&zed_actions::OpenKeymapFile, cx| {
+    cx.on_action(|&zed_actions::OpenKeymapFile, cx| {
         with_active_or_new_workspace(cx, |_, window, cx| {
             open_settings_file(
                 paths::keymap_file(),
@@ -675,7 +654,6 @@ fn register_actions(
 ) {
     workspace
         .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
-        .register_action(|_, _: &OpenStatusPage, _, cx| cx.open_url(STATUS_URL))
         .register_action(|_, _: &Minimize, window, _| {
             window.minimize_window();
         })
@@ -1194,6 +1172,36 @@ fn open_about_window(cx: &mut App) {
                                                 this.copy_details(window, cx);
                                             })),
                                     ),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .track_focus(&self.copy_entry.focus_handle)
+                                    .on_action(cx.listener(
+                                        |this, _: &menu::Confirm, window, cx| {
+                                            this.copy_details(window, cx);
+                                        },
+                                    ))
+                                    .child(
+                                        Button::new("licenses", "Licenses")
+                                            .full_width()
+                                            .style(ButtonStyle::Tinted(TintColor::Accent))
+                                            .toggle_state(copy_is_focused)
+                                            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                                            .on_click(cx.listener(|_this, _event, window, cx| {
+                                                with_any_workspace(cx, |workspace, window, cx| {
+                                                    open_bundled_file(
+                                                        workspace,
+                                                        asset_str::<Assets>("licenses.txt"),
+                                                        "Open Source License Attribution",
+                                                        "Plain Text",
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
+                                                window.remove_window();
+                                            })),
+                                    )
                             ),
                     )
                     .into_any_element(),
@@ -1350,116 +1358,6 @@ fn quit(_: &Quit, cx: &mut App) {
         anyhow::Ok(())
     })
     .detach_and_log_err(cx);
-}
-
-fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
-    const MAX_LINES: usize = 1000;
-    let app_state = workspace.app_state();
-    let languages = app_state.languages.clone();
-    let fs = app_state.fs.clone();
-    cx.spawn_in(window, async move |workspace, cx| {
-        let log = {
-            let result = futures::join!(
-                fs.load(&paths::old_log_file()),
-                fs.load(&paths::log_file()),
-                languages.language_for_name("log")
-            );
-            match result {
-                (Err(_), Err(e), _) => Err(e),
-                (old_log, new_log, lang) => {
-                    let mut lines = VecDeque::with_capacity(MAX_LINES);
-                    for line in old_log
-                        .iter()
-                        .flat_map(|log| log.lines())
-                        .chain(new_log.iter().flat_map(|log| log.lines()))
-                    {
-                        if lines.len() == MAX_LINES {
-                            lines.pop_front();
-                        }
-                        lines.push_back(line);
-                    }
-                    Ok((
-                        lines
-                            .into_iter()
-                            .flat_map(|line| [line, "\n"])
-                            .collect::<String>(),
-                        lang.ok(),
-                    ))
-                }
-            }
-        };
-
-        let (log, log_language) = match log {
-            Ok((log, log_language)) => (log, log_language),
-            Err(e) => {
-                struct OpenLogError;
-
-                workspace
-                    .update(cx, |workspace, cx| {
-                        workspace.show_notification(
-                            NotificationId::unique::<OpenLogError>(),
-                            cx,
-                            |cx| {
-                                cx.new(|cx| {
-                                    MessageNotification::new(
-                                        format!(
-                                            "Unable to access/open log file at path \
-                                                    {}: {e:#}",
-                                            paths::log_file().display()
-                                        ),
-                                        cx,
-                                    )
-                                })
-                            },
-                        );
-                    })
-                    .ok();
-                return;
-            }
-        };
-        maybe!(async move {
-            let project = workspace
-                .read_with(cx, |workspace, _| workspace.project().clone())
-                .ok()?;
-            let buffer = project
-                .update(cx, |project, cx| {
-                    project.create_buffer(log_language, false, cx)
-                })
-                .await
-                .ok()?;
-            buffer.update(cx, |buffer, cx| {
-                buffer.set_capability(Capability::ReadOnly, cx);
-                buffer.set_text(log, cx);
-            });
-
-            let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title("Log".into()));
-
-            let editor = cx
-                .new_window_entity(|window, cx| {
-                    let mut editor = Editor::for_multibuffer(buffer, Some(project), window, cx);
-                    editor.set_read_only(true);
-                    editor.set_breadcrumb_header(format!(
-                        "Last {} lines in {}",
-                        MAX_LINES,
-                        paths::log_file().display()
-                    ));
-                    let last_multi_buffer_offset = editor.buffer().read(cx).len(cx);
-                    editor.change_selections(Default::default(), window, cx, |s| {
-                        s.select_ranges(Some(last_multi_buffer_offset..last_multi_buffer_offset));
-                    });
-                    editor
-                })
-                .ok()?;
-
-            workspace
-                .update_in(cx, |workspace, window, cx| {
-                    workspace.add_item_to_active_pane(Box::new(editor), None, true, window, cx);
-                })
-                .ok()
-        })
-        .await;
-    })
-    .detach();
 }
 
 fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, cx: &mut App) {

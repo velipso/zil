@@ -23,7 +23,6 @@ pub mod tasks;
 mod theme_preview;
 mod toast_layer;
 mod toolbar;
-pub mod welcome;
 mod workspace_settings;
 
 pub use crate::notifications::NotificationFrame;
@@ -441,15 +440,6 @@ actions!(
         ToggleProjectSymbols
     ]
 );
-
-/// Toggles the file finder interface.
-#[derive(Default, PartialEq, Eq, Clone, Deserialize, JsonSchema, Action)]
-#[action(namespace = file_finder, name = "Toggle")]
-#[serde(deny_unknown_fields)]
-pub struct ToggleFileFinder {
-    #[serde(default)]
-    pub separate_history: bool,
-}
 
 /// Opens a new terminal in the center.
 #[derive(Default, PartialEq, Eq, Clone, Deserialize, JsonSchema, Action)]
@@ -1623,7 +1613,6 @@ impl Workspace {
                 cx,
             );
             center_pane.set_can_split(Some(Arc::new(|_, _, _, _| true)));
-            center_pane.set_should_display_welcome_page(true);
             center_pane
         });
         cx.subscribe_in(&center_pane, window, Self::handle_pane_event)
@@ -9134,16 +9123,6 @@ pub struct OpenChannelNotesById {
     pub channel_id: u64,
 }
 
-actions!(
-    zed,
-    [
-        /// Opens the Zed log file.
-        OpenLog,
-        /// Reveals the Zed log file in the system file manager.
-        RevealLogInFileManager
-    ]
-);
-
 async fn join_channel_internal(
     channel_id: ChannelId,
     app_state: &Arc<AppState>,
@@ -10847,6 +10826,34 @@ pub fn with_active_or_new_workspace(
             )
             .detach_and_log_err(cx);
         }
+    }
+}
+
+pub fn with_any_workspace(
+    cx: &mut App,
+    f: impl FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + 'static,
+) {
+    if let Some(multi_workspace) = cx
+        .windows()
+        .into_iter()
+        .find_map(|w| w.downcast::<MultiWorkspace>()) {
+        cx.defer(move |cx| {
+            multi_workspace
+                .update(cx, |multi_workspace, window, cx| {
+                    let workspace = multi_workspace.workspace().clone();
+                    workspace.update(cx, |workspace, cx| f(workspace, window, cx));
+                })
+                .log_err();
+        });
+    } else {
+        let app_state = AppState::global(cx);
+        open_new(
+            OpenOptions::default(),
+            app_state,
+            cx,
+            move |workspace, window, cx| f(workspace, window, cx),
+        )
+        .detach_and_log_err(cx);
     }
 }
 

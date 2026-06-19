@@ -14587,7 +14587,6 @@ dependencies = [
  "fs",
  "futures",
  "futures-lite 1.13.0",
- "git",
  "gpui",
  "http_client",
  "itertools 0.14.0",

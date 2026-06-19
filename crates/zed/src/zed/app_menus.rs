@@ -214,7 +214,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                 MenuItem::separator(),
                 MenuItem::action("Command Palette...", zed_actions::command_palette::Toggle),
                 MenuItem::separator(),
-                MenuItem::action("Go to File...", workspace::ToggleFileFinder::default()),
                 MenuItem::action("Go to Line/Column...", editor::actions::ToggleGoToLine),
             ],
         },

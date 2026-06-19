@@ -1,7 +1,6 @@
 use crate::{
     Copy, CopyAndTrim, CopyPermalinkToLine, Cut, DisplayPoint, DisplaySnapshot, Editor,
-    EvaluateSelectedText,
-    Paste, Rename, RevealInFileManager, RunToCursor, SelectMode,
+    Paste, Rename, RevealInFileManager,  SelectMode,
     SelectionEffects, SelectionExt, ToDisplayPoint,
     actions::{Format, FormatSelections},
     selections_collection::SelectionsCollection,
@@ -9,8 +8,6 @@ use crate::{
 use gpui::prelude::FluentBuilder;
 use gpui::{Context, DismissEvent, Entity, Focusable as _, Pixels, Point, Subscription, Window};
 use std::ops::Range;
-use text::PointUtf16;
-use workspace::OpenInTerminal;
 
 #[derive(Debug)]
 pub enum MenuPosition {
@@ -195,11 +192,6 @@ pub fn deploy_context_menu(
 
         let focus = window.focused(cx);
         let has_reveal_target = editor.target_file(cx).is_some();
-        let has_selections = editor
-            .selections
-            .all::<PointUtf16>(&display_map)
-            .into_iter()
-            .any(|s| !s.is_empty());
         let has_git_repo =
             buffer
                 .anchor_to_buffer_anchor(anchor)
@@ -212,23 +204,11 @@ pub fn deploy_context_menu(
                         .is_some()
                 });
 
-        let evaluate_selection = window.is_action_available(&EvaluateSelectedText, cx);
-        let run_to_cursor = window.is_action_available(&RunToCursor, cx);
         let format_selections = window.is_action_available(&FormatSelections, cx);
 
         ui::ContextMenu::build(window, cx, |menu, _window, _cx| {
             let builder = menu
                 .on_blur_subscription(Subscription::new(|| {}))
-                .when(run_to_cursor, |builder| {
-                    builder.action("Run to Cursor", Box::new(RunToCursor))
-                })
-                .when(evaluate_selection && has_selections, |builder| {
-                    builder.action("Evaluate Selection", Box::new(EvaluateSelectedText))
-                })
-                .when(
-                    run_to_cursor || (evaluate_selection && has_selections),
-                    |builder| builder.separator(),
-                )
                 .action("Rename Symbol", Box::new(Rename))
                 .action("Format Buffer", Box::new(Format))
                 .when(format_selections, |cx| {
@@ -242,23 +222,13 @@ pub fn deploy_context_menu(
                 .separator()
                 .action_disabled_when(
                     !has_reveal_target,
-                    ui::utils::reveal_in_file_manager_label(false),
+                    ui::utils::reveal_in_file_manager_label(),
                     Box::new(RevealInFileManager),
-                )
-                .action_disabled_when(
-                    !has_reveal_target,
-                    "Open in Terminal",
-                    Box::new(OpenInTerminal),
                 )
                 .action_disabled_when(
                     !has_git_repo,
                     "Copy Permalink",
                     Box::new(CopyPermalinkToLine),
-                )
-                .action_disabled_when(
-                    !has_git_repo,
-                    "View File History",
-                    Box::new(git::FileHistory),
                 );
             match focus {
                 Some(focus) => builder.context(focus),
