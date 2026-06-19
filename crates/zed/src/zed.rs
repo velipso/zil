@@ -78,7 +78,6 @@ use workspace::{
 };
 use workspace::{
     CloseIntent, CloseProject, CloseWindow, RestoreBanner, with_active_or_new_workspace,
-    with_any_workspace,
 };
 use workspace::{Pane};
 use zed_actions::{
@@ -1189,7 +1188,7 @@ fn open_about_window(cx: &mut App) {
                                             .toggle_state(copy_is_focused)
                                             .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                                             .on_click(cx.listener(|_this, _event, window, cx| {
-                                                with_any_workspace(cx, |workspace, window, cx| {
+                                                with_active_or_new_workspace(cx, |workspace, window, cx| {
                                                     open_bundled_file(
                                                         workspace,
                                                         asset_str::<Assets>("licenses.txt"),

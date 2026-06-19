@@ -10802,10 +10802,17 @@ pub fn with_active_or_new_workspace(
     cx: &mut App,
     f: impl FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + 'static,
 ) {
-    match cx
-        .active_window()
-        .and_then(|w| w.downcast::<MultiWorkspace>())
-    {
+    // favor the active multi-workspace... but if one doesn't exist, then just grab one
+    let multi_workspace =
+        cx.active_window()
+            .and_then(|w| w.downcast::<MultiWorkspace>())
+            .or_else(||
+                cx.windows()
+                    .into_iter()
+                    .find_map(|w| w.downcast::<MultiWorkspace>())
+            );
+
+    match multi_workspace {
         Some(multi_workspace) => {
             cx.defer(move |cx| {
                 multi_workspace
@@ -10826,34 +10833,6 @@ pub fn with_active_or_new_workspace(
             )
             .detach_and_log_err(cx);
         }
-    }
-}
-
-pub fn with_any_workspace(
-    cx: &mut App,
-    f: impl FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + 'static,
-) {
-    if let Some(multi_workspace) = cx
-        .windows()
-        .into_iter()
-        .find_map(|w| w.downcast::<MultiWorkspace>()) {
-        cx.defer(move |cx| {
-            multi_workspace
-                .update(cx, |multi_workspace, window, cx| {
-                    let workspace = multi_workspace.workspace().clone();
-                    workspace.update(cx, |workspace, cx| f(workspace, window, cx));
-                })
-                .log_err();
-        });
-    } else {
-        let app_state = AppState::global(cx);
-        open_new(
-            OpenOptions::default(),
-            app_state,
-            cx,
-            move |workspace, window, cx| f(workspace, window, cx),
-        )
-        .detach_and_log_err(cx);
     }
 }
 
