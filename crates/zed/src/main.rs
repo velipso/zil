@@ -638,7 +638,6 @@ fn main() {
         cx.observe_new(open_path_prompt::OpenPathPrompt::register).detach();
         cx.observe_new(open_path_prompt::OpenPathPrompt::register_new_path).detach();
         tab_switcher::init(cx);
-        outline::init(cx);
         project_symbols::init(cx);
         search::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {

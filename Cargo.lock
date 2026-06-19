@@ -7728,32 +7728,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "outline"
-version = "0.1.0"
-dependencies = [
- "editor",
- "futures",
- "fuzzy",
- "gpui",
- "indoc",
- "language",
- "lsp",
- "menu",
- "ordered-float 2.10.1",
- "picker",
- "project",
- "rope",
- "serde_json",
- "settings",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
- "zed_actions",
-]
-
-[[package]]
 name = "palette"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15067,7 +15041,6 @@ dependencies = [
  "node_runtime",
  "notifications",
  "open_path_prompt",
- "outline",
  "parking_lot",
  "paths",
  "pkg-config",

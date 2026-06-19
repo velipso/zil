@@ -117,7 +117,6 @@ mimalloc = { version = "0.1", optional = true }
 node_runtime.workspace = true
 notifications.workspace = true
 open_path_prompt.workspace = true
-outline.workspace = true
 parking_lot.workspace = true
 paths.workspace = true
 profiling.workspace = true

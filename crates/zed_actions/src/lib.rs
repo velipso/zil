@@ -374,22 +374,6 @@ pub enum RevealTarget {
     Dock,
 }
 
-pub mod outline {
-    use std::sync::OnceLock;
-
-    use gpui::{AnyView, App, Window, actions};
-
-    actions!(
-        outline,
-        [
-            #[action(name = "Toggle")]
-            ToggleOutline
-        ]
-    );
-    /// A pointer to outline::toggle function, exposed here to sewer the breadcrumbs <-> outline dependency.
-    pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WslConnectionOptions {
     pub distro_name: String,

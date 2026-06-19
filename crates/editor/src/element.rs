@@ -29,7 +29,7 @@ use crate::{
 use collections::{BTreeMap, HashMap};
 use gpui::{
     Action, Along, AnyElement, App, AppContext, AvailableSpace, Axis as ScrollbarAxis, BorderStyle,
-    Bounds, ClipboardItem, ContentMask, Context, Corners, CursorStyle, DispatchPhase, Edges,
+    Bounds, ContentMask, Context, Corners, CursorStyle, DispatchPhase, Edges,
     Element, ElementInputHandler, Entity, Focusable as _, Font, FontId, FontWeight,
     GlobalElementId, Hitbox, HitboxBehavior, Hsla, InteractiveElement, IntoElement, IsZero,
     ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad,
@@ -4104,78 +4104,13 @@ pub fn render_breadcrumb_text(
         .downcast::<Editor>()
         .map(|editor| editor.downgrade());
 
-    let has_project_path = active_item.project_path(cx).is_some();
-
     match editor {
-        Some(editor) => element
+        Some(_) => element
             .id("breadcrumb_container")
             .when(!multibuffer_header, |this| this.overflow_x_scroll())
             .child(
                 ButtonLike::new("toggle outline view")
                     .child(breadcrumbs)
-                    .when(multibuffer_header, |this| {
-                        this.style(ButtonStyle::Transparent)
-                    })
-                    .when(!multibuffer_header, |this| {
-                        let focus_handle = editor.upgrade().unwrap().focus_handle(&cx);
-
-                        this.tooltip(Tooltip::element(move |_window, cx| {
-                            v_flex()
-                                .gap_1()
-                                .child(
-                                    h_flex()
-                                        .gap_1()
-                                        .justify_between()
-                                        .child(Label::new("Show Symbol Outline"))
-                                        .child(ui::KeyBinding::for_action_in(
-                                            &zed_actions::outline::ToggleOutline,
-                                            &focus_handle,
-                                            cx,
-                                        )),
-                                )
-                                .when(has_project_path, |this| {
-                                    this.child(
-                                        h_flex()
-                                            .gap_1()
-                                            .justify_between()
-                                            .pt_1()
-                                            .border_t_1()
-                                            .border_color(cx.theme().colors().border_variant)
-                                            .child(Label::new("Right-Click to Copy Path")),
-                                    )
-                                })
-                                .into_any_element()
-                        }))
-                        .on_click({
-                            let editor = editor.clone();
-                            move |_, window, cx| {
-                                if let Some((editor, callback)) = editor
-                                    .upgrade()
-                                    .zip(zed_actions::outline::TOGGLE_OUTLINE.get())
-                                {
-                                    callback(editor.to_any_view(), window, cx);
-                                }
-                            }
-                        })
-                        .when(has_project_path, |this| {
-                            this.on_right_click({
-                                let editor = editor.clone();
-                                move |_, _, cx| {
-                                    if let Some(abs_path) = editor.upgrade().and_then(|editor| {
-                                        editor.update(cx, |editor, cx| {
-                                            editor.target_file_abs_path(cx)
-                                        })
-                                    }) {
-                                        if let Some(path_str) = abs_path.to_str() {
-                                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                                path_str.to_string(),
-                                            ));
-                                        }
-                                    }
-                                }
-                            })
-                        })
-                    }),
             )
             .into_any_element(),
         None => element
