@@ -324,6 +324,8 @@ actions!(
         ToggleRightDock,
         /// Toggles read-only mode for the active item (if supported by that item).
         ToggleReadOnlyFile,
+        /// Toggles between scrolling/stacked tabs.
+        ToggleStackedTabs,
         /// If any worktrees are in restricted mode, shows a modal with possible actions.
         /// If the modal is shown already, closes it without trusting any worktree.
         ToggleWorktreeSecurity,
@@ -5703,6 +5705,26 @@ impl Workspace {
             .cloned()
     }
 
+    pub fn toggle_stacked_tabs(
+        &mut self,
+        _: &ToggleStackedTabs,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let fs = <dyn fs::Fs>::global(cx);
+
+        settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
+            let tab_bar = content.tab_bar.get_or_insert_default();
+            tab_bar.show_tab_bar_stacked = Some(!tab_bar.show_tab_bar_stacked.unwrap_or(false));
+        });
+
+        cx.notify();
+    }
+
+    pub fn show_tab_bar_stacked(&self, cx: &App) -> bool {
+        TabBarSettings::get_global(cx).show_tab_bar_stacked
+    }
+
     fn collaborator_left(&mut self, peer_id: PeerId, window: &mut Window, cx: &mut Context<Self>) {
         self.follower_states.retain(|leader_id, state| {
             if *leader_id == CollaboratorId::PeerId(peer_id) {
@@ -7192,6 +7214,7 @@ impl Workspace {
             .on_action(cx.listener(Self::move_item_to_pane_at_index))
             .on_action(cx.listener(Self::move_focused_panel_to_next_position))
             .on_action(cx.listener(Self::toggle_theme_mode))
+            .on_action(cx.listener(Self::toggle_stacked_tabs))
             .on_action(cx.listener(|workspace, _: &Unfollow, window, cx| {
                 let pane = workspace.active_pane().clone();
                 workspace.unfollow_in_pane(&pane, window, cx);

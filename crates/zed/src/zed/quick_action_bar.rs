@@ -78,6 +78,17 @@ impl Render for QuickActionBar {
         let supports_minimap = editor_value.supports_minimap(cx);
         let minimap_enabled = supports_minimap && editor_value.minimap().is_some();
         let focus_handle = editor_value.focus_handle(cx);
+        let stacked_tabs = {
+            let editor = editor.clone();
+            editor.read_with(cx, |editor, cx| {
+                match editor.workspace() {
+                    Some(ws) => ws.read_with(cx, |ws, cx| {
+                        ws.show_tab_bar_stacked(cx)
+                    }),
+                    None => false
+                }
+            })
+        };
 
         let search_button = (editor.buffer_kind(cx) == ItemBufferKind::Singleton).then(|| {
             QuickActionBarButton::new(
@@ -154,10 +165,29 @@ impl Render for QuickActionBar {
                                             })
                                             .ok();
                                     }
-                                },)
+                                });
                             }
 
-                            menu = menu.separator();
+                            menu = menu.toggleable_entry(
+                                "Stacked Tabs",
+                                stacked_tabs,
+                                IconPosition::Start,
+                                Some(workspace::ToggleStackedTabs.boxed_clone()), {
+                                    let editor = editor.clone();
+                                    move |window, cx| {
+                                        let _ = editor.update(cx, |editor, cx| {
+                                            if let Some(ws) = editor.workspace() {
+                                                ws.update(cx, |ws, cx| {
+                                                    ws.toggle_stacked_tabs(
+                                                        &workspace::ToggleStackedTabs,
+                                                        window,
+                                                        cx
+                                                    );
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
 
                             menu = menu.toggleable_entry(
                                 "Line Numbers",
