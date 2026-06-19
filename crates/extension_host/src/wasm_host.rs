@@ -26,7 +26,6 @@ use http_client::HttpClient;
 use language::LanguageName;
 use lsp::LanguageServerName;
 use moka::sync::Cache;
-use node_runtime::NodeRuntime;
 use release_channel::ReleaseChannel;
 use semver::Version;
 use settings::Settings;
@@ -49,7 +48,6 @@ pub struct WasmHost {
     engine: Engine,
     release_channel: ReleaseChannel,
     http_client: Arc<dyn HttpClient>,
-    node_runtime: NodeRuntime,
     pub(crate) proxy: Arc<ExtensionHostProxy>,
     fs: Arc<dyn Fs>,
     pub work_dir: PathBuf,
@@ -556,7 +554,6 @@ impl WasmHost {
     pub fn new(
         fs: Arc<dyn Fs>,
         http_client: Arc<dyn HttpClient>,
-        node_runtime: NodeRuntime,
         proxy: Arc<ExtensionHostProxy>,
         work_dir: PathBuf,
         cx: &mut App,
@@ -575,7 +572,6 @@ impl WasmHost {
             fs,
             work_dir,
             http_client,
-            node_runtime,
             proxy,
             release_channel: ReleaseChannel::global(cx),
             granted_capabilities: extension_settings.granted_capabilities.clone(),
@@ -887,10 +883,6 @@ impl WasmState {
         }
     }
 
-    fn work_dir(&self) -> PathBuf {
-        self.host.work_dir.join(self.manifest.id.as_ref())
-    }
-
     fn extension_error(&self, message: String) -> anyhow::Error {
         anyhow!(
             "from extension \"{}\" version {}: {}",
@@ -954,7 +946,6 @@ mod tests {
     use fs::FakeFs;
     use gpui::TestAppContext;
     use http_client::FakeHttpClient;
-    use node_runtime::NodeRuntime;
     use serde_json::json;
     use settings::SettingsStore;
 
@@ -991,7 +982,6 @@ mod tests {
             WasmHost::new(
                 fs.clone(),
                 FakeHttpClient::with_200_response(),
-                NodeRuntime::unavailable(),
                 Arc::new(ExtensionHostProxy::default()),
                 PathBuf::from("/work"),
                 cx,

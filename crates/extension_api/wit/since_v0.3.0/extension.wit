@@ -5,7 +5,6 @@ world extension {
     import http-client;
     import platform;
     import process;
-    import nodejs;
 
     use common.{env-vars, range};
     use lsp.{completion, symbol};

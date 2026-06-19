@@ -50,7 +50,6 @@ postage.workspace = true
 rand = { workspace = true, optional = true }
 regex.workspace = true
 rpc.workspace = true
-semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true

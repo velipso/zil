@@ -1,6 +1,5 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use collections::FxHashMap;
 use gpui::{App, BackgroundExecutor, Global, SharedString};
 use language::LanguageName;
 use parking_lot::RwLock;
@@ -33,7 +32,6 @@ pub trait DapLocator: Send + Sync {
 #[derive(Default)]
 struct DapRegistryState {
     adapters: BTreeMap<DebugAdapterName, Arc<dyn DebugAdapter>>,
-    locators: FxHashMap<SharedString, Arc<dyn DapLocator>>,
 }
 
 #[derive(Clone, Default)]
@@ -51,16 +49,8 @@ impl DapRegistry {
         let _previous_value = self.0.write().adapters.insert(name, adapter);
     }
 
-    pub fn add_locator(&self, locator: Arc<dyn DapLocator>) {
-        self.0.write().locators.insert(locator.name(), locator);
-    }
-
     pub fn remove_adapter(&self, name: &str) {
         self.0.write().adapters.remove(name);
-    }
-
-    pub fn remove_locator(&self, locator: &str) {
-        self.0.write().locators.remove(locator);
     }
 
     pub fn adapter_language(&self, adapter_name: &str) -> Option<LanguageName> {
@@ -81,10 +71,6 @@ impl DapRegistry {
         }
 
         AdapterSchemas(schemas)
-    }
-
-    pub fn locators(&self) -> FxHashMap<SharedString, Arc<dyn DapLocator>> {
-        self.0.read().locators.clone()
     }
 
     pub fn adapter(&self, name: &str) -> Option<Arc<dyn DebugAdapter>> {

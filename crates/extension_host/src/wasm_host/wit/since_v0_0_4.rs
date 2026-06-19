@@ -106,32 +106,6 @@ impl HostWorktree for WasmState {
 }
 
 impl ExtensionImports for WasmState {
-    async fn node_binary_path(&mut self) -> wasmtime::Result<Result<String, String>> {
-        latest::nodejs::Host::node_binary_path(self).await
-    }
-
-    async fn npm_package_latest_version(
-        &mut self,
-        package_name: String,
-    ) -> wasmtime::Result<Result<String, String>> {
-        latest::nodejs::Host::npm_package_latest_version(self, package_name).await
-    }
-
-    async fn npm_package_installed_version(
-        &mut self,
-        package_name: String,
-    ) -> wasmtime::Result<Result<Option<String>, String>> {
-        latest::nodejs::Host::npm_package_installed_version(self, package_name).await
-    }
-
-    async fn npm_install_package(
-        &mut self,
-        package_name: String,
-        version: String,
-    ) -> wasmtime::Result<Result<(), String>> {
-        latest::nodejs::Host::npm_install_package(self, package_name, version).await
-    }
-
     async fn latest_github_release(
         &mut self,
         repo: String,

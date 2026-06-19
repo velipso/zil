@@ -4,7 +4,6 @@ world extension {
     import github;
     import http-client;
     import platform;
-    import nodejs;
 
     use common.{range};
     use lsp.{completion, symbol};

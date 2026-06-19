@@ -6,7 +6,6 @@ world extension {
     import http-client;
     import platform;
     import process;
-    import nodejs;
 
     use common.{env-vars, range};
     use dap.{attach-request, build-task-template, debug-config, debug-adapter-binary, debug-task-definition, debug-request, debug-scenario, launch-request, resolved-task, start-debugging-request-arguments-request};

@@ -24,7 +24,7 @@ use db::kvp::{GlobalKeyValueStore, KeyValueStore};
 use editor::Editor;
 use extension::ExtensionHostProxy;
 use fs::{Fs, RealFs};
-use futures::{StreamExt, channel::oneshot};
+use futures::StreamExt;
 use git::GitHostingProviderRegistry;
 use gpui::{
     App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _, block_on,
@@ -36,9 +36,8 @@ use language::LanguageRegistry;
 use reqwest_client::ReqwestClient;
 
 use assets::Assets;
-use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use parking_lot::Mutex;
-use project::{project_settings::ProjectSettings, trusted_worktrees};
+use project::trusted_worktrees;
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use session::{AppSession, Session};
 use settings::{Settings, SettingsStore, watch_config_file};
@@ -400,19 +399,6 @@ fn main() {
         paths::keymap_file().clone(),
     );
 
-    let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
-    if !stdout_is_a_pty() {
-        app.background_executor()
-            .spawn(async {
-                #[cfg(unix)]
-                util::load_login_shell_environment().await.log_err();
-                shell_env_loaded_tx.send(()).ok();
-            })
-            .detach();
-    } else {
-        drop(shell_env_loaded_tx)
-    }
-
     app.on_open_urls({
         let open_listener = open_listener.clone();
         move |urls| {
@@ -489,37 +475,10 @@ fn main() {
         let mut languages = LanguageRegistry::new(cx.background_executor().clone());
         languages.set_language_server_download_dir(paths::languages_dir().clone());
         let languages = Arc::new(languages);
-        let (mut tx, rx) = watch::channel(None);
-        cx.observe_global::<SettingsStore>(move |cx| {
-            let settings = &ProjectSettings::get_global(cx).node;
-            let options = NodeBinaryOptions {
-                allow_path_lookup: !settings.ignore_system_version,
-                // TODO: Expose this setting
-                allow_binary_download: true,
-                use_paths: settings.path.as_ref().map(|node_path| {
-                    let node_path = PathBuf::from(shellexpand::tilde(node_path).as_ref());
-                    let npm_path = settings
-                        .npm_path
-                        .as_ref()
-                        .map(|path| PathBuf::from(shellexpand::tilde(&path).as_ref()));
-                    (
-                        node_path.clone(),
-                        npm_path.unwrap_or_else(|| {
-                            let base_path = PathBuf::new();
-                            node_path.parent().unwrap_or(&base_path).join("npm")
-                        }),
-                    )
-                }),
-            };
-            tx.send(Some(options)).log_err();
-        })
-        .detach();
         ui::on_new_scrollbars::<SettingsStore>(cx);
 
-        let node_runtime = NodeRuntime::new(client.http_client(), Some(shell_env_loaded_rx), rx);
-
         debug_adapter_extension::init(extension_host_proxy.clone(), cx);
-        languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
+        languages::init(languages.clone(), fs.clone(), cx);
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let workspace_store = cx.new(|cx| WorkspaceStore::new(client.clone(), cx));
 
@@ -591,7 +550,6 @@ fn main() {
             fs: fs.clone(),
             build_window_options,
             workspace_store,
-            node_runtime,
             session: app_session,
         });
         AppState::set_global(app_state.clone(), cx);
@@ -602,7 +560,6 @@ fn main() {
             extension_host_proxy.clone(),
             app_state.fs.clone(),
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             cx,
         );
 
@@ -622,7 +579,6 @@ fn main() {
             cx,
         );
         zed::remote_debug::init(cx);
-        project::AgentRegistryStore::init_global(cx);
 
         recent_projects::init(cx);
 

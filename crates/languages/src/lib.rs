@@ -1,5 +1,4 @@
 use gpui::{App, UpdateGlobal};
-use node_runtime::NodeRuntime;
 use project::Fs;
 use settings::{SemanticTokenRules, SettingsStore};
 use smol::stream::StreamExt;
@@ -38,7 +37,7 @@ pub fn semantic_token_rules(lang: &str) -> SemanticTokenRules {
         .unwrap_or_else(|_| panic!("failed to parse {path}"))
 }
 
-pub fn init(languages: Arc<LanguageRegistry>, _fs: Arc<dyn Fs>, _node: NodeRuntime, cx: &mut App) {
+pub fn init(languages: Arc<LanguageRegistry>, _fs: Arc<dyn Fs>, cx: &mut App) {
     #[cfg(feature = "load-grammars")]
     languages.register_native_grammars(grammars::native_grammars());
 

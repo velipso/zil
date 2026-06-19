@@ -23,7 +23,6 @@ anyhow.workspace = true
 gpui.workspace = true
 grammars.workspace = true
 language.workspace = true
-node_runtime.workspace = true
 project.workspace = true
 serde.workspace = true
 settings.workspace = true

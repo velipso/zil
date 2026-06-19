@@ -257,7 +257,6 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -964,7 +963,6 @@ cargo run
 #[cfg(target_os = "macos")]
 fn init_app_state(cx: &mut App) -> Arc<AppState> {
     use fs::Fs;
-    use node_runtime::NodeRuntime;
     use session::Session;
     use settings::SettingsStore;
 
@@ -996,7 +994,6 @@ fn init_app_state(cx: &mut App) -> Arc<AppState> {
         languages,
         user_store,
         workspace_store,
-        node_runtime: NodeRuntime::unavailable(),
         build_window_options: |_, _| Default::default(),
         session,
     });
@@ -1045,7 +1042,6 @@ fn run_breakpoint_hover_visual_tests(
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -1317,7 +1313,6 @@ fn run_settings_ui_subpage_visual_tests(
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -1530,7 +1525,6 @@ import { AiPaneTabContext } from 'context';
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -2023,7 +2017,6 @@ fn run_agent_thread_view_test(
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -2347,7 +2340,6 @@ fn run_tool_permissions_visual_tests(
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -2551,7 +2543,6 @@ fn run_multi_workspace_sidebar_visual_tests(
     let project1 = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -2567,7 +2558,6 @@ fn run_multi_workspace_sidebar_visual_tests(
     let project2 = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -3326,7 +3316,6 @@ fn create_project_with_worktree(
     let project = cx.update(|cx| {
         project::Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),

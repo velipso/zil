@@ -1,5 +1,4 @@
 use super::{
-    locators,
     session::{self, Session, SessionStateEvent},
 };
 use remote::Interactive;
@@ -14,7 +13,7 @@ use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
 use collections::HashMap;
 use dap::{
-    Capabilities, DapRegistry, DebugRequest,
+    Capabilities, DapRegistry,
     adapters::{
         DapDelegate, DebugAdapterBinary, DebugAdapterName, DebugTaskDefinition, TcpArguments,
     },
@@ -30,7 +29,6 @@ use futures::{
 use gpui::{App, AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString, Task, TaskExt};
 use http_client::HttpClient;
 use language::{LanguageToolchainStore};
-use node_runtime::NodeRuntime;
 
 use remote::RemoteClient;
 use rpc::{
@@ -45,10 +43,10 @@ use std::{
     ffi::OsStr,
     net::{IpAddr, Ipv4Addr},
     path::{Path, PathBuf},
-    sync::{Arc, Once},
+    sync::Arc,
 };
-use task::{DebugScenario, SharedTaskContext, SpawnInTerminal, TaskTemplate};
-use util::{ResultExt as _, rel_path::RelPath};
+use task::{DebugScenario, SharedTaskContext, TaskTemplate};
+use util::rel_path::RelPath;
 use worktree::Worktree;
 
 #[derive(Debug)]
@@ -72,7 +70,6 @@ enum DapStoreMode {
 
 pub struct LocalDapStore {
     fs: Arc<dyn Fs>,
-    node_runtime: NodeRuntime,
     http_client: Arc<dyn HttpClient>,
     environment: Entity<ProjectEnvironment>,
     toolchain_store: Arc<dyn LanguageToolchainStore>,
@@ -83,8 +80,6 @@ pub struct RemoteDapStore {
     remote_client: Entity<RemoteClient>,
     upstream_client: AnyProtoClient,
     upstream_project_id: u64,
-    node_runtime: NodeRuntime,
-    http_client: Arc<dyn HttpClient>,
 }
 
 pub struct DapStore {
@@ -111,16 +106,7 @@ pub struct PersistedAdapterOptions {
 }
 
 impl DapStore {
-    pub fn init(client: &AnyProtoClient, cx: &mut App) {
-        static ADD_LOCATORS: Once = Once::new();
-        ADD_LOCATORS.call_once(|| {
-            let registry = DapRegistry::global(cx);
-            registry.add_locator(Arc::new(locators::cargo::CargoLocator {}));
-            registry.add_locator(Arc::new(locators::go::GoLocator {}));
-            registry.add_locator(Arc::new(locators::node::NodeLocator));
-            registry.add_locator(Arc::new(locators::python::PythonLocator));
-        });
-        client.add_entity_request_handler(Self::handle_run_debug_locator);
+    pub fn init(client: &AnyProtoClient, _cx: &mut App) {
         client.add_entity_request_handler(Self::handle_get_debug_adapter_binary);
         client.add_entity_message_handler(Self::handle_log_to_debug_console);
     }
@@ -128,7 +114,6 @@ impl DapStore {
     #[expect(clippy::too_many_arguments)]
     pub fn new_local(
         http_client: Arc<dyn HttpClient>,
-        node_runtime: NodeRuntime,
         fs: Arc<dyn Fs>,
         environment: Entity<ProjectEnvironment>,
         toolchain_store: Arc<dyn LanguageToolchainStore>,
@@ -140,7 +125,6 @@ impl DapStore {
             fs: fs.clone(),
             environment,
             http_client,
-            node_runtime,
             toolchain_store,
             is_headless,
         });
@@ -152,8 +136,6 @@ impl DapStore {
         project_id: u64,
         remote_client: Entity<RemoteClient>,
         worktree_store: Entity<WorktreeStore>,
-        node_runtime: NodeRuntime,
-        http_client: Arc<dyn HttpClient>,
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -161,8 +143,6 @@ impl DapStore {
             upstream_client: remote_client.read(cx).proto_client(),
             remote_client,
             upstream_project_id: project_id,
-            node_runtime,
-            http_client,
         });
 
         Self::new(mode, worktree_store, fs, cx)
@@ -360,73 +340,12 @@ impl DapStore {
 
     pub fn debug_scenario_for_build_task(
         &self,
-        build: TaskTemplate,
-        adapter: DebugAdapterName,
-        label: SharedString,
-        cx: &mut App,
+        _build: TaskTemplate,
+        _adapter: DebugAdapterName,
+        _label: SharedString,
+        _cx: &mut App,
     ) -> Task<Option<DebugScenario>> {
-        let locators = DapRegistry::global(cx).locators();
-
-        cx.background_spawn(async move {
-            for locator in locators.values() {
-                if let Some(scenario) = locator.create_scenario(&build, &label, &adapter).await {
-                    return Some(scenario);
-                }
-            }
-            None
-        })
-    }
-
-    pub fn run_debug_locator(
-        &mut self,
-        locator_name: &str,
-        build_command: SpawnInTerminal,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<DebugRequest>> {
-        match &self.mode {
-            DapStoreMode::Local(_) => {
-                // Pre-resolve args with existing environment.
-                let locators = DapRegistry::global(cx).locators();
-                let locator = locators.get(locator_name);
-                let executor = cx.background_executor().clone();
-
-                if let Some(locator) = locator.cloned() {
-                    cx.background_spawn(async move {
-                        let result = locator
-                            .run(build_command.clone(), executor)
-                            .await
-                            .log_with_level(log::Level::Error);
-                        if let Some(result) = result {
-                            return Ok(result);
-                        }
-
-                        anyhow::bail!(
-                            "None of the locators for task `{}` completed successfully",
-                            build_command.label
-                        )
-                    })
-                } else {
-                    Task::ready(Err(anyhow!(
-                        "Couldn't find any locator for task `{}`. Specify the `attach` or `launch` arguments in your debug scenario definition",
-                        build_command.label
-                    )))
-                }
-            }
-            DapStoreMode::Remote(remote) => {
-                let request = remote.upstream_client.request(proto::RunDebugLocators {
-                    project_id: remote.upstream_project_id,
-                    build_command: Some(build_command.to_proto()),
-                    locator: locator_name.to_owned(),
-                });
-                cx.background_spawn(async move {
-                    let response = request.await?;
-                    DebugRequest::from_proto(response)
-                })
-            }
-            DapStoreMode::Collab => {
-                Task::ready(Err(anyhow!("Debugging is not yet supported via collab")))
-            }
-        }
+        todo!("debug_scenario_for_build_task");
     }
 
     fn as_local(&self) -> Option<&LocalDapStore> {
@@ -453,15 +372,6 @@ impl DapStore {
             });
         }
 
-        let (remote_client, node_runtime, http_client) = match &self.mode {
-            DapStoreMode::Local(_) => (None, None, None),
-            DapStoreMode::Remote(remote_dap_store) => (
-                Some(remote_dap_store.remote_client.clone()),
-                Some(remote_dap_store.node_runtime.clone()),
-                Some(remote_dap_store.http_client.clone()),
-            ),
-            DapStoreMode::Collab => (None, None, None),
-        };
         let session = Session::new(
             session_id,
             parent_session,
@@ -469,9 +379,6 @@ impl DapStore {
             adapter,
             task_context,
             quirks,
-            remote_client,
-            node_runtime,
-            http_client,
             cx,
         );
 
@@ -569,7 +476,6 @@ impl DapStore {
             local_store.fs.clone(),
             worktree.read(cx).snapshot(),
             console,
-            local_store.node_runtime.clone(),
             local_store.http_client.clone(),
             local_store.toolchain_store.clone(),
             local_store
@@ -658,26 +564,6 @@ impl DapStore {
         self.downstream_client.take();
 
         cx.notify();
-    }
-
-    async fn handle_run_debug_locator(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::RunDebugLocators>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::DebugRequest> {
-        let task = envelope
-            .payload
-            .build_command
-            .context("missing definition")?;
-        let build_task = SpawnInTerminal::from_proto(task);
-        let locator = envelope.payload.locator;
-        let request = this
-            .update(&mut cx, |this, cx| {
-                this.run_debug_locator(&locator, build_task, cx)
-            })
-            .await?;
-
-        Ok(request.to_proto())
     }
 
     async fn handle_get_debug_adapter_binary(
@@ -781,7 +667,6 @@ pub struct DapAdapterDelegate {
     fs: Arc<dyn Fs>,
     console: mpsc::UnboundedSender<String>,
     worktree: worktree::Snapshot,
-    node_runtime: NodeRuntime,
     http_client: Arc<dyn HttpClient>,
     toolchain_store: Arc<dyn LanguageToolchainStore>,
     load_shell_env_task: Shared<Task<Option<HashMap<String, String>>>>,
@@ -793,7 +678,6 @@ impl DapAdapterDelegate {
         fs: Arc<dyn Fs>,
         worktree: worktree::Snapshot,
         status: mpsc::UnboundedSender<String>,
-        node_runtime: NodeRuntime,
         http_client: Arc<dyn HttpClient>,
         toolchain_store: Arc<dyn LanguageToolchainStore>,
         load_shell_env_task: Shared<Task<Option<HashMap<String, String>>>>,
@@ -804,7 +688,6 @@ impl DapAdapterDelegate {
             console: status,
             worktree,
             http_client,
-            node_runtime,
             toolchain_store,
             load_shell_env_task,
             is_headless,
@@ -823,10 +706,6 @@ impl dap::adapters::DapDelegate for DapAdapterDelegate {
     }
     fn http_client(&self) -> Arc<dyn HttpClient> {
         self.http_client.clone()
-    }
-
-    fn node_runtime(&self) -> NodeRuntime {
-        self.node_runtime.clone()
     }
 
     fn fs(&self) -> Arc<dyn Fs> {

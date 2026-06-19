@@ -732,56 +732,6 @@ async fn convert_response(
     Ok(extension_response)
 }
 
-impl nodejs::Host for WasmState {
-    async fn node_binary_path(&mut self) -> wasmtime::Result<Result<String, String>> {
-        self.host
-            .node_runtime
-            .binary_path()
-            .await
-            .map(|path| path.to_string_lossy().into_owned())
-            .to_wasmtime_result()
-    }
-
-    async fn npm_package_latest_version(
-        &mut self,
-        package_name: String,
-    ) -> wasmtime::Result<Result<String, String>> {
-        self.host
-            .node_runtime
-            .npm_package_latest_version(&package_name)
-            .await
-            .map(|v| v.to_string())
-            .to_wasmtime_result()
-    }
-
-    async fn npm_package_installed_version(
-        &mut self,
-        package_name: String,
-    ) -> wasmtime::Result<Result<Option<String>, String>> {
-        self.host
-            .node_runtime
-            .npm_package_installed_version(&self.work_dir(), &package_name)
-            .await
-            .map(|option| option.map(|version| version.to_string()))
-            .to_wasmtime_result()
-    }
-
-    async fn npm_install_package(
-        &mut self,
-        package_name: String,
-        version: String,
-    ) -> wasmtime::Result<Result<(), String>> {
-        self.capability_granter
-            .grant_npm_install_package(&package_name)?;
-
-        self.host
-            .node_runtime
-            .npm_install_packages(&self.work_dir(), &[(&package_name, &version)])
-            .await
-            .to_wasmtime_result()
-    }
-}
-
 #[async_trait]
 impl lsp::Host for WasmState {}
 

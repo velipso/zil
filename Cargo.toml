@@ -77,7 +77,6 @@ members = [
     "crates/miniprofiler_ui",
     "crates/multi_buffer",
     "crates/net",
-    "crates/node_runtime",
     "crates/notifications",
     "crates/open_path_prompt",
     "crates/paths",
@@ -145,7 +144,6 @@ members = [
     #
 
     "extensions/glsl",
-    "extensions/html",
     "extensions/proto",
     "extensions/test-extension", "tooling/grammar-builder",
 
@@ -245,7 +243,6 @@ migrator = { path = "crates/migrator" }
 miniprofiler_ui = { path = "crates/miniprofiler_ui" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
-node_runtime = { path = "crates/node_runtime" }
 notifications = { path = "crates/notifications" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 panel = { path = "crates/panel" }

@@ -3,7 +3,6 @@ package zed:extension;
 world extension {
     import github;
     import platform;
-    import nodejs;
 
     use lsp.{completion, symbol};
 
