@@ -2,7 +2,6 @@ use crate::{
     DisplayPoint, Editor, MultiBuffer, MultiBufferSnapshot, RowExt,
     display_map::{HighlightKey, ToDisplayPoint},
 };
-use buffer_diff::DiffHunkStatusKind;
 use collections::BTreeMap;
 use futures::Future;
 
@@ -14,7 +13,7 @@ use gpui::{
 use itertools::Itertools;
 use language::{Buffer, BufferSnapshot, LanguageRegistry};
 use multi_buffer::{
-    Anchor, AnchorRangeExt, ExcerptRange, MultiBufferOffset, MultiBufferRow, PathKey,
+    Anchor, AnchorRangeExt, ExcerptRange, MultiBufferOffset, PathKey,
 };
 use parking_lot::RwLock;
 use project::{FakeFs, Project};
@@ -426,15 +425,6 @@ impl EditorTestContext {
         state_context
     }
 
-    /// Assert about the text of the editor, the selections, and the expanded
-    /// diff hunks.
-    ///
-    /// Diff hunks are indicated by lines starting with `+` and `-`.
-    #[track_caller]
-    pub fn assert_state_with_diff(&mut self, expected_diff_text: String) {
-        assert_state_with_diff(&self.editor, &mut self.cx, &expected_diff_text);
-    }
-
     #[track_caller]
     pub fn assert_excerpts_with_selections(&mut self, marked_text: &str) {
         let actual_text = self.to_format_multibuffer_as_marked_text();
@@ -775,57 +765,6 @@ impl std::fmt::Display for FormatMultiBufferAsMarkedText {
 
         Ok(())
     }
-}
-
-#[track_caller]
-pub fn assert_state_with_diff(
-    editor: &Entity<Editor>,
-    cx: &mut VisualTestContext,
-    expected_diff_text: &str,
-) {
-    let (snapshot, selections) = editor.update_in(cx, |editor, window, cx| {
-        let snapshot = editor.snapshot(window, cx);
-        (
-            snapshot.buffer_snapshot().clone(),
-            editor
-                .selections
-                .ranges::<MultiBufferOffset>(&snapshot.display_snapshot)
-                .into_iter()
-                .map(|range| range.start.0..range.end.0)
-                .collect::<Vec<_>>(),
-        )
-    });
-
-    let actual_marked_text = generate_marked_text(&snapshot.text(), &selections, true);
-
-    // Read the actual diff.
-    let line_infos = snapshot.row_infos(MultiBufferRow(0)).collect::<Vec<_>>();
-    let has_diff = line_infos.iter().any(|info| info.diff_status.is_some());
-    let actual_diff = actual_marked_text
-        .split('\n')
-        .zip(line_infos)
-        .map(|(line, info)| {
-            let mut marker = match info.diff_status.map(|status| status.kind) {
-                Some(DiffHunkStatusKind::Added) => "+ ",
-                Some(DiffHunkStatusKind::Deleted) => "- ",
-                Some(DiffHunkStatusKind::Modified) => unreachable!(),
-                None => {
-                    if has_diff {
-                        "  "
-                    } else {
-                        ""
-                    }
-                }
-            };
-            if line.is_empty() {
-                marker = marker.trim();
-            }
-            format!("{marker}{line}")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    pretty_assertions::assert_eq!(actual_diff, expected_diff_text, "unexpected diff state");
 }
 
 impl Deref for EditorTestContext {

@@ -873,7 +873,6 @@ pub struct Editor {
     serialize_folds: Task<()>,
     minimap: Option<Entity<Self>>,
     pub change_list: ChangeList,
-    number_deleted_lines: bool,
 
     selection_drag_state: SelectionDragState,
     colors: Option<LspColorData>,
@@ -923,7 +922,6 @@ pub struct EditorSnapshot {
     show_gutter: bool,
     offset_content: bool,
     show_line_numbers: Option<bool>,
-    number_deleted_lines: bool,
     show_git_diff_gutter: Option<bool>,
     pub display_snapshot: DisplaySnapshot,
     pub placeholder_display_snapshot: Option<DisplaySnapshot>,
@@ -1904,7 +1902,6 @@ impl Editor {
             applicable_language_settings: HashMap::default(),
             semantic_token_state: SemanticTokenState::new(cx, full_mode),
             bracket_fetched_tree_sitter_chunks: HashMap::default(),
-            number_deleted_lines: false,
             refresh_matching_bracket_highlights_task: Task::ready(()),
             refresh_document_symbols_task: Task::ready(()).shared(),
             lsp_document_symbols: HashMap::default(),
@@ -2277,7 +2274,6 @@ impl Editor {
             show_gutter: self.show_gutter,
             offset_content: self.offset_content,
             show_line_numbers: self.show_line_numbers,
-            number_deleted_lines: self.number_deleted_lines,
             show_git_diff_gutter: self.show_git_diff_gutter,
             semantic_tokens_enabled: self.semantic_token_state.enabled(),
             scroll_anchor: self.scroll_manager.shared_scroll_anchor(cx),
@@ -8107,17 +8103,14 @@ impl EditorSnapshot {
                     || (count_wrapped_lines && row_info.wrapped_buffer_row.is_some())
             })
             .enumerate()
-            .filter_map(|(i, (row, row_info))| {
+            .filter_map(|(i, (row, _row_info))| {
                 // We want to ensure here that the current line has absolute
                 // numbering, even if we are in a soft-wrapped line. With the
                 // exception that if we are in a deleted line, we should number this
                 // relative with 0, as otherwise it would have no line number at all
                 let relative_line_number = (initial_offset + i as i64).unsigned_abs() as u32;
 
-                (relative_line_number != 0
-                    || row_info
-                        .diff_status
-                        .is_some_and(|status| status.is_deleted()))
+                (relative_line_number != 0)
                 .then_some((row, relative_line_number))
             })
             .collect()

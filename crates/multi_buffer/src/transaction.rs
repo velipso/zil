@@ -8,7 +8,7 @@ use std::{
 use sum_tree::Bias;
 use text::BufferId;
 
-use crate::{Anchor, BufferState, MultiBufferOffset};
+use crate::{Anchor, MultiBufferOffset};
 
 use super::{Event, MultiBuffer};
 
@@ -189,8 +189,8 @@ impl MultiBuffer {
 
     pub fn finalize_last_transaction(&mut self, cx: &mut Context<Self>) {
         self.history.finalize_last_transaction();
-        for BufferState { buffer, .. } in self.buffers.values() {
-            buffer.update(cx, |buffer, _| {
+        if let Some(state) = &self.state {
+            state.buffer.update(cx, |buffer, _| {
                 buffer.finalize_last_transaction();
             });
         }

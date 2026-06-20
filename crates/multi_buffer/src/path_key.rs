@@ -405,7 +405,9 @@ impl MultiBuffer {
             && excerpt.buffer_id != buffer_id
         {
             let old_buffer_id = excerpt.buffer_id;
-            self.buffers.remove(&old_buffer_id);
+            if self.id == old_buffer_id {
+                self.state = None;
+            }
             snapshot.buffers.remove(&old_buffer_id);
             remove_diff_state(&mut snapshot.diffs, old_buffer_id);
             self.diffs.remove(&old_buffer_id);
@@ -574,19 +576,22 @@ impl MultiBuffer {
             },
         );
 
-        self.buffers.entry(buffer_id).or_insert_with(|| {
+        if let Some(_) = self.state && self.id == buffer_id {
+            // entry already exists, so leave it
+        } else {
             self.buffer_changed_since_sync.replace(true);
             buffer.update(cx, |buffer, _| {
                 buffer.record_changes(Rc::downgrade(&self.buffer_changed_since_sync));
             });
-            BufferState {
+            self.id = buffer_id;
+            self.state = Some(BufferState {
                 _subscriptions: [
                     cx.observe(&buffer, |_, _, cx| cx.notify()),
                     cx.subscribe(&buffer, Self::on_buffer_event),
                 ],
                 buffer: buffer.clone(),
-            }
-        });
+            });
+        }
 
         if changed_trailing_excerpt {
             snapshot.trailing_excerpt_update_count += 1;
@@ -649,7 +654,9 @@ impl MultiBuffer {
         if let Some(buffer_id) = buffer_id {
             snapshot.buffers.remove(&buffer_id);
             remove_diff_state(&mut snapshot.diffs, buffer_id);
-            self.buffers.remove(&buffer_id);
+            if self.id == buffer_id {
+                self.state = None;
+            }
             self.diffs.remove(&buffer_id);
             cx.emit(Event::BuffersRemoved {
                 removed_buffer_ids: vec![buffer_id],
