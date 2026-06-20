@@ -149,30 +149,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "alacritty_terminal"
-version = "0.26.1-dev"
-source = "git+https://github.com/zed-industries/alacritty?rev=fcf32feacb367b75ec84dd40f041e4fd411d3cc1#fcf32feacb367b75ec84dd40f041e4fd411d3cc1"
-dependencies = [
- "base64 0.22.1",
- "bitflags 2.10.0",
- "home",
- "libc",
- "log",
- "miow",
- "parking_lot",
- "piper",
- "polling",
- "regex-automata",
- "rustix 1.1.2",
- "rustix-openpty",
- "serde",
- "signal-hook",
- "unicode-width",
- "vte",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "aligned"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6806,15 +6782,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "miow"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
-dependencies = [
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "moka"
 version = "0.12.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9428,17 +9395,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustix-openpty"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1de16c7c59892b870a6336f185dc10943517f1327447096bbb7bb32cd85e2393"
-dependencies = [
- "errno 0.3.14",
- "libc",
- "rustix 1.1.2",
-]
-
-[[package]]
 name = "rustls"
 version = "0.23.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10163,16 +10119,6 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
-
-[[package]]
-name = "signal-hook"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2a0c28ca5908dbdbcd52e6fdaa00358ab88637f8ab33e1f188dd510eb44b53d"
-dependencies = [
- "libc",
- "signal-hook-registry",
-]
 
 [[package]]
 name = "signal-hook-registry"
@@ -10969,7 +10915,6 @@ dependencies = [
 name = "terminal"
 version = "0.1.0"
 dependencies = [
- "alacritty_terminal",
  "anyhow",
  "async-channel 2.5.0",
  "collections",
@@ -11008,45 +10953,6 @@ checksum = "60b8cb979cb11c32ce1603f8137b22262a9d131aaa5c37b5678025f22b8becd0"
 dependencies = [
  "rustix 1.1.2",
  "windows-sys 0.60.2",
-]
-
-[[package]]
-name = "terminal_view"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-recursion",
- "breadcrumbs",
- "collections",
- "db",
- "dirs",
- "editor",
- "futures",
- "gpui",
- "itertools 0.14.0",
- "language",
- "log",
- "menu",
- "pretty_assertions",
- "project",
- "regex",
- "release_channel",
- "remote",
- "rpc",
- "schemars",
- "semver",
- "serde",
- "serde_json",
- "settings",
- "shellexpand",
- "task",
- "terminal",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -12377,7 +12283,6 @@ dependencies = [
  "cursor-icon",
  "log",
  "memchr",
- "serde",
 ]
 
 [[package]]
@@ -14986,7 +14891,6 @@ dependencies = [
  "tab_switcher",
  "task",
  "tempfile",
- "terminal_view",
  "theme",
  "theme_extension",
  "theme_selector",

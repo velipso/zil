@@ -200,9 +200,7 @@ impl VsCodeSettings {
             message_editor: None,
             node: self.node_binary_settings(),
 
-            outline_panel: self.outline_panel_settings_content(),
             project: self.project_settings_content(),
-            project_panel: self.project_panel_settings_content(),
             proxy: self.read_string("http.proxy"),
             remote: RemoteSettingsContent::default(),
             repl: None,
@@ -211,7 +209,6 @@ impl VsCodeSettings {
             status_bar: self.status_bar_settings_content(),
             tab_bar: self.tab_bar_settings_content(),
             tabs: self.item_settings_content(),
-            terminal: self.terminal_settings_content(),
             theme: Box::new(self.theme_settings_content()),
             title_bar: None,
             vim: None,
@@ -489,7 +486,6 @@ impl VsCodeSettings {
             },
             worktree: self.worktree_settings_content(),
             lsp: Default::default(),
-            terminal: None,
             dap: Default::default(),
             context_servers: self.context_servers(),
             context_server_timeout: None,
@@ -586,15 +582,6 @@ impl VsCodeSettings {
             associations.entry(v.into()).or_default().0.push(k.clone());
         }
         skip_default(associations)
-    }
-
-    fn outline_panel_settings_content(&self) -> Option<OutlinePanelSettingsContent> {
-        skip_default(OutlinePanelSettingsContent {
-            file_icons: self.read_bool("outline.icons"),
-            folder_icons: self.read_bool("outline.icons"),
-            git_status: self.read_bool("git.decorations.enabled"),
-            ..Default::default()
-        })
     }
 
     fn node_binary_settings(&self) -> Option<NodeBinarySettings> {
@@ -706,154 +693,6 @@ impl VsCodeSettings {
             line_endings_button: None,
             active_encoding_button: None,
         })
-    }
-
-    fn project_panel_settings_content(&self) -> Option<ProjectPanelSettingsContent> {
-        let mut project_panel_settings = ProjectPanelSettingsContent {
-            auto_fold_dirs: self.read_bool("explorer.compactFolders"),
-            auto_reveal_entries: self.read_bool("explorer.autoReveal"),
-            bold_folder_labels: None,
-            button: None,
-            default_width: None,
-            dock: None,
-            drag_and_drop: None,
-            entry_spacing: None,
-            file_icons: None,
-            folder_icons: None,
-            git_status: self.read_bool("git.decorations.enabled"),
-            hide_gitignore: self.read_bool("explorer.excludeGitIgnore"),
-            hide_hidden: None,
-            hide_root: None,
-            indent_guides: None,
-            indent_size: None,
-            scrollbar: self.read_bool("workbench.list.horizontalScrolling").map(
-                |horizontal_scrolling| ProjectPanelScrollbarSettingsContent {
-                    show: None,
-                    horizontal_scroll: Some(horizontal_scrolling),
-                },
-            ),
-            sort_mode: self.read_enum("explorer.sortOrder", |s| match s {
-                "default" | "foldersNestsFiles" => Some(ProjectPanelSortMode::DirectoriesFirst),
-                "mixed" => Some(ProjectPanelSortMode::Mixed),
-                "filesFirst" => Some(ProjectPanelSortMode::FilesFirst),
-                _ => None,
-            }),
-            sort_order: self.read_enum("explorer.sortOrderLexicographicOptions", |s| match s {
-                "default" => Some(ProjectPanelSortOrder::Default),
-                "upper" => Some(ProjectPanelSortOrder::Upper),
-                "lower" => Some(ProjectPanelSortOrder::Lower),
-                "unicode" => Some(ProjectPanelSortOrder::Unicode),
-                _ => None,
-            }),
-            starts_open: None,
-            sticky_scroll: None,
-            auto_open: None,
-            git_status_indicator: None,
-        };
-
-        if let (Some(false), Some(false)) = (
-            self.read_bool("explorer.decorations.badges"),
-            self.read_bool("explorer.decorations.colors"),
-        ) {
-            project_panel_settings.git_status = Some(false);
-        }
-
-        skip_default(project_panel_settings)
-    }
-
-    fn terminal_settings_content(&self) -> Option<TerminalSettingsContent> {
-        let (font_family, font_fallbacks) = self.read_fonts("terminal.integrated.fontFamily");
-        skip_default(TerminalSettingsContent {
-            alternate_scroll: None,
-            blinking: self
-                .read_bool("terminal.integrated.cursorBlinking")
-                .map(|b| {
-                    if b {
-                        TerminalBlink::On
-                    } else {
-                        TerminalBlink::Off
-                    }
-                }),
-            button: None,
-            copy_on_select: self.read_bool("terminal.integrated.copyOnSelection"),
-            cursor_shape: self.read_enum("terminal.integrated.cursorStyle", |s| match s {
-                "block" => Some(CursorShapeContent::Block),
-                "line" => Some(CursorShapeContent::Bar),
-                "underline" => Some(CursorShapeContent::Underline),
-                _ => None,
-            }),
-            default_height: None,
-            default_width: None,
-            dock: None,
-            font_fallbacks,
-            font_family,
-            font_features: None,
-            font_size: self
-                .read_f32("terminal.integrated.fontSize")
-                .map(FontSize::from),
-            font_weight: None,
-            keep_selection_on_copy: None,
-            line_height: self
-                .read_f32("terminal.integrated.lineHeight")
-                .map(|lh| TerminalLineHeight::Custom(lh)),
-            max_scroll_history_lines: self.read_usize("terminal.integrated.scrollback"),
-            bell: self
-                .read_value("accessibility.signals.terminalBell")
-                .and_then(|v| Some(v.get("sound")?.as_str()? == "on"))
-                .or_else(|| {
-                    // Older deprecated setting, might as well still support it:
-                    self.read_value("terminal.integrated.enableBell")
-                        .map(|v| v.as_bool() == Some(true) || v.as_str() == Some("both"))
-                })
-                .map(|enabled| {
-                    if enabled {
-                        TerminalBell::System
-                    } else {
-                        TerminalBell::Off
-                    }
-                }),
-            minimum_contrast: None,
-            option_as_meta: self.read_bool("terminal.integrated.macOptionIsMeta"),
-            project: self.project_terminal_settings_content(),
-            scrollbar: None,
-            scroll_multiplier: None,
-            toolbar: None,
-            show_count_badge: None,
-            flexible: None,
-        })
-    }
-
-    fn project_terminal_settings_content(&self) -> ProjectTerminalSettingsContent {
-        #[cfg(target_os = "windows")]
-        let platform = "windows";
-        #[cfg(target_os = "linux")]
-        let platform = "linux";
-        #[cfg(target_os = "macos")]
-        let platform = "osx";
-        #[cfg(target_os = "freebsd")]
-        let platform = "freebsd";
-        let env = self
-            .read_value(&format!("terminal.integrated.env.{platform}"))
-            .and_then(|v| v.as_object())
-            .map(|v| {
-                v.iter()
-                    .map(|(k, v)| (k.clone(), v.to_string()))
-                    // zed does not support substitutions, so this can break env vars
-                    .filter(|(_, v)| !v.contains('$'))
-                    .collect()
-            });
-
-        ProjectTerminalSettingsContent {
-            // TODO: handle arguments
-            shell: self
-                .read_string(&format!("terminal.integrated.{platform}Exec"))
-                .map(|s| Shell::Program(s)),
-            working_directory: None,
-            env,
-            detect_venv: None,
-            path_hyperlink_regexes: None,
-            path_hyperlink_timeout_ms: None,
-        }
     }
 
     fn theme_settings_content(&self) -> ThemeSettingsContent {

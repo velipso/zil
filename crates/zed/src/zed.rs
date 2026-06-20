@@ -61,7 +61,6 @@ use std::{
     sync::Arc,
     sync::atomic::{self, AtomicBool},
 };
-use terminal_view::terminal_panel::{self, TerminalPanel};
 use theme::{ActiveTheme, SystemAppearance, ThemeRegistry, deserialize_icon_theme};
 use theme_settings::{ThemeSettings, load_user_theme};
 use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
@@ -485,7 +484,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_right_item(image_info, window, cx);
         });
 
-        let panels_task = initialize_panels(window, cx);
+        let panels_task = Task::ready(anyhow::Ok(())); // VELIPSO: remove
         workspace.set_panels_task(panels_task);
         register_actions(app_state.clone(), workspace, window, cx);
 
@@ -606,33 +605,6 @@ fn show_software_emulation_warning_if_needed(
         })
         .detach()
     }
-}
-
-fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<anyhow::Result<()>> {
-    cx.spawn_in(window, async move |workspace_handle, cx| {
-        let terminal_panel = TerminalPanel::load(workspace_handle.clone(), cx.clone());
-
-        async fn add_panel_when_ready(
-            panel_task: impl Future<Output = anyhow::Result<Entity<impl workspace::Panel>>> + 'static,
-            workspace_handle: WeakEntity<Workspace>,
-            mut cx: gpui::AsyncWindowContext,
-        ) {
-            if let Some(panel) = panel_task.await.context("failed to load panel").log_err()
-            {
-                workspace_handle
-                    .update_in(&mut cx, |workspace, window, cx| {
-                        workspace.add_panel(panel, window, cx);
-                    })
-                    .log_err();
-            }
-        }
-
-        futures::join!(
-            add_panel_when_ready(terminal_panel, workspace_handle.clone(), cx.clone()),
-        );
-
-        anyhow::Ok(())
-    })
 }
 
 fn ensure_agent_panel_for_workspace(
@@ -832,14 +804,6 @@ fn register_actions(
         })
         .register_action(open_project_settings_file)
         .register_action(open_project_tasks_file)
-        .register_action(
-            |workspace: &mut Workspace,
-             _: &terminal_panel::ToggleFocus,
-             window: &mut Window,
-             cx: &mut Context<Workspace>| {
-                workspace.toggle_panel_focus::<TerminalPanel>(window, cx);
-            },
-        )
         .register_action({
             let app_state = app_state.clone();
             move |_, _: &NewWindow, _, cx| {

@@ -21,7 +21,6 @@ doctest = false
 
 [dependencies]
 async-channel.workspace = true
-alacritty_terminal.workspace = true
 anyhow.workspace = true
 collections.workspace = true
 futures.workspace = true

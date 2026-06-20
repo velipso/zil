@@ -8,7 +8,6 @@ mod language_model;
 pub mod merge_from;
 mod project;
 mod serde_helper;
-mod terminal;
 mod theme;
 mod title_bar;
 mod workspace;
@@ -27,7 +26,6 @@ pub use serde_helper::{
     serialize_f32_with_two_decimal_places, serialize_optional_f32_with_two_decimal_places,
 };
 use settings_json::parse_json_with_comments;
-pub use terminal::*;
 pub use theme::*;
 pub use title_bar::*;
 pub use workspace::*;
@@ -199,10 +197,6 @@ pub struct SettingsContent {
 
     pub language_models: Option<AllLanguageModelSettingsContent>,
 
-    pub outline_panel: Option<OutlinePanelSettingsContent>,
-
-    pub project_panel: Option<ProjectPanelSettingsContent>,
-
     /// Configuration for the Message Editor
     pub message_editor: Option<MessageEditorSettings>,
 
@@ -223,9 +217,6 @@ pub struct SettingsContent {
 
     /// Configuration for session-related features
     pub session: Option<SessionSettingsContent>,
-
-    /// Configuration of the terminal in Zed.
-    pub terminal: Option<TerminalSettingsContent>,
 
     pub title_bar: Option<TitleBarSettingsContent>,
 
@@ -742,6 +733,37 @@ pub struct ScrollbarSettings {
     pub show: Option<ShowScrollbar>,
 }
 
+/// When to show the scrollbar.
+///
+/// Default: auto
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    PartialEq,
+    Eq,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ShowScrollbar {
+    /// Show the scrollbar if there's important information or
+    /// follow the system's configured behavior.
+    #[default]
+    Auto,
+    /// Match the system's configured behavior.
+    System,
+    /// Always show the scrollbar.
+    Always,
+    /// Never show the scrollbar.
+    Never,
+}
+
 #[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct PanelSettingsContent {
@@ -980,56 +1002,6 @@ pub enum HourFormat {
     #[default]
     Hour12,
     Hour24,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
-pub struct OutlinePanelSettingsContent {
-    /// Whether to show the outline panel button in the status bar.
-    ///
-    /// Default: true
-    pub button: Option<bool>,
-    /// Customize default width (in pixels) taken by outline panel
-    ///
-    /// Default: 240
-    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
-    pub default_width: Option<f32>,
-    /// The position of outline panel
-    ///
-    /// Default: right
-    pub dock: Option<DockSide>,
-    /// Whether to show file icons in the outline panel.
-    ///
-    /// Default: true
-    pub file_icons: Option<bool>,
-    /// Whether to show folder icons or chevrons for directories in the outline panel.
-    ///
-    /// Default: true
-    pub folder_icons: Option<bool>,
-    /// Whether to show the git status in the outline panel.
-    ///
-    /// Default: true
-    pub git_status: Option<bool>,
-    /// Amount of indentation (in pixels) for nested items.
-    ///
-    /// Default: 20
-    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
-    pub indent_size: Option<f32>,
-    /// Whether to reveal it in the outline panel automatically,
-    /// when a corresponding project entry becomes active.
-    /// Gitignored entries are never auto revealed.
-    ///
-    /// Default: true
-    pub auto_reveal_entries: Option<bool>,
-    /// Whether to fold directories automatically
-    /// when directory has only one directory inside.
-    ///
-    /// Default: true
-    pub auto_fold_dirs: Option<bool>,
-    /// Settings related to indent guides in the outline panel.
-    pub indent_guides: Option<IndentGuidesSettingsContent>,
-    /// Scrollbar-related settings
-    pub scrollbar: Option<ScrollbarSettingsContent>,
 }
 
 #[derive(

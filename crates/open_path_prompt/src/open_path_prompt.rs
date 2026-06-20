@@ -10,7 +10,7 @@ use fuzzy::{CharBag, StringMatch, StringMatchCandidate};
 use gpui::{HighlightStyle, StyledText, Task};
 use picker::{Picker, PickerDelegate};
 use project::{DirectoryItem, DirectoryLister};
-use settings::{ProjectPanelSortMode, Settings};
+use settings::Settings;
 use std::{
     path::{self, Path, PathBuf},
     sync::{
@@ -42,7 +42,6 @@ pub struct OpenPathDelegate {
     render_footer:
         Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
     hidden_entries: bool,
-    sort_mode: ProjectPanelSortMode,
 }
 
 impl OpenPathDelegate {
@@ -53,7 +52,6 @@ impl OpenPathDelegate {
         cx: &App,
     ) -> Self {
         let path_style = lister.path_style(cx);
-        let sort_mode = ProjectPanelSortMode::DirectoriesFirst;
         Self {
             tx: Some(tx),
             lister,
@@ -72,7 +70,6 @@ impl OpenPathDelegate {
             replace_prompt: Task::ready(()),
             render_footer: Arc::new(|_, _| None),
             hidden_entries: false,
-            sort_mode,
         }
     }
 
@@ -316,7 +313,6 @@ impl PickerDelegate for OpenPathDelegate {
         let hidden_entries = self.hidden_entries;
         let parent_path_is_root = self.prompt_root == dir;
         let current_dir = self.current_dir();
-        let sort_mode = self.sort_mode;
         cx.spawn_in(window, async move |this, cx| {
             if let Some(query) = query {
                 let paths = query.await;
@@ -330,7 +326,7 @@ impl PickerDelegate for OpenPathDelegate {
                             DirectoryState::None { create: false }
                             | DirectoryState::List { .. } => match paths {
                                 Ok(paths) => DirectoryState::List {
-                                    entries: path_candidates(parent_path_is_root, paths, sort_mode),
+                                    entries: path_candidates(parent_path_is_root, paths),
                                     parent_path: dir.clone(),
                                     error: None,
                                 },
@@ -344,7 +340,7 @@ impl PickerDelegate for OpenPathDelegate {
                             | DirectoryState::Create { .. } => match paths {
                                 Ok(paths) => {
                                     let mut entries =
-                                        path_candidates(parent_path_is_root, paths, sort_mode);
+                                        path_candidates(parent_path_is_root, paths);
                                     let mut exists = false;
                                     let mut is_dir = false;
                                     let mut new_id = None;
@@ -892,7 +888,6 @@ impl PickerDelegate for OpenPathDelegate {
 fn path_candidates(
     parent_path_is_root: bool,
     mut children: Vec<DirectoryItem>,
-    sort_mode: ProjectPanelSortMode,
 ) -> Vec<CandidateInfo> {
     if parent_path_is_root {
         children.push(DirectoryItem {
@@ -902,11 +897,7 @@ fn path_candidates(
     }
 
     children.sort_by(|a, b| {
-        let (a_is_file, b_is_file) = match sort_mode {
-            ProjectPanelSortMode::DirectoriesFirst => (!a.is_dir, !b.is_dir),
-            ProjectPanelSortMode::FilesFirst => (a.is_dir, b.is_dir),
-            ProjectPanelSortMode::Mixed => (true, true),
-        };
+        let (a_is_file, b_is_file) = (!a.is_dir, !b.is_dir);
         compare_paths((&a.path, a_is_file), (&b.path, b_is_file))
     });
     children

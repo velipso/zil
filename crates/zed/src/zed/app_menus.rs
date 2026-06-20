@@ -1,6 +1,5 @@
 use gpui::{App, Menu, MenuItem, OsAction};
 use release_channel::ReleaseChannel;
-use terminal_view::terminal_panel;
 use zed_actions::{dev};
 
 pub fn app_menus(cx: &mut App) -> Vec<Menu> {
@@ -38,8 +37,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                 MenuItem::action("Split Right", workspace::SplitRight::default()),
             ],
         }),
-        MenuItem::separator(),
-        MenuItem::action("Terminal Panel", terminal_panel::ToggleFocus),
         MenuItem::separator(),
     ];
 

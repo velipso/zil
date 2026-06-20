@@ -14,7 +14,7 @@ use gpui::{
     px,
 };
 use serde::{Deserialize, Serialize};
-use settings::{Settings, SettingsStore, TerminalDockPosition};
+use settings::{Settings, SettingsStore};
 use std::sync::Arc;
 use ui::{
     ContextMenu, CountBadge, Divider, DividerColor, IconButton, Tooltip, prelude::*,
@@ -309,16 +309,6 @@ impl Into<settings::DockPosition> for DockPosition {
             Self::Left => settings::DockPosition::Left,
             Self::Bottom => settings::DockPosition::Bottom,
             Self::Right => settings::DockPosition::Right,
-        }
-    }
-}
-
-impl From<TerminalDockPosition> for DockPosition {
-    fn from(value: TerminalDockPosition) -> Self {
-        match value {
-            TerminalDockPosition::Left => DockPosition::Left,
-            TerminalDockPosition::Bottom => DockPosition::Bottom,
-            TerminalDockPosition::Right => DockPosition::Right,
         }
     }
 }

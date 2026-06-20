@@ -441,16 +441,6 @@ pub struct NewCenterTerminal {
     pub local: bool,
 }
 
-/// Opens a new terminal.
-#[derive(Default, PartialEq, Eq, Clone, Deserialize, JsonSchema, Action)]
-#[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
-pub struct NewTerminal {
-    /// If true, creates a local terminal even in remote projects.
-    #[serde(default)]
-    pub local: bool,
-}
-
 /// Increases size of a currently focused dock by a given amount of pixels.
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
 #[action(namespace = workspace)]

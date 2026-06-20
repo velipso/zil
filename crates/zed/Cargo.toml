@@ -22,7 +22,6 @@ test-support = [
     "workspace/test-support",
     "project/test-support",
     "editor/test-support",
-    "terminal_view/test-support",
     "image_viewer/test-support",
     "recent_projects/test-support",
     "title_bar/test-support",
@@ -36,7 +35,6 @@ visual-tests = [
     "workspace/test-support",
     "project/test-support",
     "editor/test-support",
-    "terminal_view/test-support",
     "image_viewer/test-support",
     "clock/test-support",
     "db/test-support",
@@ -137,7 +135,6 @@ smol.workspace = true
 sysinfo.workspace = true
 tab_switcher.workspace = true
 task.workspace = true
-terminal_view.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
 theme_extension.workspace = true
@@ -195,7 +192,6 @@ language = { workspace = true, features = ["test-support"] }
 pretty_assertions.workspace = true
 project = { workspace = true, features = ["test-support"] }
 semver.workspace = true
-terminal_view = { workspace = true, features = ["test-support"] }
 title_bar = { workspace = true, features = ["test-support"] }
 workspace = { workspace = true, features = ["test-support"] }
 image.workspace = true

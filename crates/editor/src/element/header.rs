@@ -958,50 +958,6 @@ pub(crate) fn render_buffer_header(
                                     ));
                                 }),
                             )
-                        })
-                        .when_some(relative_path, |menu, relative_path| {
-                            menu.entry(
-                                "Copy Relative Path",
-                                Some(Box::new(zed_actions::workspace::CopyRelativePath)),
-                                window.handler_for(&editor, move |_, _, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        relative_path.display(path_style).to_string(),
-                                    ));
-                                }),
-                            )
-                        })
-                        .when(
-                            reveal_in_project_panel.is_some() || parent_abs_path.is_some(),
-                            |menu| menu.separator(),
-                        )
-                        .when_some(reveal_in_project_panel, |menu, entry_id| {
-                            menu.entry(
-                                "Reveal In Project Panel",
-                                Some(Box::new(RevealInProjectPanel::default())),
-                                window.handler_for(&editor, move |editor, _, cx| {
-                                    if let Some(project) = &mut editor.project {
-                                        project.update(cx, |_, cx| {
-                                            cx.emit(project::Event::RevealInProjectPanel(entry_id))
-                                        });
-                                    }
-                                }),
-                            )
-                        })
-                        .when_some(parent_abs_path, |menu, parent_abs_path| {
-                            menu.entry(
-                                "Open in Terminal",
-                                Some(Box::new(OpenInTerminal)),
-                                window.handler_for(&editor, move |_, window, cx| {
-                                    window.dispatch_action(
-                                        OpenTerminal {
-                                            working_directory: parent_abs_path.clone(),
-                                            local: false,
-                                        }
-                                        .boxed_clone(),
-                                        cx,
-                                    );
-                                }),
-                            )
                         });
                 }
 

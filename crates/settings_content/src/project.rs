@@ -13,7 +13,7 @@ use settings_macros::{MergeFrom, with_fallible_options};
 use util::serde::default_true;
 
 use crate::{
-    AllLanguageSettingsContent, DelayMs, ExtendingVec, ParseStatus, ProjectTerminalSettingsContent,
+    AllLanguageSettingsContent, DelayMs, ExtendingVec, ParseStatus,
     RootUserSettings, fallible_options,
 };
 
@@ -58,8 +58,6 @@ pub struct ProjectSettingsContent {
     /// Default: null
     #[serde(default)]
     pub lsp: LspSettingsMap,
-
-    pub terminal: Option<ProjectTerminalSettingsContent>,
 
     /// Configuration for Debugger-related features
     #[serde(default)]
