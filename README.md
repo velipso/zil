@@ -6,7 +6,7 @@ My goal is to remove everything I dislike, which is probably 90% of it.
 
 The initial fork + vendoring added **1,665,382** lines of code.
 
-I have currently deleted **842,360** lines of code! 🎉
+I have currently deleted **877,962** lines of code! 🎉
 
 ---
 
