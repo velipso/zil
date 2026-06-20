@@ -113,10 +113,7 @@ use language::{
 };
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
-use multi_buffer::{
-    ExcerptBoundaryInfo, ExpandExcerptDirection, MultiBufferDiffHunk, MultiBufferPoint,
-    MultiBufferRow,
-};
+use multi_buffer::{ExcerptBoundaryInfo, MultiBufferPoint, MultiBufferRow};
 use persistence::EditorDb;
 use project::{
     DocumentHighlight,
@@ -8166,22 +8163,6 @@ pub enum EditorEvent {
     BufferFoldToggled {
         ids: Vec<BufferId>,
         folded: bool,
-    },
-    ExpandExcerptsRequested {
-        excerpt_anchors: Vec<Anchor>,
-        lines: u32,
-        direction: ExpandExcerptDirection,
-    },
-    StageOrUnstageRequested {
-        stage: bool,
-        hunks: Vec<MultiBufferDiffHunk>,
-    },
-    OpenExcerptsRequested {
-        selections_by_buffer: HashMap<BufferId, (Vec<Range<BufferOffset>>, Option<u32>)>,
-        split: bool,
-    },
-    RestoreRequested {
-        hunks: Vec<MultiBufferDiffHunk>,
     },
     BufferEdited,
     Edited {

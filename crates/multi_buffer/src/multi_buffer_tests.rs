@@ -855,88 +855,6 @@ fn test_excerpt_events(cx: &mut App) {
     assert_eq!(*follower_edit_event_count.read(), 5);
 }
 
-#[gpui::test]
-fn test_expand_excerpts(cx: &mut App) {
-    let buffer = cx.new(|cx| Buffer::local(sample_text(20, 3, 'a'), cx));
-    let multibuffer = cx.new(|_| MultiBuffer::new(Capability::ReadWrite));
-
-    multibuffer.update(cx, |multibuffer, cx| {
-        multibuffer.set_excerpts_for_path(
-            PathKey::for_buffer(&buffer, cx),
-            buffer,
-            vec![
-                // Note that in this test, this first excerpt
-                // does not contain a new line
-                Point::new(3, 2)..Point::new(3, 3),
-                Point::new(7, 1)..Point::new(7, 3),
-                Point::new(15, 0)..Point::new(15, 0),
-            ],
-            1,
-            cx,
-        )
-    });
-
-    let snapshot = multibuffer.read(cx).snapshot(cx);
-
-    assert_eq!(
-        snapshot.text(),
-        concat!(
-            "ccc\n", //
-            "ddd\n", //
-            "eee",   //
-            "\n",    // End of excerpt
-            "ggg\n", //
-            "hhh\n", //
-            "iii",   //
-            "\n",    // End of excerpt
-            "ooo\n", //
-            "ppp\n", //
-            "qqq",   // End of excerpt
-        )
-    );
-    drop(snapshot);
-
-    multibuffer.update(cx, |multibuffer, cx| {
-        let multibuffer_snapshot = multibuffer.snapshot(cx);
-        let line_zero = multibuffer_snapshot.anchor_before(Point::new(0, 0));
-        multibuffer.expand_excerpts(
-            multibuffer.snapshot(cx).excerpts().map(|excerpt| {
-                multibuffer_snapshot
-                    .anchor_in_excerpt(excerpt.context.start)
-                    .unwrap()
-            }),
-            1,
-            ExpandExcerptDirection::UpAndDown,
-            cx,
-        );
-        let snapshot = multibuffer.snapshot(cx);
-        let line_two = snapshot.anchor_before(Point::new(2, 0));
-        assert_eq!(line_two.cmp(&line_zero, &snapshot), cmp::Ordering::Greater);
-    });
-
-    let snapshot = multibuffer.read(cx).snapshot(cx);
-
-    assert_eq!(
-        snapshot.text(),
-        concat!(
-            "bbb\n", //
-            "ccc\n", //
-            "ddd\n", //
-            "eee\n", //
-            "fff\n", //
-            "ggg\n", //
-            "hhh\n", //
-            "iii\n", //
-            "jjj\n", // End of excerpt
-            "nnn\n", //
-            "ooo\n", //
-            "ppp\n", //
-            "qqq\n", //
-            "rrr",   // End of excerpt
-        )
-    );
-}
-
 #[gpui::test(iterations = 100)]
 async fn test_set_anchored_excerpts_for_path(cx: &mut TestAppContext) {
     let buffer_1 = cx.new(|cx| Buffer::local(sample_text(20, 3, 'a'), cx));
@@ -3351,22 +3269,6 @@ impl ReferenceMultibuffer {
                         }
                         let multibuffer_row =
                             MultiBufferRow(text[..ix].matches('\n').count() as u32);
-                        let mut expand_direction = None;
-                        if let Some(buffer) = &main_buffer {
-                            let needs_expand_up = is_excerpt_start && is_start && buffer_row > 0;
-                            let needs_expand_down = is_excerpt_end
-                                && is_end
-                                && buffer.read(cx).max_point().row > buffer_row;
-                            expand_direction = if needs_expand_up && needs_expand_down {
-                                Some(ExpandExcerptDirection::UpAndDown)
-                            } else if needs_expand_up {
-                                Some(ExpandExcerptDirection::Up)
-                            } else if needs_expand_down {
-                                Some(ExpandExcerptDirection::Down)
-                            } else {
-                                None
-                            };
-                        }
                         RowInfo {
                             buffer_id: region.buffer_id,
                             diff_status: region.status,
@@ -3374,17 +3276,6 @@ impl ReferenceMultibuffer {
                             wrapped_buffer_row: None,
 
                             multibuffer_row: Some(multibuffer_row),
-                            expand_info: maybe!({
-                                let direction = expand_direction?;
-                                let excerpt = region.excerpt.as_ref()?;
-                                Some(ExpandInfo {
-                                    direction,
-                                    start_anchor: Anchor::in_buffer(
-                                        excerpt.path_key_index,
-                                        excerpt.range.start,
-                                    ),
-                                })
-                            }),
                         }
                     });
                 ix += line.len() + 1;

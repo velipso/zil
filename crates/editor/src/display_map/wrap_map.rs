@@ -1163,7 +1163,6 @@ impl Iterator for WrapRows<'_> {
                 buffer_id: None,
                 buffer_row: None,
                 multibuffer_row: None,
-                expand_info: None,
                 wrapped_buffer_row: buffer_row.buffer_row,
             }
         } else {

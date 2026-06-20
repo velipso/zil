@@ -1639,9 +1639,6 @@ impl EditorElement {
                 .iter()
                 .enumerate()
                 .map(|(ix, info)| {
-                    if info.expand_info.is_some() {
-                        return None;
-                    }
                     let row = info.multibuffer_row?;
                     let display_row = DisplayRow(rows.start.0 + ix as u32);
                     let active = active_rows.contains_key(&display_row);
@@ -1664,9 +1661,6 @@ impl EditorElement {
         buffer_rows
             .into_iter()
             .map(|row_info| {
-                if row_info.expand_info.is_some() {
-                    return None;
-                }
                 if let Some(row) = row_info.multibuffer_row {
                     snapshot.render_crease_trailer(row, window, cx)
                 } else {

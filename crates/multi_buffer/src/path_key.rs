@@ -1,7 +1,6 @@
 use std::{ops::Range, rc::Rc, sync::Arc};
 
 use gpui::{App, AppContext, Context, Entity};
-use itertools::Itertools;
 use language::{Buffer, BufferEditSource, BufferSnapshot};
 use rope::Point;
 use sum_tree::{Dimensions, SumTree};
@@ -11,7 +10,7 @@ use ztracing::instrument;
 
 use crate::{
     Anchor, BufferState, BufferStateSnapshot, DiffChangeKind, Event, Excerpt, ExcerptOffset,
-    ExcerptRange, ExcerptSummary, ExpandExcerptDirection, MultiBuffer, MultiBufferOffset,
+    ExcerptRange, MultiBuffer, MultiBufferOffset,
     PathKeyIndex, build_excerpt_ranges, remove_diff_state,
 };
 
@@ -215,101 +214,6 @@ impl MultiBuffer {
                 })
                 .ok()
                 .unwrap_or_default()
-        }
-    }
-
-    pub fn expand_excerpts(
-        &mut self,
-        anchors: impl IntoIterator<Item = Anchor>,
-        line_count: u32,
-        direction: ExpandExcerptDirection,
-        cx: &mut Context<Self>,
-    ) {
-        if line_count == 0 {
-            return;
-        }
-
-        let snapshot = self.snapshot(cx);
-        let mut sorted_anchors = anchors
-            .into_iter()
-            .filter_map(|anchor| anchor.excerpt_anchor())
-            .collect::<Vec<_>>();
-        if sorted_anchors.is_empty() {
-            return;
-        }
-        sorted_anchors.sort_by(|a, b| a.cmp(b, &snapshot));
-        let buffers = sorted_anchors.into_iter().chunk_by(|anchor| anchor.path);
-        let mut cursor = snapshot.excerpts.cursor::<ExcerptSummary>(());
-
-        for (path_index, excerpt_anchors) in &buffers {
-            let path = snapshot
-                .path_keys
-                .get_index(path_index.0 as usize)
-                .expect("anchor from wrong multibuffer");
-
-            let mut excerpt_anchors = excerpt_anchors.peekable();
-            let mut ranges = Vec::new();
-
-            cursor.seek_forward(path, Bias::Left);
-            let Some((buffer, buffer_snapshot)) = cursor
-                .item()
-                .map(|excerpt| (excerpt.buffer(&self), excerpt.buffer_snapshot(&snapshot)))
-            else {
-                continue;
-            };
-
-            while let Some(excerpt) = cursor.item()
-                && &excerpt.path_key == path
-            {
-                let mut range = ExcerptRange {
-                    context: excerpt.range.context.to_point(buffer_snapshot),
-                    primary: excerpt.range.primary.to_point(buffer_snapshot),
-                };
-
-                let mut needs_expand = false;
-                while excerpt_anchors.peek().is_some_and(|anchor| {
-                    excerpt
-                        .range
-                        .contains(&anchor.text_anchor(), buffer_snapshot)
-                }) {
-                    needs_expand = true;
-                    excerpt_anchors.next();
-                }
-
-                if needs_expand {
-                    match direction {
-                        ExpandExcerptDirection::Up => {
-                            range.context.start.row =
-                                range.context.start.row.saturating_sub(line_count);
-                            range.context.start.column = 0;
-                        }
-                        ExpandExcerptDirection::Down => {
-                            range.context.end.row = (range.context.end.row + line_count)
-                                .min(excerpt.buffer_snapshot(&snapshot).max_point().row);
-                            range.context.end.column = excerpt
-                                .buffer_snapshot(&snapshot)
-                                .line_len(range.context.end.row);
-                        }
-                        ExpandExcerptDirection::UpAndDown => {
-                            range.context.start.row =
-                                range.context.start.row.saturating_sub(line_count);
-                            range.context.start.column = 0;
-                            range.context.end.row = (range.context.end.row + line_count)
-                                .min(excerpt.buffer_snapshot(&snapshot).max_point().row);
-                            range.context.end.column = excerpt
-                                .buffer_snapshot(&snapshot)
-                                .line_len(range.context.end.row);
-                        }
-                    }
-                }
-
-                ranges.push(range);
-                cursor.next();
-            }
-
-            ranges.sort_by_key(|r| r.context.start);
-
-            self.set_excerpt_ranges_for_path(path.clone(), buffer, buffer_snapshot, ranges, cx);
         }
     }
 

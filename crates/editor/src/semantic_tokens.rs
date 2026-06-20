@@ -475,7 +475,7 @@ mod tests {
     use languages::FakeLspAdapter;
     use lsp::LanguageServerId;
     use multi_buffer::{
-        AnchorRangeExt, ExpandExcerptDirection, MultiBuffer, MultiBufferOffset, PathKey,
+        AnchorRangeExt, MultiBuffer, MultiBufferOffset, PathKey,
     };
     use project::Project;
     use rope::{Point, PointUtf16};
@@ -1234,11 +1234,6 @@ mod tests {
                     toml_buffer.read(cx).remote_id(),
                 ))
                 .unwrap()
-        });
-        editor.update_in(cx, |editor, _, cx| {
-            editor.buffer().update(cx, |buffer, cx| {
-                buffer.expand_excerpts([toml_anchor], 2, ExpandExcerptDirection::Down, cx);
-            });
         });
 
         // Wait for semantic tokens to be re-fetched after expansion.

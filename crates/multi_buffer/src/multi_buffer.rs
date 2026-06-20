@@ -723,18 +723,11 @@ impl ExcerptBoundary {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ExpandInfo {
-    pub direction: ExpandExcerptDirection,
-    pub start_anchor: Anchor,
-}
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct RowInfo {
     pub buffer_id: Option<BufferId>,
     pub buffer_row: Option<u32>,
     pub multibuffer_row: Option<MultiBufferRow>,
-    pub expand_info: Option<ExpandInfo>,
     pub wrapped_buffer_row: Option<u32>,
 }
 
@@ -1074,31 +1067,6 @@ struct BufferEdit {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum DiffChangeKind {
     BufferEdited,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ExpandExcerptDirection {
-    Up,
-    Down,
-    UpAndDown,
-}
-
-impl ExpandExcerptDirection {
-    pub fn should_expand_up(&self) -> bool {
-        match self {
-            ExpandExcerptDirection::Up => true,
-            ExpandExcerptDirection::Down => false,
-            ExpandExcerptDirection::UpAndDown => true,
-        }
-    }
-
-    pub fn should_expand_down(&self) -> bool {
-        match self {
-            ExpandExcerptDirection::Up => false,
-            ExpandExcerptDirection::Down => true,
-            ExpandExcerptDirection::UpAndDown => true,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -6019,12 +5987,6 @@ impl Excerpt {
             .buffer_snapshot
     }
 
-    fn buffer(&self, multibuffer: &MultiBuffer) -> Entity<Buffer> {
-        multibuffer
-            .buffer(self.buffer_id)
-            .expect("buffer entity not found for excerpt")
-    }
-
     fn chunks_in_range<'a>(
         &'a self,
         range: Range<usize>,
@@ -6489,7 +6451,6 @@ impl Iterator for MultiBufferRows<'_> {
                 buffer_id: None,
                 buffer_row: Some(0),
                 multibuffer_row: Some(MultiBufferRow(0)),
-                expand_info: None,
                 wrapped_buffer_row: None,
             });
         }
@@ -6515,7 +6476,6 @@ impl Iterator for MultiBufferRows<'_> {
                     buffer_row: Some(last_row),
                     multibuffer_row: Some(multibuffer_row),
                     wrapped_buffer_row: None,
-                    expand_info: None,
                 });
             } else {
                 return None;
@@ -6529,7 +6489,6 @@ impl Iterator for MultiBufferRows<'_> {
             buffer_id: Some(region.buffer.remote_id()),
             buffer_row: Some(buffer_point.row),
             multibuffer_row: Some(MultiBufferRow(self.point.row)),
-            expand_info: None,
             wrapped_buffer_row: None,
         });
         self.point += Point::new(1, 0);
