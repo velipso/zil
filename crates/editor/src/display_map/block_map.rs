@@ -19,7 +19,7 @@ use std::{
     cell::{Cell, RefCell},
     cmp::{self, Ordering},
     fmt::Debug,
-    ops::{Deref, DerefMut, Not, Range, RangeBounds, RangeInclusive},
+    ops::{Deref, DerefMut, Not, Range, RangeInclusive},
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering::SeqCst},
@@ -862,11 +862,6 @@ impl BlockMap {
         let mut blocks_in_edit = Vec::new();
         let mut edits = edits.into_iter().peekable();
 
-        let mut inlay_point_cursor = wrap_snapshot.inlay_point_cursor();
-        let mut tab_point_cursor = wrap_snapshot.tab_point_cursor();
-        let mut fold_point_cursor = wrap_snapshot.fold_point_cursor();
-        let mut wrap_point_cursor = wrap_snapshot.wrap_point_cursor();
-
         while let Some(edit) = edits.next() {
             let span = ztracing::debug_span!("while edits", edit = ?edit);
             let _enter = span.enter();
@@ -1006,9 +1001,7 @@ impl BlockMap {
             last_block_ix = end_block_ix;
 
             debug_assert!(blocks_in_edit.is_empty());
-            // + 8 is chosen arbitrarily to cover some multibuffer headers
-            blocks_in_edit
-                .reserve(end_block_ix - start_block_ix + if buffer.is_singleton() { 0 } else { 8 });
+            blocks_in_edit.reserve(end_block_ix - start_block_ix);
 
             blocks_in_edit.extend(
                 self.custom_blocks[start_block_ix..end_block_ix]
@@ -1023,20 +1016,6 @@ impl BlockMap {
                         Some((placement, Block::Custom(block.clone())))
                     }),
             );
-
-            blocks_in_edit.extend(self.header_and_footer_blocks(
-                buffer,
-                (start_bound, end_bound),
-                |point, bias| {
-                    wrap_point_cursor
-                        .map(
-                            tab_point_cursor.map(
-                                fold_point_cursor.map(inlay_point_cursor.map(point, bias), bias),
-                            ),
-                        )
-                        .row()
-                },
-            ));
 
             if let Some(CompanionView {
                 companion_wrap_snapshot: companion_snapshot,
@@ -1133,95 +1112,6 @@ impl BlockMap {
                 *block.render.lock() = render;
             }
         }
-    }
-
-    /// Guarantees that `wrap_row_for` is called with points in increasing order.
-    #[ztracing::instrument(skip_all)]
-    fn header_and_footer_blocks<'a, R, T>(
-        &'a self,
-        buffer: &'a multi_buffer::MultiBufferSnapshot,
-        range: R,
-        mut wrap_row_for: impl 'a + FnMut(Point, Bias) -> WrapRow,
-    ) -> impl Iterator<Item = (BlockPlacement<WrapRow>, Block)> + 'a
-    where
-        R: RangeBounds<T>,
-        T: multi_buffer::ToOffset,
-    {
-        let mut boundaries = buffer.excerpt_boundaries_in_range(range).peekable();
-
-        std::iter::from_fn(move || {
-            loop {
-                let excerpt_boundary = boundaries.next()?;
-                let wrap_row = wrap_row_for(Point::new(excerpt_boundary.row.0, 0), Bias::Left);
-
-                let new_buffer_id = match (&excerpt_boundary.prev, &excerpt_boundary.next) {
-                    (None, next) => Some(next.buffer_id()),
-                    (Some(prev), next) => {
-                        if prev.buffer_id() != next.buffer_id() {
-                            Some(next.buffer_id())
-                        } else {
-                            None
-                        }
-                    }
-                };
-
-                let mut height = 0;
-
-                if let Some(new_buffer_id) = new_buffer_id {
-                    let first_excerpt = excerpt_boundary.next.clone();
-                    if self.buffers_with_disabled_headers.contains(&new_buffer_id) {
-                        continue;
-                    }
-                    if self.folded_buffers.contains(&new_buffer_id) && buffer.show_headers() {
-                        let mut last_excerpt_end_row = first_excerpt.end_row;
-
-                        while let Some(next_boundary) = boundaries.peek() {
-                            if next_boundary.next.buffer_id() == new_buffer_id {
-                                last_excerpt_end_row = next_boundary.next.end_row;
-                            } else {
-                                break;
-                            }
-
-                            boundaries.next();
-                        }
-                        let wrap_end_row = wrap_row_for(
-                            Point::new(
-                                last_excerpt_end_row.0,
-                                buffer.line_len(last_excerpt_end_row),
-                            ),
-                            Bias::Right,
-                        );
-
-                        return Some((
-                            BlockPlacement::Replace(wrap_row..=wrap_end_row),
-                            Block::FoldedBuffer {
-                                height: height + self.buffer_header_height,
-                                first_excerpt,
-                            },
-                        ));
-                    }
-                }
-
-                let starts_new_buffer = new_buffer_id.is_some();
-                let block = if starts_new_buffer && buffer.show_headers() {
-                    height += self.buffer_header_height;
-                    Block::BufferHeader {
-                        excerpt: excerpt_boundary.next,
-                        height,
-                    }
-                } else if excerpt_boundary.prev.is_some() {
-                    height += self.excerpt_header_height;
-                    Block::ExcerptBoundary {
-                        excerpt: excerpt_boundary.next,
-                        height,
-                    }
-                } else {
-                    continue;
-                };
-
-                return Some((BlockPlacement::Above(wrap_row), block));
-            }
-        })
     }
 
     fn spacer_blocks(
@@ -4114,21 +4004,6 @@ mod tests {
             let mut tab_point_cursor = wraps_snapshot.tab_point_cursor();
             let mut fold_point_cursor = wraps_snapshot.fold_point_cursor();
             let mut wrap_point_cursor = wraps_snapshot.wrap_point_cursor();
-
-            // Note that this needs to be synced with the related section in BlockMap::sync
-            expected_blocks.extend(block_map.header_and_footer_blocks(
-                &buffer_snapshot,
-                MultiBufferOffset(0)..,
-                |point, bias| {
-                    wrap_point_cursor
-                        .map(
-                            tab_point_cursor.map(
-                                fold_point_cursor.map(inlay_point_cursor.map(point, bias), bias),
-                            ),
-                        )
-                        .row()
-                },
-            ));
 
             BlockMap::sort_blocks(&mut expected_blocks);
 

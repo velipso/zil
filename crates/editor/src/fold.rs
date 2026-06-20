@@ -224,18 +224,12 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let has_folds = if self.buffer.read(cx).is_singleton() {
+        let has_folds = {
             let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
             let has_folds = display_map
                 .folds_in_range(MultiBufferOffset(0)..display_map.buffer_snapshot().len())
                 .next()
                 .is_some();
-            has_folds
-        } else {
-            let snapshot = self.buffer.read(cx).snapshot(cx);
-            let has_folds = snapshot
-                .all_buffer_ids()
-                .any(|buffer_id| self.is_buffer_folded(buffer_id, cx));
             has_folds
         };
 
@@ -328,32 +322,19 @@ impl Editor {
     }
 
     pub fn fold_all(&mut self, _: &actions::FoldAll, window: &mut Window, cx: &mut Context<Self>) {
-        if self.buffer.read(cx).is_singleton() {
-            let mut fold_ranges = Vec::new();
-            let snapshot = self.buffer.read(cx).snapshot(cx);
+        let mut fold_ranges = Vec::new();
+        let snapshot = self.buffer.read(cx).snapshot(cx);
 
-            for row in 0..snapshot.max_row().0 {
-                if let Some(foldable_range) = self
-                    .snapshot(window, cx)
-                    .crease_for_buffer_row(MultiBufferRow(row))
-                {
-                    fold_ranges.push(foldable_range);
-                }
+        for row in 0..snapshot.max_row().0 {
+            if let Some(foldable_range) = self
+                .snapshot(window, cx)
+                .crease_for_buffer_row(MultiBufferRow(row))
+            {
+                fold_ranges.push(foldable_range);
             }
-
-            self.fold_creases(fold_ranges, true, window, cx);
-        } else {
-            self.toggle_fold_multiple_buffers = cx.spawn_in(window, async move |editor, cx| {
-                editor
-                    .update_in(cx, |editor, _, cx| {
-                        let snapshot = editor.buffer.read(cx).snapshot(cx);
-                        for buffer_id in snapshot.all_buffer_ids() {
-                            editor.fold_buffer(buffer_id, cx);
-                        }
-                    })
-                    .ok();
-            });
         }
+
+        self.fold_creases(fold_ranges, true, window, cx);
     }
 
     pub fn fold_function_bodies(
@@ -523,26 +504,13 @@ impl Editor {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.buffer.read(cx).is_singleton() {
-            let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-            self.unfold_ranges(
-                &[MultiBufferOffset(0)..display_map.buffer_snapshot().len()],
-                true,
-                true,
-                cx,
-            );
-        } else {
-            self.toggle_fold_multiple_buffers = cx.spawn(async move |editor, cx| {
-                editor
-                    .update(cx, |editor, cx| {
-                        let snapshot = editor.buffer.read(cx).snapshot(cx);
-                        for buffer_id in snapshot.all_buffer_ids() {
-                            editor.unfold_buffer(buffer_id, cx);
-                        }
-                    })
-                    .ok();
-            });
-        }
+        let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
+        self.unfold_ranges(
+            &[MultiBufferOffset(0)..display_map.buffer_snapshot().len()],
+            true,
+            true,
+            cx,
+        );
     }
 
     pub fn fold_selected_ranges(
@@ -619,63 +587,22 @@ impl Editor {
 
     pub fn fold_buffers(
         &mut self,
-        buffer_ids: impl IntoIterator<Item = BufferId>,
-        cx: &mut Context<Self>,
+        _buffer_ids: impl IntoIterator<Item = BufferId>,
+        _cx: &mut Context<Self>,
     ) {
-        if self.buffer().read(cx).is_singleton() {
-            return;
-        }
-
-        let ids_to_fold: Vec<BufferId> = buffer_ids
-            .into_iter()
-            .filter(|id| !self.is_buffer_folded(*id, cx))
-            .collect();
-
-        if ids_to_fold.is_empty() {
-            return;
-        }
-
-        self.display_map.update(cx, |display_map, cx| {
-            display_map.fold_buffers(ids_to_fold.clone(), cx)
-        });
-
-        let snapshot = self.display_snapshot(cx);
-        self.selections.change_with(&snapshot, |selections| {
-            for buffer_id in ids_to_fold.iter().copied() {
-                selections.remove_selections_from_buffer(buffer_id);
-            }
-        });
-
-        cx.emit(EditorEvent::BufferFoldToggled {
-            ids: ids_to_fold,
-            folded: true,
-        });
-        cx.notify();
+        // VELIPSO: empty
     }
 
-    pub fn unfold_buffer(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
-        if self.buffer().read(cx).is_singleton() || !self.is_buffer_folded(buffer_id, cx) {
-            return;
-        }
-        self.display_map.update(cx, |display_map, cx| {
-            display_map.unfold_buffers([buffer_id], cx);
-        });
-        cx.emit(EditorEvent::BufferFoldToggled {
-            ids: vec![buffer_id],
-            folded: false,
-        });
-        cx.notify();
+    pub fn unfold_buffer(&mut self, _buffer_id: BufferId, _cx: &mut Context<Self>) {
+        // VELIPSO: empty
     }
 
     pub fn is_buffer_folded(&self, buffer: BufferId, cx: &App) -> bool {
         self.display_map.read(cx).is_buffer_folded(buffer)
     }
 
-    pub fn has_any_buffer_folded(&self, cx: &App) -> bool {
-        if self.buffer().read(cx).is_singleton() {
-            return false;
-        }
-        !self.folded_buffers(cx).is_empty()
+    pub fn has_any_buffer_folded(&self, _cx: &App) -> bool {
+        false // VELIPSO: always false
     }
 
     pub fn folded_buffers<'a>(&self, cx: &'a App) -> &'a HashSet<BufferId> {
@@ -740,10 +667,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.buffer.read(cx).is_singleton() {
-            return;
-        }
-
         let fold_at_level = fold_at.0;
         let snapshot = self.buffer.read(cx).snapshot(cx);
         let mut to_fold = Vec::new();
@@ -788,19 +711,8 @@ impl Editor {
         self.fold_creases(to_fold, true, window, cx);
     }
 
-    pub(super) fn unfold_buffers_with_selections(&mut self, cx: &mut Context<Self>) {
-        if self.buffer().read(cx).is_singleton() {
-            return;
-        }
-        let snapshot = self.buffer.read(cx).snapshot(cx);
-        let buffer_ids: HashSet<BufferId> = self
-            .selections
-            .disjoint_anchor_ranges()
-            .flat_map(|range| snapshot.buffer_ids_for_range(range))
-            .collect();
-        for buffer_id in buffer_ids {
-            self.unfold_buffer(buffer_id, cx);
-        }
+    pub(super) fn unfold_buffers_with_selections(&mut self, _cx: &mut Context<Self>) {
+        // VELIPSO: nothing
     }
 
     pub(super) fn folds_did_change(&mut self, cx: &mut Context<Self>) {

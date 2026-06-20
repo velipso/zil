@@ -123,8 +123,8 @@ use project::{
     Location, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
     ProjectTransaction,
     lsp_store::{
-        BufferSemanticTokens, FormatTrigger,
-        LspFormatTarget, OpenLspBufferHandle, RefreshForServer,
+        BufferSemanticTokens,
+        OpenLspBufferHandle, RefreshForServer,
     },
     project_settings::{ProjectSettings},
 };
@@ -164,7 +164,7 @@ use ui::{
     prelude::*, scrollbars::ScrollbarAutoHide,
 };
 use ui_input::ErasedEditor;
-use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
+use util::{RangeExt, ResultExt, maybe, post_inc};
 use workspace::{
     CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal,
     OpenTerminal, Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
@@ -194,7 +194,6 @@ const MAX_SELECTION_HISTORY_LEN: usize = 1024;
 pub(crate) const CURSORS_VISIBLE_FOR: Duration = Duration::from_millis(2000);
 pub const SELECTION_HIGHLIGHT_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(100);
 
-pub(crate) const FORMAT_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) const SCROLL_CENTER_TOP_BOTTOM_DEBOUNCE_TIMEOUT: Duration = Duration::from_secs(1);
 pub const LSP_REQUEST_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -786,7 +785,6 @@ pub struct Editor {
     offset_content: bool,
     disable_expand_excerpt_buttons: bool,
     delegate_expand_excerpts: bool,
-    delegate_open_excerpts: bool,
     enable_lsp_data: bool,
     needs_initial_data_update: bool,
     enable_mouse_wheel_zoom: bool,
@@ -870,7 +868,6 @@ pub struct Editor {
     addons: HashMap<TypeId, Box<dyn Addon>>,
     registered_buffers: HashMap<BufferId, OpenLspBufferHandle>,
     selection_mark_mode: bool,
-    toggle_fold_multiple_buffers: Task<()>,
     _scroll_cursor_center_top_bottom_task: Task<()>,
     serialize_selections: Task<()>,
     serialize_folds: Task<()>,
@@ -1790,7 +1787,6 @@ impl Editor {
             use_relative_line_numbers: None,
             disable_expand_excerpt_buttons: !full_mode,
             delegate_expand_excerpts: false,
-            delegate_open_excerpts: false,
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
             enable_mouse_wheel_zoom: full_mode,
@@ -1893,7 +1889,6 @@ impl Editor {
             registered_buffers: HashMap::default(),
             _scroll_cursor_center_top_bottom_task: Task::ready(()),
             selection_mark_mode: false,
-            toggle_fold_multiple_buffers: Task::ready(()),
             serialize_selections: Task::ready(()),
             serialize_folds: Task::ready(()),
             text_style_refinement: None,
@@ -2596,13 +2591,12 @@ impl Editor {
             transaction.0.keys().all(|buffer| {
                 other_editors.iter().any(|editor| {
                     let multi_buffer = editor.read(cx).buffer();
-                    multi_buffer.read(cx).is_singleton()
-                        && multi_buffer
-                            .read(cx)
-                            .as_singleton()
-                            .map_or(false, |singleton| {
-                                singleton.entity_id() == buffer.entity_id()
-                            })
+                    multi_buffer
+                        .read(cx)
+                        .as_singleton()
+                        .map_or(false, |singleton| {
+                            singleton.entity_id() == buffer.entity_id()
+                        })
                 })
             })
         };
@@ -5613,173 +5607,6 @@ impl Editor {
         self.pending_rename.as_ref()
     }
 
-    fn can_format_selections(&self, cx: &App) -> bool {
-        if !self.mode.is_full() {
-            return false;
-        }
-
-        let Some(project) = &self.project else {
-            return false;
-        };
-
-        let project = project.read(cx);
-        let multi_buffer = self.buffer.read(cx);
-        let snapshot = multi_buffer.snapshot(cx);
-
-        self.selections
-            .disjoint_anchor_ranges()
-            .filter(|range| range.start != range.end)
-            .flat_map(|range| [range.start, range.end])
-            .filter_map(|anchor| snapshot.anchor_to_buffer_anchor(anchor))
-            .filter_map(|(_, buffer_snapshot)| multi_buffer.buffer(buffer_snapshot.remote_id()))
-            .any(|buffer| project.supports_range_formatting(&buffer, cx))
-    }
-
-    fn format(
-        &mut self,
-        _: &Format,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Task<Result<()>>> {
-        if self.read_only(cx) {
-            return None;
-        }
-
-        let project = match &self.project {
-            Some(project) => project.clone(),
-            None => return None,
-        };
-
-        Some(self.perform_format(
-            project,
-            FormatTrigger::Manual,
-            FormatTarget::Buffers(self.buffer.read(cx).all_buffers()),
-            window,
-            cx,
-        ))
-    }
-
-    fn format_selections(
-        &mut self,
-        _: &FormatSelections,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Task<Result<()>>> {
-        if self.read_only(cx) {
-            return None;
-        }
-
-        let project = match &self.project {
-            Some(project) => project.clone(),
-            None => return None,
-        };
-
-        let ranges = self
-            .selections
-            .all_adjusted(&self.display_snapshot(cx))
-            .into_iter()
-            .map(|selection| selection.range())
-            .collect_vec();
-
-        Some(self.perform_format(
-            project,
-            FormatTrigger::Manual,
-            FormatTarget::Ranges(ranges),
-            window,
-            cx,
-        ))
-    }
-
-    fn perform_format(
-        &mut self,
-        project: Entity<Project>,
-        trigger: FormatTrigger,
-        target: FormatTarget,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        let buffer = self.buffer.clone();
-        let (buffers, target) = match target {
-            FormatTarget::Buffers(buffers) => (buffers, LspFormatTarget::Buffers),
-            FormatTarget::Ranges(selection_ranges) => {
-                let multi_buffer = buffer.read(cx);
-                let snapshot = multi_buffer.read(cx);
-                let mut buffers = HashSet::default();
-                let mut buffer_id_to_ranges: BTreeMap<BufferId, Vec<Range<text::Anchor>>> =
-                    BTreeMap::new();
-                for selection_range in selection_ranges {
-                    for (buffer_snapshot, buffer_range, _) in
-                        snapshot.range_to_buffer_ranges(selection_range.start..selection_range.end)
-                    {
-                        let buffer_id = buffer_snapshot.remote_id();
-                        let start = buffer_snapshot.anchor_before(buffer_range.start);
-                        let end = buffer_snapshot.anchor_after(buffer_range.end);
-                        buffers.insert(multi_buffer.buffer(buffer_id).unwrap());
-                        buffer_id_to_ranges
-                            .entry(buffer_id)
-                            .and_modify(|buffer_ranges| buffer_ranges.push(start..end))
-                            .or_insert_with(|| vec![start..end]);
-                    }
-                }
-                (buffers, LspFormatTarget::Ranges(buffer_id_to_ranges))
-            }
-        };
-
-        let transaction_id_prev = buffer.read(cx).last_transaction_id(cx);
-        let selections_prev = transaction_id_prev
-            .and_then(|transaction_id_prev| {
-                // default to selections as they were after the last edit, if we have them,
-                // instead of how they are now.
-                // This will make it so that editing, moving somewhere else, formatting, then undoing the format
-                // will take you back to where you made the last edit, instead of staying where you scrolled
-                self.selection_history
-                    .transaction(transaction_id_prev)
-                    .map(|t| t.0.clone())
-            })
-            .unwrap_or_else(|| self.selections.disjoint_anchors_arc());
-
-        let mut timeout = cx.background_executor().timer(FORMAT_TIMEOUT).fuse();
-        let format = project.update(cx, |project, cx| {
-            project.format(buffers, target, true, trigger, cx)
-        });
-
-        cx.spawn_in(window, async move |editor, cx| {
-            let transaction = futures::select_biased! {
-                transaction = format.log_err().fuse() => transaction,
-                () = timeout => {
-                    log::warn!("timed out waiting for formatting");
-                    None
-                }
-            };
-
-            buffer.update(cx, |buffer, cx| {
-                if let Some(transaction) = transaction
-                    && !buffer.is_singleton()
-                {
-                    buffer.push_transaction(&transaction.0, cx);
-                }
-                cx.notify();
-            });
-
-            if let Some(transaction_id_now) =
-                buffer.read_with(cx, |b, cx| b.last_transaction_id(cx))
-            {
-                let has_new_transaction = transaction_id_prev != Some(transaction_id_now);
-                if has_new_transaction {
-                    editor
-                        .update(cx, |editor, _| {
-                            editor
-                                .selection_history
-                                .insert_transaction(transaction_id_now, selections_prev);
-                        })
-                        .ok();
-                }
-            }
-
-            Ok(())
-        })
-    }
-
     fn restart_language_server(
         &mut self,
         _: &RestartLanguageServer,
@@ -7230,246 +7057,12 @@ impl Editor {
 
     pub(crate) fn open_excerpts_common(
         &mut self,
-        jump_data: Option<JumpData>,
-        split: bool,
-        window: &mut Window,
+        _jump_data: Option<JumpData>,
+        _split: bool,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.buffer.read(cx).is_singleton() {
-            cx.propagate();
-            return;
-        }
-
-        let mut new_selections_by_buffer = HashMap::default();
-        match &jump_data {
-            Some(JumpData::MultiBufferPoint {
-                anchor,
-                position,
-                line_offset_from_top,
-            }) => {
-                if let Some(buffer) = self.buffer.read(cx).buffer(anchor.buffer_id) {
-                    let buffer_snapshot = buffer.read(cx).snapshot();
-                    let jump_to_point = if buffer_snapshot.can_resolve(&anchor) {
-                        language::ToPoint::to_point(anchor, &buffer_snapshot)
-                    } else {
-                        buffer_snapshot.clip_point(*position, Bias::Left)
-                    };
-                    let jump_to_offset = buffer_snapshot.point_to_offset(jump_to_point);
-                    new_selections_by_buffer.insert(
-                        buffer,
-                        (
-                            vec![BufferOffset(jump_to_offset)..BufferOffset(jump_to_offset)],
-                            Some(*line_offset_from_top),
-                        ),
-                    );
-                }
-            }
-            Some(JumpData::MultiBufferRow {
-                row,
-                line_offset_from_top,
-            }) => {
-                let point = MultiBufferPoint::new(row.0, 0);
-                if let Some((buffer, buffer_point)) =
-                    self.buffer.read(cx).point_to_buffer_point(point, cx)
-                {
-                    let buffer_offset = buffer.read(cx).point_to_offset(buffer_point);
-                    new_selections_by_buffer
-                        .entry(buffer)
-                        .or_insert((Vec::new(), Some(*line_offset_from_top)))
-                        .0
-                        .push(BufferOffset(buffer_offset)..BufferOffset(buffer_offset))
-                }
-            }
-            None => {
-                let selections = self
-                    .selections
-                    .all::<MultiBufferOffset>(&self.display_snapshot(cx));
-                let multi_buffer = self.buffer.read(cx);
-                let multi_buffer_snapshot = multi_buffer.snapshot(cx);
-                for selection in selections {
-                    for (snapshot, range, anchor) in multi_buffer_snapshot
-                        .range_to_buffer_ranges_with_deleted_hunks(selection.range())
-                    {
-                        if let Some((text_anchor, _)) = anchor.and_then(|anchor| {
-                            multi_buffer_snapshot.anchor_to_buffer_anchor(anchor)
-                        }) {
-                            let Some(buffer_handle) = multi_buffer.buffer(text_anchor.buffer_id)
-                            else {
-                                continue;
-                            };
-                            let offset = text::ToOffset::to_offset(
-                                &text_anchor,
-                                &buffer_handle.read(cx).snapshot(),
-                            );
-                            let range = BufferOffset(offset)..BufferOffset(offset);
-                            new_selections_by_buffer
-                                .entry(buffer_handle)
-                                .or_insert((Vec::new(), None))
-                                .0
-                                .push(range)
-                        } else {
-                            let Some(buffer_handle) = multi_buffer.buffer(snapshot.remote_id())
-                            else {
-                                continue;
-                            };
-                            new_selections_by_buffer
-                                .entry(buffer_handle)
-                                .or_insert((Vec::new(), None))
-                                .0
-                                .push(range)
-                        }
-                    }
-                }
-            }
-        }
-
-        if self.delegate_open_excerpts {
-            let selections_by_buffer: HashMap<_, _> = new_selections_by_buffer
-                .into_iter()
-                .map(|(buffer, value)| (buffer.read(cx).remote_id(), value))
-                .collect();
-            if !selections_by_buffer.is_empty() {
-                cx.emit(EditorEvent::OpenExcerptsRequested {
-                    selections_by_buffer,
-                    split,
-                });
-            }
-            return;
-        }
-
-        let Some(workspace) = self.workspace() else {
-            cx.propagate();
-            return;
-        };
-
-        new_selections_by_buffer
-            .retain(|buffer, _| buffer.read(cx).file().is_none_or(|file| file.can_open()));
-
-        if new_selections_by_buffer.is_empty() {
-            return;
-        }
-
-        Self::open_buffers_in_workspace(
-            workspace.downgrade(),
-            new_selections_by_buffer,
-            split,
-            window,
-            cx,
-        );
-    }
-
-    pub(crate) fn open_buffers_in_workspace(
-        workspace: WeakEntity<Workspace>,
-        new_selections_by_buffer: HashMap<
-            Entity<language::Buffer>,
-            (Vec<Range<BufferOffset>>, Option<u32>),
-        >,
-        split: bool,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        // We defer the pane interaction because we ourselves are a workspace item
-        // and activating a new item causes the pane to call a method on us reentrantly,
-        // which panics if we're on the stack.
-        window.defer(cx, move |window, cx| {
-            workspace
-                .update(cx, |workspace, cx| {
-                    let pane = if split {
-                        workspace.adjacent_pane(window, cx)
-                    } else {
-                        workspace.active_pane().clone()
-                    };
-
-                    for (buffer, (ranges, scroll_offset)) in new_selections_by_buffer {
-                        let buffer_read = buffer.read(cx);
-                        let (has_file, is_project_file) = if let Some(file) = buffer_read.file() {
-                            (true, project::File::from_dyn(Some(file)).is_some())
-                        } else {
-                            (false, false)
-                        };
-
-                        // If project file is none workspace.open_project_item will fail to open the excerpt
-                        // in a pre existing workspace item if one exists, because Buffer entity_id will be None
-                        // so we check if there's a tab match in that case first
-                        let editor = (!has_file || !is_project_file)
-                            .then(|| {
-                                // Handle file-less buffers separately: those are not really the project items, so won't have a project path or entity id,
-                                // so `workspace.open_project_item` will never find them, always opening a new editor.
-                                // Instead, we try to activate the existing editor in the pane first.
-                                let (editor, pane_item_index, pane_item_id) =
-                                    pane.read(cx).items().enumerate().find_map(|(i, item)| {
-                                        let editor = item.downcast::<Editor>()?;
-                                        let singleton_buffer =
-                                            editor.read(cx).buffer().read(cx).as_singleton()?;
-                                        if singleton_buffer == buffer {
-                                            Some((editor, i, item.item_id()))
-                                        } else {
-                                            None
-                                        }
-                                    })?;
-                                pane.update(cx, |pane, cx| {
-                                    pane.activate_item(pane_item_index, true, true, window, cx);
-                                    if !PreviewTabsSettings::get_global(cx)
-                                        .enable_preview_from_multibuffer
-                                    {
-                                        pane.unpreview_item_if_preview(pane_item_id);
-                                    }
-                                });
-                                Some(editor)
-                            })
-                            .flatten()
-                            .unwrap_or_else(|| {
-                                let keep_old_preview = PreviewTabsSettings::get_global(cx)
-                                    .enable_keep_preview_on_code_navigation;
-                                let allow_new_preview = PreviewTabsSettings::get_global(cx)
-                                    .enable_preview_from_multibuffer;
-                                workspace.open_project_item::<Self>(
-                                    pane.clone(),
-                                    buffer,
-                                    true,
-                                    true,
-                                    keep_old_preview,
-                                    allow_new_preview,
-                                    window,
-                                    cx,
-                                )
-                            });
-
-                        editor.update(cx, |editor, cx| {
-                            if has_file && !is_project_file {
-                                editor.set_read_only(true);
-                            }
-                            let autoscroll = match scroll_offset {
-                                Some(scroll_offset) => {
-                                    Autoscroll::top_relative(scroll_offset as ScrollOffset)
-                                }
-                                None => Autoscroll::newest(),
-                            };
-                            let nav_history = editor.nav_history.take();
-                            let multibuffer_snapshot = editor.buffer().read(cx).snapshot(cx);
-                            let Some(buffer_snapshot) = multibuffer_snapshot.as_singleton() else {
-                                return;
-                            };
-                            editor.change_selections(
-                                SelectionEffects::scroll(autoscroll),
-                                window,
-                                cx,
-                                |s| {
-                                    s.select_ranges(ranges.into_iter().map(|range| {
-                                        let range = buffer_snapshot.anchor_before(range.start)
-                                            ..buffer_snapshot.anchor_after(range.end);
-                                        multibuffer_snapshot
-                                            .buffer_anchor_range_to_anchor_range(range)
-                                            .unwrap()
-                                    }));
-                                },
-                            );
-                            editor.nav_history = nav_history;
-                        });
-                    }
-                })
-                .ok();
-        });
+        cx.propagate();
     }
 
     fn selection_replacement_ranges(
@@ -8093,13 +7686,12 @@ impl Editor {
 
     fn breadcrumbs_inner(&self, cx: &App) -> Option<Vec<HighlightedText>> {
         let multibuffer = self.buffer().read(cx);
-        let is_singleton = multibuffer.is_singleton();
         let (buffer_id, symbols) = self.outline_symbols_at_cursor.as_ref()?;
         let buffer = multibuffer.buffer(*buffer_id)?;
 
         let buffer = buffer.read(cx);
         // In a multi-buffer layout, we don't want to include the filename in the breadcrumbs
-        let mut breadcrumbs = if is_singleton {
+        let mut breadcrumbs = {
             let text = self.breadcrumb_header.clone().unwrap_or_else(|| {
                 buffer
                     .snapshot()
@@ -8111,19 +7703,13 @@ impl Editor {
                         cx,
                     )
                     .unwrap_or_else(|| {
-                        if multibuffer.is_singleton() {
-                            multibuffer.title(cx).to_string()
-                        } else {
-                            "untitled".to_string()
-                        }
+                        multibuffer.title(cx).to_string()
                     })
             });
             vec![HighlightedText {
                 text: text.into(),
                 highlights: vec![],
             }]
-        } else {
-            vec![]
         };
 
         breadcrumbs.extend(symbols.iter().map(|symbol| HighlightedText {
@@ -8163,7 +7749,7 @@ impl Editor {
     fn do_update_data_on_scroll(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.register_visible_buffers(cx);
 
-        if !self.buffer().read(cx).is_singleton() || self.needs_initial_data_update {
+        if self.needs_initial_data_update {
             self.needs_initial_data_update = false;
             self.update_lsp_data(None, window, cx);
         }
@@ -8492,12 +8078,8 @@ impl EditorSnapshot {
                 0.0.into()
             };
 
-            let is_singleton = self.buffer_snapshot().is_singleton();
-
             let left_padding = Pixels::ZERO
-                + if !is_singleton {
-                    ch_width * 4.0
-                } else if show_git_gutter && show_line_numbers {
+                + if show_git_gutter && show_line_numbers {
                     ch_width * 2.0
                 } else if show_git_gutter || show_line_numbers {
                     ch_width
@@ -8505,11 +8087,11 @@ impl EditorSnapshot {
                     px(0.)
                 };
 
-            let shows_folds = is_singleton && gutter_settings.folds;
+            let shows_folds = gutter_settings.folds;
 
             let right_padding = if shows_folds && show_line_numbers {
                 ch_width * 4.0
-            } else if shows_folds || (!is_singleton && show_line_numbers) {
+            } else if shows_folds {
                 ch_width * 3.0
             } else if show_line_numbers {
                 ch_width

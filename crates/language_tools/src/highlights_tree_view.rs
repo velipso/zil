@@ -125,9 +125,6 @@ struct HighlightEntry {
 /// An item in the display list: either a separator between excerpts or a highlight entry.
 #[derive(Debug, Clone)]
 enum DisplayItem {
-    ExcerptSeparator {
-        label: SharedString,
-    },
     Entry {
         /// Index into `cached_entries`.
         entry_ix: usize,
@@ -143,7 +140,6 @@ pub struct HighlightsTreeView {
     focus_handle: FocusHandle,
     cached_entries: Vec<HighlightEntry>,
     display_items: Vec<DisplayItem>,
-    is_singleton: bool,
     show_text_highlights: bool,
     show_syntax_tokens: bool,
     show_semantic_tokens: bool,
@@ -191,7 +187,6 @@ impl HighlightsTreeView {
             focus_handle: cx.focus_handle(),
             cached_entries: Vec::new(),
             display_items: Vec::new(),
-            is_singleton: true,
             show_text_highlights: true,
             show_syntax_tokens: true,
             show_semantic_tokens: true,
@@ -433,7 +428,6 @@ impl HighlightsTreeView {
         let cursor_position = editor.selections.newest_anchor().head();
         let multi_buffer_snapshot = editor.buffer().read(cx).snapshot(cx);
 
-        self.is_singleton = multi_buffer_snapshot.is_singleton();
         self.cached_entries = new_highlights;
         self.hovered_item_ix = None;
         self.rebuild_display_items(&multi_buffer_snapshot, cx);
@@ -444,27 +438,12 @@ impl HighlightsTreeView {
         cx.notify();
     }
 
-    fn rebuild_display_items(&mut self, snapshot: &MultiBufferSnapshot, cx: &App) {
+    fn rebuild_display_items(&mut self, _snapshot: &MultiBufferSnapshot, _cx: &App) {
         self.display_items.clear();
 
-        let mut last_range_end = None;
         for (entry_ix, entry) in self.cached_entries.iter().enumerate() {
             if !self.should_show_entry(entry) {
                 continue;
-            }
-
-            if !self.is_singleton {
-                let excerpt_changed = last_range_end.is_none_or(|anchor| {
-                    snapshot
-                        .excerpt_containing(anchor..entry.range.start)
-                        .is_none()
-                });
-                if excerpt_changed {
-                    last_range_end = Some(entry.range.end);
-                    let label = excerpt_label_for(entry, snapshot, cx);
-                    self.display_items
-                        .push(DisplayItem::ExcerptSeparator { label });
-                }
             }
 
             self.display_items.push(DisplayItem::Entry { entry_ix });
@@ -529,7 +508,6 @@ impl HighlightsTreeView {
                     let entry = &self.cached_entries[*entry_ix];
                     Some((display_ix, *entry_ix, entry))
                 }
-                _ => None,
             })
             .filter(|(_, _, entry)| {
                 entry.buffer_id == cursor_buffer_id
@@ -605,21 +583,6 @@ impl HighlightsTreeView {
             .hover(|style| style.bg(colors.element_hover))
     }
 
-    fn render_separator(&self, label: &SharedString, cx: &App) -> Div {
-        let colors = cx.theme().colors();
-        h_flex()
-            .gap_1()
-            .px(rems(0.5))
-            .bg(colors.surface_background)
-            .border_b_1()
-            .border_color(colors.border_variant)
-            .child(
-                Label::new(label.clone())
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
-            )
-    }
-
     fn compute_items(
         &mut self,
         visible_range: Range<usize>,
@@ -634,9 +597,6 @@ impl HighlightsTreeView {
             };
 
             match display_item {
-                DisplayItem::ExcerptSeparator { label } => {
-                    items.push(self.render_separator(label, cx));
-                }
                 DisplayItem::Entry { entry_ix } => {
                     let entry_ix = *entry_ix;
                     let entry = &self.cached_entries[entry_ix];
@@ -751,7 +711,6 @@ impl HighlightsTreeView {
             .enumerate()
             .filter_map(|(display_ix, item)| match item {
                 DisplayItem::Entry { entry_ix } => Some((display_ix, *entry_ix)),
-                _ => None,
             })
             .collect();
 
@@ -1104,23 +1063,6 @@ impl ToolbarItemView for HighlightsTreeToolbarItemView {
         self._subscription = None;
         ToolbarItemLocation::Hidden
     }
-}
-
-fn excerpt_label_for(
-    entry: &HighlightEntry,
-    snapshot: &MultiBufferSnapshot,
-    cx: &App,
-) -> SharedString {
-    let path_label = snapshot
-        .anchor_to_buffer_anchor(entry.range.start)
-        .and_then(|(anchor, _)| snapshot.buffer_for_id(anchor.buffer_id))
-        .and_then(|buf| buf.file())
-        .map(|file| {
-            let full_path = file.full_path(cx);
-            full_path.to_string_lossy().to_string()
-        })
-        .unwrap_or_else(|| "untitled".to_string());
-    path_label.into()
 }
 
 fn build_highlight_entries(

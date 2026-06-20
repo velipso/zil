@@ -156,7 +156,6 @@ pub enum TabTooltipContent {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ItemBufferKind {
-    Multibuffer,
     Singleton,
     None,
 }

@@ -3376,11 +3376,8 @@ impl Pane {
         }
     }
 
-    fn multibuffer_item_ids(&self, cx: &mut Context<Pane>) -> Vec<EntityId> {
-        self.items()
-            .filter(|item| item.buffer_kind(cx) == ItemBufferKind::Multibuffer)
-            .map(|item| item.item_id())
-            .collect()
+    fn multibuffer_item_ids(&self, _cx: &mut Context<Pane>) -> Vec<EntityId> {
+        Vec::new()
     }
 
     pub fn drag_split_direction(&self) -> Option<SplitDirection> {

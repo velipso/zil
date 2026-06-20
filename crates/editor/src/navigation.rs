@@ -1502,11 +1502,6 @@ impl Editor {
     ) -> Task<Result<()>> {
         let editor_snapshot = self.snapshot(window, cx);
 
-        // We don't care about multi-buffer symbols
-        if !editor_snapshot.is_singleton() {
-            return Task::ready(Ok(()));
-        }
-
         let cursor_offset = self
             .selections
             .newest::<MultiBufferOffset>(&editor_snapshot.display_snapshot)
@@ -1831,9 +1826,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let multibuffer = self.buffer().read(cx);
-        if !multibuffer.is_singleton() {
-            return;
-        };
         let anchor_range = range.to_anchors(&multibuffer.snapshot(cx));
         self.change_selections(
             SelectionEffects::scroll(Autoscroll::for_go_to_definition(

@@ -81,21 +81,12 @@ impl CursorPosition {
     fn update_position(
         &mut self,
         editor: &Entity<Editor>,
-        debounce: Option<Duration>,
+        _debounce: Option<Duration>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let editor = editor.downgrade();
         self.update_position = cx.spawn_in(window, async move |cursor_position, cx| {
-            let is_singleton = editor
-                .update(cx, |editor, cx| editor.buffer().read(cx).is_singleton())
-                .ok()
-                .unwrap_or(true);
-
-            if !is_singleton && let Some(debounce) = debounce {
-                cx.background_executor().timer(debounce).await;
-            }
-
             editor
                 .update(cx, |editor, cx| {
                     cursor_position.update(cx, |cursor_position, cx| {

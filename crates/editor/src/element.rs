@@ -304,11 +304,6 @@ impl EditorElement {
         register_action(editor, window, Editor::select_enclosing_symbol);
         register_action(editor, window, Editor::undo_selection);
         register_action(editor, window, Editor::redo_selection);
-        if editor.read(cx).buffer_kind(cx) == ItemBufferKind::Multibuffer {
-            register_action(editor, window, Editor::expand_excerpts);
-            register_action(editor, window, Editor::expand_excerpts_up);
-            register_action(editor, window, Editor::expand_excerpts_down);
-        }
         register_action(editor, window, Editor::go_to_next_document_highlight);
         register_action(editor, window, Editor::go_to_prev_document_highlight);
         register_action(editor, window, Editor::open_url);
@@ -446,22 +441,6 @@ impl EditorElement {
                     editor.handle_input(text, window, cx);
                 },
             );
-            register_action(editor, window, |editor, action, window, cx| {
-                if let Some(task) = editor.format(action, window, cx) {
-                    editor.detach_and_notify_err(task, window, cx);
-                } else {
-                    cx.propagate();
-                }
-            });
-            if editor.read(cx).can_format_selections(cx) {
-                register_action(editor, window, |editor, action, window, cx| {
-                    if let Some(task) = editor.format_selections(action, window, cx) {
-                        editor.detach_and_notify_err(task, window, cx);
-                    } else {
-                        cx.propagate();
-                    }
-                });
-            }
             register_action(editor, window, |editor, action, window, cx| {
                 if let Some(task) = editor.rename(action, window, cx) {
                     editor.detach_and_notify_err(task, window, cx);

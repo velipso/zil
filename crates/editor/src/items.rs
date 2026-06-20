@@ -1,6 +1,6 @@
 use crate::{
     Anchor, Autoscroll, BufferSerialization, Capability, Editor, EditorEvent,
-    EditorSettings, ExcerptRange, FormatTarget, MultiBuffer, MultiBufferSnapshot, NavigationData,
+    EditorSettings, ExcerptRange, MultiBuffer, MultiBufferSnapshot, NavigationData,
     SelectionEffects, ToPoint as _,
     display_map::HighlightKey,
     editor_settings::SeedQuerySetting,
@@ -23,7 +23,7 @@ use language::{
 };
 use multi_buffer::{BufferOffset, MultiBufferOffset, PathKey};
 use project::{
-    File, Project, ProjectItem as _, ProjectPath, lsp_store::FormatTrigger,
+    File, Project, ProjectItem as _, ProjectPath,
     project_settings::ProjectSettings, search::SearchQuery,
 };
 use rope::TextSummary;
@@ -216,7 +216,7 @@ impl FollowableItem for Editor {
         }
 
         Some(proto::view::Variant::Editor(proto::view::Editor {
-            singleton: buffer.is_singleton(),
+            singleton: true, // VELIPSO: always true
             title: buffer.explicit_title().map(ToOwned::to_owned),
             excerpts: Vec::new(),
             scroll_top_anchor: Some(serialize_anchor(&scroll_anchor.anchor)),
@@ -805,19 +805,16 @@ impl Item for Editor {
             .for_each_buffer(&mut |buffer| f(buffer.entity_id(), buffer.read(cx)));
     }
 
-    fn buffer_kind(&self, cx: &App) -> ItemBufferKind {
-        match self.buffer.read(cx).is_singleton() {
-            true => ItemBufferKind::Singleton,
-            false => ItemBufferKind::Multibuffer,
-        }
+    fn buffer_kind(&self, _cx: &App) -> ItemBufferKind {
+        ItemBufferKind::Singleton
     }
 
     fn active_project_path(&self, cx: &App) -> Option<ProjectPath> {
         self.active_buffer(cx)?.read(cx).project_path(cx)
     }
 
-    fn can_save_as(&self, cx: &App) -> bool {
-        self.buffer.read(cx).is_singleton()
+    fn can_save_as(&self, _cx: &App) -> bool {
+        true
     }
 
     fn can_split(&self) -> bool {
@@ -911,7 +908,7 @@ impl Item for Editor {
             .map(|handle| handle.read(cx).base_buffer().unwrap_or(handle.clone()))
             .collect::<HashSet<_>>();
 
-        let buffers_to_save = if self.buffer.read(cx).is_singleton() && !options.autosave {
+        let buffers_to_save = if !options.autosave {
             buffers
         } else {
             buffers
@@ -920,26 +917,7 @@ impl Item for Editor {
                 .collect()
         };
 
-        let format_trigger = if options.force_format {
-            FormatTrigger::Manual
-        } else {
-            FormatTrigger::Save
-        };
-
-        cx.spawn_in(window, async move |this, cx| {
-            if options.format {
-                this.update_in(cx, |editor, window, cx| {
-                    editor.perform_format(
-                        project.clone(),
-                        format_trigger,
-                        FormatTarget::Buffers(buffers_to_save.clone()),
-                        window,
-                        cx,
-                    )
-                })?
-                .await?;
-            }
-
+        cx.spawn_in(window, async move |_this, cx| {
             if !buffers_to_save.is_empty() {
                 project
                     .update(cx, |project, cx| {
@@ -974,22 +952,14 @@ impl Item for Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        let buffer = self.buffer().clone();
         let buffers = self.buffer.read(cx).all_buffers();
         let reload_buffers =
             project.update(cx, |project, cx| project.reload_buffers(buffers, true, cx));
         cx.spawn_in(window, async move |this, cx| {
-            let transaction = reload_buffers.log_err().await;
+            let _ = reload_buffers.log_err().await;
             this.update(cx, |editor, cx| {
                 editor.request_autoscroll(Autoscroll::fit(), cx)
             })?;
-            buffer.update(cx, |buffer, cx| {
-                if let Some(transaction) = transaction
-                    && !buffer.is_singleton()
-                {
-                    buffer.push_transaction(&transaction.0, cx);
-                }
-            });
             Ok(())
         })
     }
@@ -1006,24 +976,16 @@ impl Item for Editor {
         self.pixel_position_of_newest_cursor
     }
 
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        if self.breadcrumbs_visible() && self.buffer().read(cx).is_singleton() {
-            ToolbarItemLocation::PrimaryLeft
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+    fn breadcrumb_location(&self, _cx: &App) -> ToolbarItemLocation {
+        ToolbarItemLocation::PrimaryLeft
     }
 
     // In a non-singleton case, the breadcrumbs are actually shown on sticky file headers of the multibuffer.
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        if self.buffer.read(cx).is_singleton() {
-            let font = theme_settings::ThemeSettings::get_global(cx)
-                .buffer_font
-                .clone();
-            Some((self.breadcrumbs_inner(cx)?, Some(font)))
-        } else {
-            None
-        }
+        let font = theme_settings::ThemeSettings::get_global(cx)
+            .buffer_font
+            .clone();
+        Some((self.breadcrumbs_inner(cx)?, Some(font)))
     }
 
     fn added_to_workspace(

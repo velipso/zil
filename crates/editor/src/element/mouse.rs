@@ -18,9 +18,9 @@ use util::{RangeExt, debug_panic, post_inc};
 use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap, SplitSide};
 use crate::{
     CURSORS_VISIBLE_FOR, ColumnarMode, DisplayPoint, DisplayRow, Editor,
-    EditorSettings, EditorSnapshot, GutterHoverButton, HoveredCursor, JumpData,
+    EditorSettings, EditorSnapshot, GutterHoverButton, HoveredCursor,
     SelectPhase, Selection, SelectionDragState,
-    display_map::ToDisplayPoint, editor_settings::DoubleClickInMultibuffer,
+    display_map::ToDisplayPoint,
     mouse_context_menu, scroll::ScrollPixelOffset,
 };
 
@@ -437,7 +437,7 @@ impl EditorElement {
         editor: &mut Editor,
         event: &MouseDownEvent,
         position_map: &PositionMap,
-        line_numbers: &HashMap<MultiBufferRow, LineNumberLayout>,
+        _line_numbers: &HashMap<MultiBufferRow, LineNumberLayout>,
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
@@ -449,7 +449,7 @@ impl EditorElement {
         let gutter_hitbox = &position_map.gutter_hitbox;
         let point_for_position = position_map.point_for_position(event.position);
         let mut click_count = event.click_count;
-        let mut modifiers = event.modifiers;
+        let modifiers = event.modifiers;
 
         if gutter_hitbox.is_hovered(window) {
             click_count = 3; // Simulate triple-click when clicking the gutter to select lines
@@ -472,84 +472,6 @@ impl EditorElement {
                     click_position: event.position,
                     mouse_down_time: Instant::now(),
                 };
-                cx.stop_propagation();
-                return;
-            }
-        }
-
-        let is_singleton = editor.buffer().read(cx).is_singleton();
-
-        if click_count == 2 && !is_singleton {
-            match EditorSettings::get_global(cx).double_click_in_multibuffer {
-                DoubleClickInMultibuffer::Select => {
-                    // do nothing special on double click, all selection logic is below
-                }
-                DoubleClickInMultibuffer::Open => {
-                    if modifiers.alt {
-                        // if double click is made with alt, pretend it's a regular double click without opening and alt,
-                        // and run the selection logic.
-                        modifiers.alt = false;
-                    } else {
-                        let scroll_position_row = position_map.scroll_position.y;
-                        let display_row = (((event.position - gutter_hitbox.bounds.origin).y
-                            / position_map.line_height)
-                            as f64
-                            + position_map.scroll_position.y)
-                            as u32;
-                        let multi_buffer_row = position_map
-                            .snapshot
-                            .display_point_to_point(
-                                DisplayPoint::new(DisplayRow(display_row), 0),
-                                Bias::Right,
-                            )
-                            .row;
-                        let line_offset_from_top = display_row - scroll_position_row as u32;
-                        // if double click is made without alt, open the corresponding excerp
-                        editor.open_excerpts_common(
-                            Some(JumpData::MultiBufferRow {
-                                row: MultiBufferRow(multi_buffer_row),
-                                line_offset_from_top,
-                            }),
-                            false,
-                            window,
-                            cx,
-                        );
-                        return;
-                    }
-                }
-            }
-        }
-
-        if !is_singleton {
-            let display_row = (ScrollPixelOffset::from(
-                (event.position - gutter_hitbox.bounds.origin).y / position_map.line_height,
-            ) + position_map.scroll_position.y) as u32;
-            let multi_buffer_row = position_map
-                .snapshot
-                .display_point_to_point(DisplayPoint::new(DisplayRow(display_row), 0), Bias::Right)
-                .row;
-            if line_numbers
-                .get(&MultiBufferRow(multi_buffer_row))
-                .is_some_and(|line_layout| {
-                    line_layout.segments.iter().any(|segment| {
-                        segment
-                            .hitbox
-                            .as_ref()
-                            .is_some_and(|hitbox| hitbox.contains(&event.position))
-                    })
-                })
-            {
-                let line_offset_from_top = display_row - position_map.scroll_position.y as u32;
-
-                editor.open_excerpts_common(
-                    Some(JumpData::MultiBufferRow {
-                        row: MultiBufferRow(multi_buffer_row),
-                        line_offset_from_top,
-                    }),
-                    modifiers.alt,
-                    window,
-                    cx,
-                );
                 cx.stop_propagation();
                 return;
             }
