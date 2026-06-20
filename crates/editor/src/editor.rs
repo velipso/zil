@@ -84,7 +84,7 @@ use editor_settings::{Minimap as MinimapSettings};
 use element::{LineWithInvisibles, PositionMap};
 use futures::{
     FutureExt,
-    future::{self, Shared},
+    future::Shared,
 };
 use gpui::{
     Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds,
@@ -109,7 +109,7 @@ use language::{
     language_settings::{
         self, LanguageSettings, RewrapBehavior,
     },
-    point_from_lsp, text_diff_with_options,
+    text_diff_with_options,
 };
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
@@ -120,7 +120,7 @@ use multi_buffer::{
 use persistence::EditorDb;
 use project::{
     DocumentHighlight,
-    Location, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
+    PrepareRenameResponse, Project, ProjectItem, ProjectPath,
     ProjectTransaction,
     lsp_store::{
         BufferSemanticTokens,
@@ -143,9 +143,9 @@ use std::{
     any::{Any, TypeId},
     borrow::Cow,
     cell::{OnceCell, RefCell},
-    cmp::{self, Ordering, Reverse},
+    cmp::{self, Ordering},
     collections::hash_map,
-    iter::{self, Peekable},
+    iter::Peekable,
     mem,
     num::NonZeroU32,
     ops::{Deref, Not, Range, RangeInclusive},
@@ -154,7 +154,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use text::{BufferId, FromAnchor, OffsetUtf16, Rope, ToPoint as _};
+use text::{BufferId, OffsetUtf16, Rope, ToPoint as _};
 use theme::{
     ActiveTheme, GlobalTheme, PlayerColor, StatusColors, SyntaxTheme, Theme,
 };
@@ -166,10 +166,10 @@ use ui::{
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, maybe, post_inc};
 use workspace::{
-    CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal,
-    OpenTerminal, Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
+    CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory, OpenInTerminal,
+    OpenTerminal, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
     TabBarSettings, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
-    item::{ItemBufferKind, ItemHandle, PreviewTabsSettings},
+    item::{ItemBufferKind, ItemHandle},
     notifications::{DetachAndPromptErr, NotifyTaskExt},
     searchable::SearchEvent,
 };
@@ -270,7 +270,6 @@ pub fn init(cx: &mut App) {
             cx.new(|cx| Editor::single_line(window, cx)),
         )) as Arc<dyn ErasedEditor>
     });
-    _ = multi_buffer::EXCERPT_CONTEXT_LINES.set(multibuffer_context_lines);
 }
 
 pub struct SearchWithinRange;
@@ -784,7 +783,6 @@ pub struct Editor {
     minimap_visibility: MinimapVisibility,
     offset_content: bool,
     disable_expand_excerpt_buttons: bool,
-    delegate_expand_excerpts: bool,
     enable_lsp_data: bool,
     needs_initial_data_update: bool,
     enable_mouse_wheel_zoom: bool,
@@ -1784,7 +1782,6 @@ impl Editor {
             show_line_numbers: (!full_mode).then_some(false),
             use_relative_line_numbers: None,
             disable_expand_excerpt_buttons: !full_mode,
-            delegate_expand_excerpts: false,
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
             enable_mouse_wheel_zoom: full_mode,
@@ -2659,7 +2656,6 @@ impl Editor {
                     PathKey::for_buffer(buffer_handle, cx),
                     buffer_handle.clone(),
                     edited_ranges.clone(),
-                    multibuffer_context_lines(cx),
                     cx,
                 );
                 let snapshot = multibuffer.snapshot(cx);
@@ -8532,16 +8528,6 @@ impl RowRangeExt for Range<DisplayRow> {
     }
 }
 
-/// If select range has more than one line, we
-/// just point the cursor to range.start.
-fn collapse_multiline_range(range: Range<Point>) -> Range<Point> {
-    if range.start.row == range.end.row {
-        range
-    } else {
-        range.start..range.start
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineHighlight {
     pub background: Background,
@@ -8554,11 +8540,4 @@ struct LineManipulationResult {
     pub new_text: String,
     pub line_count_before: usize,
     pub line_count_after: usize,
-}
-
-pub fn multibuffer_context_lines(cx: &App) -> u32 {
-    EditorSettings::try_get(cx)
-        .map(|settings| settings.excerpt_context_lines)
-        .unwrap_or(2)
-        .min(32)
 }

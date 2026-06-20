@@ -771,7 +771,6 @@ impl Item for Editor {
                     MAX_TAB_TITLE_LEN,
                 ))
                 .color(label_color)
-                .when(params.preview, |this| this.italic())
                 .when(was_deleted, |this| this.strikethrough()),
             )
             .when_some(description, |this, description| {

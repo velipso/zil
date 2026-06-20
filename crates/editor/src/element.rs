@@ -44,7 +44,7 @@ use language::{
     language_settings::ShowWhitespaceSetting,
 };
 use multi_buffer::{
-    Anchor, ExpandExcerptDirection, ExpandInfo, MultiBufferRow, RowInfo,
+    Anchor, MultiBufferRow, RowInfo,
 };
 
 use settings::{
@@ -68,7 +68,7 @@ use sum_tree::Bias;
 use text::BufferId;
 use theme::{ActiveTheme, Appearance, PlayerColor};
 use ui::utils::ensure_minimum_contrast;
-use ui::{ButtonLike, Tooltip, prelude::*, scrollbars::ShowScrollbar};
+use ui::{ButtonLike, prelude::*, scrollbars::ShowScrollbar};
 use unicode_segmentation::UnicodeSegmentation;
 use util::{ResultExt, debug_panic};
 use workspace::{
@@ -1283,19 +1283,6 @@ impl EditorElement {
         }
     }
 
-    fn prepaint_expand_toggles(
-        &self,
-        expand_toggles: &mut [Option<(AnyElement, gpui::Point<Pixels>)>],
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        for (expand_toggle, origin) in expand_toggles.iter_mut().flatten() {
-            let available_space = size(AvailableSpace::MinContent, AvailableSpace::MinContent);
-            expand_toggle.layout_as_root(available_space, window, cx);
-            expand_toggle.prepaint_as_root(*origin, available_space, window, cx);
-        }
-    }
-
     fn prepaint_crease_trailers(
         &self,
         trailers: Vec<Option<AnyElement>>,
@@ -1522,93 +1509,6 @@ impl EditorElement {
         }
 
         (offset_y, length, row_range)
-    }
-
-    fn layout_expand_toggles(
-        &self,
-        gutter_hitbox: &Hitbox,
-        gutter_dimensions: GutterDimensions,
-        em_width: Pixels,
-        line_height: Pixels,
-        scroll_position: gpui::Point<ScrollOffset>,
-        start_row: DisplayRow,
-        buffer_rows: &[RowInfo],
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<Option<(AnyElement, gpui::Point<Pixels>)>> {
-        if self.editor.read(cx).disable_expand_excerpt_buttons {
-            return vec![];
-        }
-
-        let editor_font_size = self.style.text.font_size.to_pixels(window.rem_size()) * 1.2;
-
-        let max_line_number_length = self
-            .editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .snapshot(cx)
-            .widest_line_number()
-            .ilog10()
-            + 1;
-
-        let available_width = gutter_dimensions.left_padding;
-
-        buffer_rows
-            .iter()
-            .enumerate()
-            .map(|(ix, row_info)| {
-                let ExpandInfo {
-                    direction,
-                    start_anchor,
-                } = row_info.expand_info?;
-
-                let icon_name = match direction {
-                    ExpandExcerptDirection::Up => IconName::ExpandUp,
-                    ExpandExcerptDirection::Down => IconName::ExpandDown,
-                    ExpandExcerptDirection::UpAndDown => IconName::ExpandVertical,
-                };
-
-                let editor = self.editor.clone();
-                let is_wide = max_line_number_length
-                    >= EditorSettings::get_global(cx).gutter.min_line_number_digits as u32
-                    && row_info
-                        .buffer_row
-                        .is_some_and(|row| (row + 1).ilog10() + 1 == max_line_number_length)
-                    || gutter_dimensions.right_padding == px(0.);
-
-                let width = if is_wide {
-                    available_width - px(5.)
-                } else {
-                    available_width + em_width - px(5.)
-                };
-
-                let toggle = IconButton::new(("expand", ix), icon_name)
-                    .icon_color(Color::Custom(cx.theme().colors().editor_line_number))
-                    .icon_size(IconSize::Custom(rems(editor_font_size / window.rem_size())))
-                    .width(width)
-                    .on_click(move |_, window, cx| {
-                        editor.update(cx, |editor, cx| {
-                            editor.expand_excerpt(start_anchor, direction, window, cx);
-                        });
-                    })
-                    .tooltip(Tooltip::for_action_title(
-                        "Expand Excerpt",
-                        &crate::actions::ExpandExcerpts::default(),
-                    ))
-                    .into_any_element();
-
-                let position = point(
-                    px(1.),
-                    line_height
-                        * (DisplayRow(start_row.0 + ix as u32).as_f64() - scroll_position.y) as f32
-                        + px(1.),
-                );
-                let origin = gutter_hitbox.origin + position;
-
-                Some((toggle, origin))
-            })
-            .collect()
     }
 
     fn layout_line_numbers(
@@ -2973,12 +2873,6 @@ impl EditorElement {
             window.with_element_namespace("crease_toggles", |window| {
                 for crease_toggle in layout.crease_toggles.iter_mut().flatten() {
                     crease_toggle.paint(window, cx);
-                }
-            });
-
-            window.with_element_namespace("expand_toggles", |window| {
-                for (expand_toggle, _) in layout.expand_toggles.iter_mut().flatten() {
-                    expand_toggle.paint(window, cx);
                 }
             });
 
@@ -5484,21 +5378,6 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    let mut expand_toggles =
-                        window.with_element_namespace("expand_toggles", |window| {
-                            self.layout_expand_toggles(
-                                &gutter_hitbox,
-                                gutter_dimensions,
-                                em_width,
-                                line_height,
-                                scroll_position,
-                                start_row,
-                                &row_infos,
-                                window,
-                                cx,
-                            )
-                        });
-
                     let mut crease_toggles =
                         window.with_element_namespace("crease_toggles", |window| {
                             self.layout_crease_toggles(
@@ -5907,10 +5786,6 @@ impl Element for EditorElement {
                         )
                     });
 
-                    window.with_element_namespace("expand_toggles", |window| {
-                        self.prepaint_expand_toggles(&mut expand_toggles, window, cx)
-                    });
-
                     let wrap_guides = self.layout_wrap_guides(
                         em_advance,
                         scroll_position,
@@ -6027,7 +5902,6 @@ impl Element for EditorElement {
                         space_invisible,
                         sticky_buffer_header,
                         sticky_headers,
-                        expand_toggles,
                         text_align: self.style.text.text_align,
                         content_width: text_hitbox.size.width,
                     }
@@ -6220,7 +6094,6 @@ pub struct EditorLayout {
     selections: Vec<(PlayerColor, Vec<SelectionLayout>)>,
     test_indicators: Vec<AnyElement>,
     crease_toggles: Vec<Option<AnyElement>>,
-    expand_toggles: Vec<Option<(AnyElement, gpui::Point<Pixels>)>>,
     crease_trailers: Vec<Option<CreaseTrailerLayout>>,
     mouse_context_menu: Option<AnyElement>,
     tab_invisible: ShapedLine,

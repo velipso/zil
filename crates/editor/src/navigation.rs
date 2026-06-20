@@ -1,5 +1,4 @@
 use super::*;
-use lsp::LanguageServerId;
 
 impl Editor {
     pub fn move_left(&mut self, _: &MoveLeft, window: &mut Window, cx: &mut Context<Self>) {
@@ -868,33 +867,6 @@ impl Editor {
         );
     }
 
-    pub fn expand_excerpts(
-        &mut self,
-        action: &ExpandExcerpts,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.expand_excerpts_for_direction(action.lines, ExpandExcerptDirection::UpAndDown, cx)
-    }
-
-    pub fn expand_excerpts_down(
-        &mut self,
-        action: &ExpandExcerptsDown,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.expand_excerpts_for_direction(action.lines, ExpandExcerptDirection::Down, cx)
-    }
-
-    pub fn expand_excerpts_up(
-        &mut self,
-        action: &ExpandExcerptsUp,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.expand_excerpts_for_direction(action.lines, ExpandExcerptDirection::Up, cx)
-    }
-
     pub fn go_to_singleton_buffer_point(
         &mut self,
         point: Point,
@@ -1023,18 +995,6 @@ impl Editor {
         .detach();
     }
 
-    pub(super) fn navigation_entry(
-        &self,
-        cursor_anchor: Anchor,
-        cx: &mut Context<Self>,
-    ) -> Option<NavigationEntry> {
-        let Some(history) = self.nav_history.clone() else {
-            return None;
-        };
-        let data = self.navigation_data(cursor_anchor, cx);
-        Some(history.navigation_entry(Some(Arc::new(data) as Arc<dyn Any + Send + Sync>)))
-    }
-
     pub(super) fn push_to_nav_history(
         &mut self,
         cursor_anchor: Anchor,
@@ -1058,65 +1018,6 @@ impl Editor {
                 anchor: cursor_anchor,
                 is_deactivate,
             })
-        }
-    }
-
-    pub(super) fn expand_excerpt(
-        &mut self,
-        excerpt_anchor: Anchor,
-        direction: ExpandExcerptDirection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let lines_to_expand = EditorSettings::get_global(cx).expand_excerpt_lines;
-
-        if self.delegate_expand_excerpts {
-            cx.emit(EditorEvent::ExpandExcerptsRequested {
-                excerpt_anchors: vec![excerpt_anchor],
-                lines: lines_to_expand,
-                direction,
-            });
-            return;
-        }
-
-        let current_scroll_position = self.scroll_position(cx);
-        let mut scroll = None;
-
-        if direction == ExpandExcerptDirection::Down {
-            let multi_buffer = self.buffer.read(cx);
-            let snapshot = multi_buffer.snapshot(cx);
-            if let Some((buffer_snapshot, excerpt_range)) =
-                snapshot.excerpt_containing(excerpt_anchor..excerpt_anchor)
-            {
-                let excerpt_end_row =
-                    Point::from_anchor(&excerpt_range.context.end, &buffer_snapshot).row;
-                let last_row = buffer_snapshot.max_point().row;
-                let lines_below = last_row.saturating_sub(excerpt_end_row);
-                if lines_below >= lines_to_expand {
-                    scroll = Some(
-                        current_scroll_position
-                            + gpui::Point::new(0.0, lines_to_expand as ScrollOffset),
-                    );
-                }
-            }
-        }
-        if direction == ExpandExcerptDirection::Up
-            && self
-                .buffer
-                .read(cx)
-                .snapshot(cx)
-                .excerpt_before(excerpt_anchor)
-                .is_none()
-        {
-            scroll = Some(current_scroll_position);
-        }
-
-        self.buffer.update(cx, |buffer, cx| {
-            buffer.expand_excerpts([excerpt_anchor], lines_to_expand, direction, cx)
-        });
-
-        if let Some(new_scroll_position) = scroll {
-            self.set_scroll_position(new_scroll_position, window, cx);
         }
     }
 
@@ -1164,167 +1065,23 @@ impl Editor {
 
     pub fn navigate_to_hover_links(
         &mut self,
-        kind: Option<GotoDefinitionKind>,
         definitions: Vec<HoverLink>,
-        origin: Option<NavigationEntry>,
-        split: bool,
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) -> Task<Result<Navigated>> {
-        // Separate out url and file links, we can only handle one of them at most or an arbitrary number of locations
-        let mut first_url_or_file = None;
-        let definitions: Vec<_> = definitions
-            .into_iter()
-            .filter_map(|def| match def {
-                HoverLink::Text(link) => Some(Task::ready(anyhow::Ok(Some(link.target)))),
-                HoverLink::LspLocation(lsp_location, server_id) => {
-                    let computation =
-                        self.compute_target_location(lsp_location, server_id, window, cx);
-                    Some(cx.background_spawn(computation))
-                }
+        for def in definitions.into_iter() {
+            match def {
                 HoverLink::Url(url) => {
-                    first_url_or_file = Some(Either::Left(url));
-                    None
-                }
-                HoverLink::File(file_target) => {
-                    first_url_or_file = Some(Either::Right(file_target));
-                    None
-                }
-            })
-            .collect();
-
-        let workspace = self.workspace();
-
-        let excerpt_context_lines = multi_buffer::excerpt_context_lines(cx);
-        cx.spawn_in(window, async move |editor, cx| {
-            let locations: Vec<Location> = future::join_all(definitions)
-                .await
-                .into_iter()
-                .filter_map(|location| location.transpose())
-                .collect::<Result<_>>()
-                .context("location tasks")?;
-            let mut locations = cx.update(|_, cx| {
-                locations
-                    .into_iter()
-                    .map(|location| {
-                        let buffer = location.buffer.read(cx);
-                        (location.buffer, location.range.to_point(buffer))
-                    })
-                    .into_group_map()
-            })?;
-            let mut num_locations = 0;
-            for ranges in locations.values_mut() {
-                ranges.sort_by_key(|range| (range.start, Reverse(range.end)));
-                ranges.dedup();
-                // Merge overlapping or contained ranges. After sorting by
-                // (start, Reverse(end)), we can merge in a single pass:
-                // if the next range starts before the current one ends,
-                // extend the current range's end if needed.
-                let mut i = 0;
-                while i + 1 < ranges.len() {
-                    if ranges[i + 1].start <= ranges[i].end {
-                        let merged_end = ranges[i].end.max(ranges[i + 1].end);
-                        ranges[i].end = merged_end;
-                        ranges.remove(i + 1);
-                    } else {
-                        i += 1;
-                    }
-                }
-                let fits_in_one_excerpt = ranges
-                    .iter()
-                    .tuple_windows()
-                    .all(|(a, b)| b.start.row - a.end.row <= 2 * excerpt_context_lines);
-                num_locations += if fits_in_one_excerpt { 1 } else { ranges.len() };
-            }
-
-            if num_locations > 1 {
-                let tab_kind = match kind {
-                    Some(GotoDefinitionKind::Implementation) => "Implementations",
-                    Some(GotoDefinitionKind::Symbol) | None => "Definitions",
-                    Some(GotoDefinitionKind::Declaration) => "Declarations",
-                    Some(GotoDefinitionKind::Type) => "Types",
-                };
-                let title = editor
-                    .update_in(cx, |_, _, cx| {
-                        let target = locations
-                            .iter()
-                            .flat_map(|(k, v)| iter::repeat(k.clone()).zip(v))
-                            .map(|(buffer, location)| {
-                                buffer
-                                    .read(cx)
-                                    .text_for_range(location.clone())
-                                    .collect::<String>()
-                            })
-                            .filter(|text| !text.contains('\n'))
-                            .unique()
-                            .take(3)
-                            .join(", ");
-                        if target.is_empty() {
-                            tab_kind.to_owned()
-                        } else {
-                            format!("{tab_kind} for {target}")
-                        }
-                    })
-                    .context("buffer title")?;
-
-                let Some(workspace) = workspace else {
-                    return Ok(Navigated::No);
-                };
-
-                let opened = workspace
-                    .update_in(cx, |workspace, window, cx| {
-                        let allow_preview = PreviewTabsSettings::get_global(cx)
-                            .enable_preview_multibuffer_from_code_navigation;
-                        if let Some((target_editor, target_pane)) =
-                            Self::open_locations_in_multibuffer(
-                                workspace,
-                                locations,
-                                title,
-                                split,
-                                allow_preview,
-                                MultibufferSelectionMode::First,
-                                window,
-                                cx,
-                            )
-                        {
-                            // We create our own nav history instead of using
-                            // `target_editor.nav_history` because `nav_history`
-                            // seems to be populated asynchronously when an item
-                            // is added to a pane
-                            let mut nav_history = target_pane
-                                .update(cx, |pane, _| pane.nav_history_for_item(&target_editor));
-                            target_editor.update(cx, |editor, cx| {
-                                let nav_data = editor
-                                    .navigation_data(editor.selections.newest_anchor().head(), cx);
-                                let target =
-                                    Some(nav_history.navigation_entry(Some(
-                                        Arc::new(nav_data) as Arc<dyn Any + Send + Sync>
-                                    )));
-                                nav_history.push_tag(origin, target);
-                            })
-                        }
-                    })
-                    .is_ok();
-
-                anyhow::Ok(Navigated::from_bool(opened))
-            } else if num_locations == 0 {
-                // If there is one url or file, open it directly
-                match first_url_or_file {
-                    Some(Either::Left(url)) => {
-                        cx.update(|window, cx| {
-                            if parse_zed_link(&url, cx).is_some() {
-                                window
-                                    .dispatch_action(Box::new(zed_actions::OpenZedUrl { url }), cx);
-                            } else {
-                                cx.open_url(&url);
-                            }
+                    return cx.spawn_in(window, async move |_editor, cx| {
+                        cx.update(|_window, cx| {
+                            cx.open_url(&url);
                         })?;
                         Ok(Navigated::Yes)
-                    }
-                    Some(Either::Right(file_target)) => {
-                        // TODO(andrew): respect preview tab settings
-                        //               `enable_keep_preview_on_code_navigation` and
-                        //               `enable_preview_file_from_code_navigation`
+                    });
+                },
+                HoverLink::File(file_target) => {
+                    let workspace = self.workspace();
+                    return cx.spawn_in(window, async move |_editor, cx| {
                         let Some(workspace) = workspace else {
                             return Ok(Navigated::No);
                         };
@@ -1337,158 +1094,14 @@ impl Editor {
                                 )
                             })?
                             .await?;
-
                         file_target.navigate_item_to_position(item, cx);
-
                         Ok(Navigated::Yes)
-                    }
-                    None => Ok(Navigated::No),
-                }
-            } else {
-                let Some((target_buffer, target_ranges)) = locations.into_iter().next() else {
-                    return Ok(Navigated::No);
-                };
-
-                editor.update_in(cx, |editor, window, cx| {
-                    let target_ranges = target_ranges
-                        .into_iter()
-                        .map(|r| editor.range_for_match(&r))
-                        .map(collapse_multiline_range)
-                        .collect::<Vec<_>>();
-                    if !split {
-                        let target_buffer = &editor.buffer.read(cx).as_singleton();
-                        let multibuffer = editor.buffer.read(cx);
-                        let target_ranges = target_ranges
-                            .into_iter()
-                            .filter_map(|r| {
-                                let start = multibuffer.buffer_point_to_anchor(
-                                    &target_buffer,
-                                    r.start,
-                                    cx,
-                                )?;
-                                let end = multibuffer.buffer_point_to_anchor(
-                                    &target_buffer,
-                                    r.end,
-                                    cx,
-                                )?;
-                                Some(start..end)
-                            })
-                            .collect::<Vec<_>>();
-                        if target_ranges.is_empty() {
-                            return Navigated::No;
-                        }
-
-                        editor.change_selections(
-                            SelectionEffects::scroll(Autoscroll::for_go_to_definition(
-                                editor.cursor_top_offset(cx),
-                                cx,
-                            ))
-                            .nav_history(true),
-                            window,
-                            cx,
-                            |s| s.select_anchor_ranges(target_ranges),
-                        );
-
-                        let target =
-                            editor.navigation_entry(editor.selections.newest_anchor().head(), cx);
-                        if let Some(mut nav_history) = editor.nav_history.clone() {
-                            nav_history.push_tag(origin, target);
-                        }
-                    } else {
-                        let Some(workspace) = workspace else {
-                            return Navigated::No;
-                        };
-                        let pane = workspace.read(cx).active_pane().clone();
-                        let offset = editor.cursor_top_offset(cx);
-
-                        window.defer(cx, move |window, cx| {
-                            let (target_editor, target_pane): (Entity<Self>, Entity<Pane>) =
-                                workspace.update(cx, |workspace, cx| {
-                                    let pane = if split {
-                                        workspace.adjacent_pane(window, cx)
-                                    } else {
-                                        workspace.active_pane().clone()
-                                    };
-
-                                    let preview_tabs_settings = PreviewTabsSettings::get_global(cx);
-                                    let keep_old_preview = preview_tabs_settings
-                                        .enable_keep_preview_on_code_navigation;
-                                    let allow_new_preview = preview_tabs_settings
-                                        .enable_preview_file_from_code_navigation;
-
-                                    let editor = workspace.open_project_item(
-                                        pane.clone(),
-                                        target_buffer.clone(),
-                                        true,
-                                        true,
-                                        keep_old_preview,
-                                        allow_new_preview,
-                                        window,
-                                        cx,
-                                    );
-                                    (editor, pane)
-                                });
-                            // We create our own nav history instead of using
-                            // `target_editor.nav_history` because `nav_history`
-                            // seems to be populated asynchronously when an item
-                            // is added to a pane
-                            let mut nav_history = target_pane
-                                .update(cx, |pane, _| pane.nav_history_for_item(&target_editor));
-                            target_editor.update(cx, |target_editor, cx| {
-                                // When selecting a definition in a different buffer, disable the nav history
-                                // to avoid creating a history entry at the previous cursor location.
-                                pane.update(cx, |pane, _| pane.disable_history());
-
-                                let multibuffer = target_editor.buffer.read(cx);
-                                let target_buffer = multibuffer.as_singleton();
-                                let target_ranges = target_ranges
-                                    .into_iter()
-                                    .filter_map(|r| {
-                                        let start = multibuffer.buffer_point_to_anchor(
-                                            &target_buffer,
-                                            r.start,
-                                            cx,
-                                        )?;
-                                        let end = multibuffer.buffer_point_to_anchor(
-                                            &target_buffer,
-                                            r.end,
-                                            cx,
-                                        )?;
-                                        Some(start..end)
-                                    })
-                                    .collect::<Vec<_>>();
-                                if target_ranges.is_empty() {
-                                    return Navigated::No;
-                                }
-
-                                target_editor.change_selections(
-                                    SelectionEffects::scroll(Autoscroll::for_go_to_definition(
-                                        offset, cx,
-                                    ))
-                                    .nav_history(true),
-                                    window,
-                                    cx,
-                                    |s| s.select_anchor_ranges(target_ranges),
-                                );
-
-                                let nav_data = target_editor.navigation_data(
-                                    target_editor.selections.newest_anchor().head(),
-                                    cx,
-                                );
-                                let target =
-                                    Some(nav_history.navigation_entry(Some(
-                                        Arc::new(nav_data) as Arc<dyn Any + Send + Sync>
-                                    )));
-                                nav_history.push_tag(origin, target);
-                                pane.update(cx, |pane, _| pane.enable_history());
-                                Navigated::Yes
-                            });
-                        });
-                    }
-                    Navigated::Yes
-                })
+                    });
+                },
+                _ => {}
             }
-        })
+        }
+        Task::ready(anyhow::Ok(Navigated::No))
     }
 
     pub(super) fn go_to_symbol_by_offset(
@@ -1594,134 +1207,6 @@ impl Editor {
         self.go_to_symbol_by_offset(window, cx, -1).detach();
     }
 
-    /// Opens a multibuffer with the given project locations in it.
-    pub(super) fn open_locations_in_multibuffer(
-        workspace: &mut Workspace,
-        locations: std::collections::HashMap<Entity<Buffer>, Vec<Range<Point>>>,
-        title: String,
-        split: bool,
-        allow_preview: bool,
-        multibuffer_selection_mode: MultibufferSelectionMode,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Option<(Entity<Editor>, Entity<Pane>)> {
-        if locations.is_empty() {
-            log::error!("bug: open_locations_in_multibuffer called with empty list of locations");
-            return None;
-        }
-
-        let capability = workspace.project().read(cx).capability();
-        let mut ranges = <Vec<Range<Anchor>>>::new();
-
-        // a key to find existing multibuffer editors with the same set of locations
-        // to prevent us from opening more and more multibuffer tabs for searches and the like
-        let mut key = (title.clone(), vec![]);
-        let excerpt_buffer = cx.new(|cx| {
-            let key = &mut key.1;
-            let mut multibuffer = MultiBuffer::new(capability);
-            for (buffer, mut ranges_for_buffer) in locations {
-                ranges_for_buffer.sort_by_key(|range| (range.start, Reverse(range.end)));
-                key.push((buffer.read(cx).remote_id(), ranges_for_buffer.clone()));
-                multibuffer.set_excerpts_for_path(
-                    PathKey::for_buffer(&buffer, cx),
-                    buffer.clone(),
-                    ranges_for_buffer.clone(),
-                    multibuffer_context_lines(cx),
-                    cx,
-                );
-                let snapshot = multibuffer.snapshot(cx);
-                let buffer_snapshot = buffer.read(cx).snapshot();
-                ranges.extend(ranges_for_buffer.into_iter().filter_map(|range| {
-                    let text_range = buffer_snapshot.anchor_range_inside(range);
-                    let start = snapshot.anchor_in_buffer(text_range.start)?;
-                    let end = snapshot.anchor_in_buffer(text_range.end)?;
-                    Some(start..end)
-                }))
-            }
-
-            let final_snapshot = multibuffer.snapshot(cx);
-            ranges.sort_by(|a, b| a.start.cmp(&b.start, &final_snapshot));
-
-            multibuffer.with_title(title)
-        });
-        let existing = workspace.active_pane().update(cx, |pane, cx| {
-            pane.items()
-                .filter_map(|item| item.downcast::<Editor>())
-                .find(|editor| {
-                    editor
-                        .read(cx)
-                        .lookup_key
-                        .as_ref()
-                        .and_then(|it| {
-                            it.downcast_ref::<(String, Vec<(BufferId, Vec<Range<Point>>)>)>()
-                        })
-                        .is_some_and(|it| *it == key)
-                })
-        });
-        let was_existing = existing.is_some();
-        let editor = existing.unwrap_or_else(|| {
-            cx.new(|cx| {
-                let mut editor = Editor::for_multibuffer(
-                    excerpt_buffer,
-                    Some(workspace.project().clone()),
-                    window,
-                    cx,
-                );
-                editor.lookup_key = Some(Box::new(key));
-                editor
-            })
-        });
-        editor.update(cx, |editor, cx| match multibuffer_selection_mode {
-            MultibufferSelectionMode::First => {
-                if let Some(first_range) = ranges.first() {
-                    editor.change_selections(
-                        SelectionEffects::no_scroll(),
-                        window,
-                        cx,
-                        |selections| {
-                            selections.clear_disjoint();
-                            selections.select_anchor_ranges(std::iter::once(first_range.clone()));
-                        },
-                    );
-                }
-                editor.highlight_background(
-                    HighlightKey::Editor,
-                    &ranges,
-                    |_, theme| theme.colors().editor_highlighted_line_background,
-                    cx,
-                );
-            }
-            MultibufferSelectionMode::All => {
-                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
-                    selections.clear_disjoint();
-                    selections.select_anchor_ranges(ranges);
-                });
-            }
-        });
-
-        let item = Box::new(editor.clone());
-
-        let pane = if split {
-            workspace.adjacent_pane(window, cx)
-        } else {
-            workspace.active_pane().clone()
-        };
-        let activate_pane = split;
-
-        let mut destination_index = None;
-        pane.update(cx, |pane, cx| {
-            if allow_preview && !was_existing {
-                destination_index = pane.replace_preview_item_id(item.item_id(), window, cx);
-            }
-            if was_existing && !allow_preview {
-                pane.unpreview_item_if_preview(item.item_id());
-            }
-            pane.add_item(item, activate_pane, true, destination_index, window, cx);
-        });
-
-        Some((editor, pane))
-    }
-
     fn navigation_data(&self, cursor_anchor: Anchor, cx: &mut Context<Self>) -> NavigationData {
         let display_snapshot = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let buffer = self.buffer.read(cx).read(cx);
@@ -1737,84 +1222,7 @@ impl Editor {
             scroll_top_row,
         }
     }
-
-    fn expand_excerpts_for_direction(
-        &mut self,
-        lines: u32,
-        direction: ExpandExcerptDirection,
-        cx: &mut Context<Self>,
-    ) {
-        let selections = self.selections.disjoint_anchors_arc();
-
-        let lines = if lines == 0 {
-            EditorSettings::get_global(cx).expand_excerpt_lines
-        } else {
-            lines
-        };
-
-        let snapshot = self.buffer.read(cx).snapshot(cx);
-        let excerpt_anchors = selections
-            .iter()
-            .flat_map(|selection| {
-                snapshot
-                    .range_to_buffer_ranges(selection.range())
-                    .into_iter()
-                    .filter_map(|(buffer_snapshot, range, _)| {
-                        snapshot.anchor_in_excerpt(buffer_snapshot.anchor_after(range.start))
-                    })
-            })
-            .collect::<Vec<_>>();
-
-        if self.delegate_expand_excerpts {
-            cx.emit(EditorEvent::ExpandExcerptsRequested {
-                excerpt_anchors,
-                lines,
-                direction,
-            });
-            return;
-        }
-
-        self.buffer.update(cx, |buffer, cx| {
-            buffer.expand_excerpts(excerpt_anchors, lines, direction, cx)
-        })
-    }
-
-    fn compute_target_location(
-        &self,
-        lsp_location: lsp::Location,
-        server_id: LanguageServerId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<anyhow::Result<Option<Location>>> {
-        let Some(project) = self.project.clone() else {
-            return Task::ready(Ok(None));
-        };
-
-        cx.spawn_in(window, async move |editor, cx| {
-            let location_task = editor.update(cx, |_, cx| {
-                project.update(cx, |project, cx| {
-                    project.open_local_buffer_via_lsp(lsp_location.uri.clone(), server_id, cx)
-                })
-            })?;
-            let location = Some({
-                let target_buffer_handle = location_task.await.context("open local buffer")?;
-                let range = target_buffer_handle.read_with(cx, |target_buffer, _| {
-                    let target_start = target_buffer
-                        .clip_point_utf16(point_from_lsp(lsp_location.range.start), Bias::Left);
-                    let target_end = target_buffer
-                        .clip_point_utf16(point_from_lsp(lsp_location.range.end), Bias::Left);
-                    target_buffer.anchor_after(target_start)
-                        ..target_buffer.anchor_before(target_end)
-                });
-                Location {
-                    buffer: target_buffer_handle,
-                    range,
-                }
-            });
-            Ok(location)
-        })
-    }
-
+    
     fn go_to_singleton_buffer_range_impl(
         &mut self,
         range: Range<Point>,

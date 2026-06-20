@@ -129,26 +129,11 @@ pub struct EditorSettingsContent {
     /// Default: false
     pub redact_private_values: Option<bool>,
 
-    /// How many lines to expand the multibuffer excerpts by default
-    ///
-    /// Default: 3
-    pub expand_excerpt_lines: Option<u32>,
-
-    /// How many lines of context to provide in multibuffer excerpts by default
-    ///
-    /// Default: 2
-    pub excerpt_context_lines: Option<u32>,
-
     /// Whether to enable middle-click paste on Linux
     ///
     /// Default: true
     pub middle_click_paste: Option<bool>,
 
-    /// What to do when multibuffer is double clicked in some of its excerpts
-    /// (parts of singleton buffers).
-    ///
-    /// Default: select
-    pub double_click_in_multibuffer: Option<DoubleClickInMultibuffer>,
     /// Whether the editor search results will loop
     ///
     /// Default: true
@@ -444,31 +429,6 @@ pub enum SeedQuerySetting {
     Selection,
     /// Never populate the search query
     Never,
-}
-
-/// What to do when multibuffer is double clicked in some of its excerpts (parts of singleton buffers).
-#[derive(
-    Default,
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum DoubleClickInMultibuffer {
-    /// Behave as a regular buffer and select the whole word.
-    #[default]
-    Select,
-    /// Open the excerpt clicked as a new buffer in the new tab, if no `alt` modifier was pressed during double click.
-    /// Otherwise, behave as a regular buffer and select the whole word.
-    Open,
 }
 
 /// When to show the minimap thumb.

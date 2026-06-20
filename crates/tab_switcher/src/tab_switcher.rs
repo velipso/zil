@@ -237,7 +237,6 @@ struct TabMatch {
     item_index: usize,
     item: Box<dyn ItemHandle>,
     detail: usize,
-    preview: bool,
 }
 
 pub struct TabSwitcherDelegate {
@@ -379,7 +378,6 @@ impl TabSwitcherDelegate {
                     item_index,
                     item: item.clone(),
                     detail,
-                    preview: pane.is_active_preview_item(item.item_id()),
                 });
                 item_index += 1;
             }
@@ -470,7 +468,6 @@ impl TabSwitcherDelegate {
                 item_index,
                 item: item.boxed_clone(),
                 detail,
-                preview: pane.is_active_preview_item(item.item_id()),
             })
             .for_each(|tab_match| self.matches.push(tab_match));
 
@@ -779,7 +776,6 @@ impl PickerDelegate for TabSwitcherDelegate {
         let params = TabContentParams {
             detail: Some(tab_match.detail),
             selected: true,
-            preview: tab_match.preview,
             deemphasized: false,
         };
         let label = tab_match.item.tab_content(params, window, cx);

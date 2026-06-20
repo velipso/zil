@@ -66,7 +66,7 @@ use gpui::{
 };
 pub use history_manager::*;
 pub use item::{
-    FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, PreviewTabsSettings,
+    FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings,
     ProjectItem, SerializableItem, SerializableItemHandle, WeakItemHandle,
 };
 use itertools::Itertools;
@@ -2790,7 +2790,6 @@ impl Workspace {
                                 project_entry_id,
                                 project_path,
                                 true,
-                                entry.is_preview,
                                 true,
                                 None,
                                 window, cx,
@@ -4561,7 +4560,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<anyhow::Result<Box<dyn ItemHandle>>> {
-        self.open_path_preview(path, pane, focus_item, false, true, window, cx)
+        self.open_path_preview(path, pane, focus_item, true, window, cx)
     }
 
     pub fn open_path_preview(
@@ -4569,7 +4568,6 @@ impl Workspace {
         path: impl Into<ProjectPath>,
         pane: Option<WeakEntity<Pane>>,
         focus_item: bool,
-        allow_preview: bool,
         activate: bool,
         window: &mut Window,
         cx: &mut App,
@@ -4593,7 +4591,6 @@ impl Workspace {
                     project_entry_id,
                     project_path,
                     focus_item,
-                    allow_preview,
                     activate,
                     None,
                     window,
@@ -4610,13 +4607,12 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<anyhow::Result<Box<dyn ItemHandle>>> {
-        self.split_path_preview(path, false, None, window, cx)
+        self.split_path_preview(path, None, window, cx)
     }
 
     pub fn split_path_preview(
         &mut self,
         path: impl Into<ProjectPath>,
-        allow_preview: bool,
         split_direction: Option<SplitDirection>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -4651,7 +4647,6 @@ impl Workspace {
                         project_entry_id,
                         project_path,
                         true,
-                        allow_preview,
                         true,
                         None,
                         window,
@@ -4712,69 +4707,6 @@ impl Workspace {
     {
         self.find_project_item::<T>(pane, project_item, cx)
             .is_some()
-    }
-
-    pub fn open_project_item<T>(
-        &mut self,
-        pane: Entity<Pane>,
-        project_item: Entity<T::Item>,
-        activate_pane: bool,
-        focus_item: bool,
-        keep_old_preview: bool,
-        allow_new_preview: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<T>
-    where
-        T: ProjectItem,
-    {
-        let old_item_id = pane.read(cx).active_item().map(|item| item.item_id());
-
-        if let Some(item) = self.find_project_item(&pane, &project_item, cx) {
-            if !keep_old_preview
-                && let Some(old_id) = old_item_id
-                && old_id != item.item_id()
-            {
-                // switching to a different item, so unpreview old active item
-                pane.update(cx, |pane, _| {
-                    pane.unpreview_item_if_preview(old_id);
-                });
-            }
-
-            self.activate_item(&item, activate_pane, focus_item, window, cx);
-            if !allow_new_preview {
-                pane.update(cx, |pane, _| {
-                    pane.unpreview_item_if_preview(item.item_id());
-                });
-            }
-            return item;
-        }
-
-        let item = pane.update(cx, |pane, cx| {
-            cx.new(|cx| {
-                T::for_project_item(self.project().clone(), Some(pane), project_item, window, cx)
-            })
-        });
-        let mut destination_index = None;
-        pane.update(cx, |pane, cx| {
-            if !keep_old_preview && let Some(old_id) = old_item_id {
-                pane.unpreview_item_if_preview(old_id);
-            }
-            if allow_new_preview {
-                destination_index = pane.replace_preview_item_id(item.item_id(), window, cx);
-            }
-        });
-
-        self.add_item(
-            pane,
-            Box::new(item.clone()),
-            destination_index,
-            activate_pane,
-            focus_item,
-            window,
-            cx,
-        );
-        item
     }
 
     pub fn open_shared_screen(
@@ -6819,7 +6751,6 @@ impl Workspace {
                                 kind: Arc::from(handle.serialized_item_kind()),
                                 item_id: handle.item_id().as_u64(),
                                 active: Some(handle.item_id()) == active_item_id,
-                                preview: pane.is_active_preview_item(handle.item_id()),
                             })
                         })
                         .collect::<Vec<_>>(),

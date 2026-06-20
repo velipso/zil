@@ -684,8 +684,7 @@ impl EditorElement {
             true
         };
 
-        if let Some(mouse_position) = event.mouse_position()
-            && !pending_nonempty_selections
+        if !pending_nonempty_selections
             && hovered_link_modifier
             && mouse_down_hovered_link_modifier
             && text_hitbox.is_hovered(window)
@@ -694,8 +693,7 @@ impl EditorElement {
                 SelectionDragState::Dragging { .. }
             )
         {
-            let point = position_map.point_for_position(mouse_position);
-            editor.handle_click_hovered_link(point, event.modifiers(), window, cx);
+            editor.handle_click_hovered_link(window, cx);
             editor.selection_drag_state = SelectionDragState::None;
 
             cx.stop_propagation();
@@ -717,8 +715,7 @@ impl EditorElement {
         editor.prev_pressure_stage = Some(event.stage);
 
         if force_click_possible && text_hitbox.is_hovered(window) {
-            let point = position_map.point_for_position(event.position);
-            editor.handle_click_hovered_link(point, event.modifiers, window, cx);
+            editor.handle_click_hovered_link(window, cx);
             editor.selection_drag_state = SelectionDragState::None;
             cx.stop_propagation();
         }

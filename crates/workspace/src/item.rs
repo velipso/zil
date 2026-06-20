@@ -61,17 +61,6 @@ pub struct ItemSettings {
     pub show_close_button: ShowCloseButton,
 }
 
-#[derive(RegisterSetting)]
-pub struct PreviewTabsSettings {
-    pub enabled: bool,
-    pub enable_preview_from_project_panel: bool,
-    pub enable_preview_from_file_finder: bool,
-    pub enable_preview_from_multibuffer: bool,
-    pub enable_preview_multibuffer_from_code_navigation: bool,
-    pub enable_preview_file_from_code_navigation: bool,
-    pub enable_keep_preview_on_code_navigation: bool,
-}
-
 impl Settings for ItemSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let tabs = content.tabs.as_ref().unwrap();
@@ -92,29 +81,6 @@ impl Settings for ItemSettings {
     }
 }
 
-impl Settings for PreviewTabsSettings {
-    fn from_settings(content: &settings::SettingsContent) -> Self {
-        let preview_tabs = content.preview_tabs.as_ref().unwrap();
-        Self {
-            enabled: preview_tabs.enabled.unwrap(),
-            enable_preview_from_project_panel: preview_tabs
-                .enable_preview_from_project_panel
-                .unwrap(),
-            enable_preview_from_file_finder: preview_tabs.enable_preview_from_file_finder.unwrap(),
-            enable_preview_from_multibuffer: preview_tabs.enable_preview_from_multibuffer.unwrap(),
-            enable_preview_multibuffer_from_code_navigation: preview_tabs
-                .enable_preview_multibuffer_from_code_navigation
-                .unwrap(),
-            enable_preview_file_from_code_navigation: preview_tabs
-                .enable_preview_file_from_code_navigation
-                .unwrap(),
-            enable_keep_preview_on_code_navigation: preview_tabs
-                .enable_keep_preview_on_code_navigation
-                .unwrap(),
-        }
-    }
-}
-
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum ItemEvent {
     CloseItem,
@@ -127,7 +93,6 @@ pub enum ItemEvent {
 pub struct TabContentParams {
     pub detail: Option<usize>,
     pub selected: bool,
-    pub preview: bool,
     /// Tab content should be deemphasized when active pane does not have focus.
     pub deemphasized: bool,
 }
@@ -947,7 +912,6 @@ impl<T: Item> ItemHandle for Entity<T> {
                                     },
                                 );
                             }
-                            pane.update(cx, |pane, cx| pane.handle_item_edit(item.item_id(), cx));
                         }
                     });
                 },

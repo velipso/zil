@@ -69,11 +69,10 @@ impl MultiBuffer {
         &mut self,
         buffer: Entity<Buffer>,
         ranges: impl IntoIterator<Item = Range<Point>>,
-        context_line_count: u32,
         cx: &mut Context<Self>,
     ) -> bool {
         let path = PathKey::for_buffer(&buffer, cx);
-        self.set_excerpts_for_path(path, buffer, ranges, context_line_count, cx)
+        self.set_excerpts_for_path(path, buffer, ranges, cx)
     }
 
     /// Sets excerpts, returns `true` if at least one new excerpt was added.
@@ -85,12 +84,11 @@ impl MultiBuffer {
         path: PathKey,
         buffer: Entity<Buffer>,
         ranges: impl IntoIterator<Item = Range<Point>>,
-        context_line_count: u32,
         cx: &mut Context<Self>,
     ) -> bool {
         let buffer_snapshot = buffer.read(cx).snapshot();
         let ranges: Vec<_> = ranges.into_iter().collect();
-        let excerpt_ranges = build_excerpt_ranges(ranges, context_line_count, &buffer_snapshot);
+        let excerpt_ranges = build_excerpt_ranges(ranges, &buffer_snapshot);
 
         let merged = Self::merge_excerpt_ranges(&excerpt_ranges);
         let (inserted, _path_key_index) =
@@ -107,12 +105,11 @@ impl MultiBuffer {
         path: PathKey,
         buffer: Entity<Buffer>,
         ranges: impl IntoIterator<Item = Range<Point>>,
-        context_line_count: u32,
         cx: &mut Context<Self>,
     ) -> bool {
         let buffer_snapshot = buffer.read(cx).snapshot();
         let ranges: Vec<_> = ranges.into_iter().collect();
-        let excerpt_ranges = build_excerpt_ranges(ranges, context_line_count, &buffer_snapshot);
+        let excerpt_ranges = build_excerpt_ranges(ranges, &buffer_snapshot);
         let merged = self.merge_new_with_existing_excerpt_ranges(
             &path,
             &buffer_snapshot,
@@ -185,7 +182,6 @@ impl MultiBuffer {
         path_key: PathKey,
         buffer: Entity<Buffer>,
         ranges: Vec<Range<text::Anchor>>,
-        context_line_count: u32,
         cx: &Context<Self>,
     ) -> impl Future<Output = Vec<Range<Anchor>>> + use<> {
         let buffer_snapshot = buffer.read(cx).snapshot();
@@ -197,7 +193,7 @@ impl MultiBuffer {
                 .background_spawn(async move {
                     let point_ranges = ranges.iter().map(|range| range.to_point(&snapshot));
                     let excerpt_ranges =
-                        build_excerpt_ranges(point_ranges, context_line_count, &snapshot);
+                        build_excerpt_ranges(point_ranges, &snapshot);
                     let merged = Self::merge_excerpt_ranges(&excerpt_ranges);
                     (ranges, merged)
                 })

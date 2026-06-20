@@ -4,7 +4,7 @@ use gpui::App;
 use language::CursorShape;
 pub use settings::{
     CurrentLineHighlight, DelayMs,
-    DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
+    DisplayIn, DocumentColorsRenderMode,
     MinimapThumb, MinimapThumbBorder,
     MultiCursorModifier, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
 };
@@ -38,10 +38,7 @@ pub struct EditorSettings {
     pub use_smartcase_search: bool,
     pub multi_cursor_modifier: MultiCursorModifier,
     pub redact_private_values: bool,
-    pub expand_excerpt_lines: u32,
-    pub excerpt_context_lines: u32,
     pub middle_click_paste: bool,
-    pub double_click_in_multibuffer: DoubleClickInMultibuffer,
     pub search_wrap: bool,
     pub search: SearchSettings,
     pub drag_and_drop_selection: DragAndDropSelection,
@@ -224,10 +221,7 @@ impl Settings for EditorSettings {
             use_smartcase_search: editor.use_smartcase_search.unwrap(),
             multi_cursor_modifier: editor.multi_cursor_modifier.unwrap(),
             redact_private_values: editor.redact_private_values.unwrap(),
-            expand_excerpt_lines: editor.expand_excerpt_lines.unwrap(),
-            excerpt_context_lines: editor.excerpt_context_lines.unwrap(),
             middle_click_paste: editor.middle_click_paste.unwrap(),
-            double_click_in_multibuffer: editor.double_click_in_multibuffer.unwrap(),
             search_wrap: editor.search_wrap.unwrap(),
             search: SearchSettings {
                 whole_word: search.whole_word.unwrap(),

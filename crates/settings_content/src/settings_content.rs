@@ -141,8 +141,6 @@ pub struct SettingsContent {
     pub tab_bar: Option<TabBarSettingsContent>,
     pub status_bar: Option<StatusBarSettingsContent>,
 
-    pub preview_tabs: Option<PreviewTabsSettingsContent>,
-
     pub agent: Option<AgentSettingsContent>,
     pub agent_servers: Option<AllAgentServersSettings>,
 
@@ -1032,13 +1030,6 @@ pub struct OutlinePanelSettingsContent {
     pub indent_guides: Option<IndentGuidesSettingsContent>,
     /// Scrollbar-related settings
     pub scrollbar: Option<ScrollbarSettingsContent>,
-    /// Default depth to expand outline items in the current file.
-    /// The default depth to which outline entries are expanded on reveal.
-    /// - Set to 0 to collapse all items that have children
-    /// - Set to 1 or higher to collapse items at that depth or deeper
-    ///
-    /// Default: 100
-    pub expand_outlines_with_depth: Option<usize>,
 }
 
 #[derive(

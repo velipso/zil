@@ -1477,76 +1477,6 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn multibuffer_section() -> [SettingsPageItem; 5] {
-        [
-            SettingsPageItem::SectionHeader("Multibuffer"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Double Click In Multibuffer",
-                description: "What to do when multibuffer is double-clicked in some of its excerpts.",
-                field: Box::new(SettingField {
-                    json_path: Some("double_click_in_multibuffer"),
-                    pick: |settings_content| {
-                        settings_content.editor.double_click_in_multibuffer.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.double_click_in_multibuffer = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Expand Excerpt Lines",
-                description: "How many lines to expand the multibuffer excerpts by default.",
-                field: Box::new(SettingField {
-                    json_path: Some("expand_excerpt_lines"),
-                    pick: |settings_content| settings_content.editor.expand_excerpt_lines.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.expand_excerpt_lines = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Excerpt Context Lines",
-                description: "How many lines of context to provide in multibuffer excerpts by default.",
-                field: Box::new(SettingField {
-                    json_path: Some("excerpt_context_lines"),
-                    pick: |settings_content| settings_content.editor.excerpt_context_lines.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.excerpt_context_lines = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Expand Outlines With Depth",
-                description: "Default depth to expand outline items in the current file.",
-                field: Box::new(SettingField {
-                    json_path: Some("outline_panel.expand_outlines_with_depth"),
-                    pick: |settings_content| {
-                        settings_content
-                            .outline_panel
-                            .as_ref()
-                            .and_then(|outline_panel| {
-                                outline_panel.expand_outlines_with_depth.as_ref()
-                            })
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .outline_panel
-                            .get_or_insert_default()
-                            .expand_outlines_with_depth = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn scrolling_section() -> [SettingsPageItem; 9] {
         [
             SettingsPageItem::SectionHeader("Scrolling"),
@@ -2586,7 +2516,6 @@ fn editor_page() -> SettingsPage {
     let items = concat_sections!(
         auto_save_section(),
         which_key_section(),
-        multibuffer_section(),
         scrolling_section(),
         hover_popover_section(),
         drag_and_drop_selection_section(),
@@ -3675,162 +3604,6 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn preview_tabs_section() -> [SettingsPageItem; 8] {
-        [
-            SettingsPageItem::SectionHeader("Preview Tabs"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Preview Tabs Enabled",
-                description: "Show opened editors as preview tabs.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enabled"),
-                    pick: |settings_content| {
-                        settings_content.preview_tabs.as_ref()?.enabled.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enabled = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enable Preview From Project Panel",
-                description: "Whether to open tabs in preview mode when opened from the project panel with a single click.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enable_preview_from_project_panel"),
-                    pick: |settings_content| {
-                        settings_content
-                            .preview_tabs
-                            .as_ref()?
-                            .enable_preview_from_project_panel
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enable_preview_from_project_panel = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enable Preview From File Finder",
-                description: "Whether to open tabs in preview mode when selected from the file finder.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enable_preview_from_file_finder"),
-                    pick: |settings_content| {
-                        settings_content
-                            .preview_tabs
-                            .as_ref()?
-                            .enable_preview_from_file_finder
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enable_preview_from_file_finder = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enable Preview From Multibuffer",
-                description: "Whether to open tabs in preview mode when opened from a multibuffer.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enable_preview_from_multibuffer"),
-                    pick: |settings_content| {
-                        settings_content
-                            .preview_tabs
-                            .as_ref()?
-                            .enable_preview_from_multibuffer
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enable_preview_from_multibuffer = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enable Preview Multibuffer From Code Navigation",
-                description: "Whether to open tabs in preview mode when code navigation is used to open a multibuffer.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enable_preview_multibuffer_from_code_navigation"),
-                    pick: |settings_content| {
-                        settings_content
-                            .preview_tabs
-                            .as_ref()?
-                            .enable_preview_multibuffer_from_code_navigation
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enable_preview_multibuffer_from_code_navigation = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enable Preview File From Code Navigation",
-                description: "Whether to open tabs in preview mode when code navigation is used to open a single file.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enable_preview_file_from_code_navigation"),
-                    pick: |settings_content| {
-                        settings_content
-                            .preview_tabs
-                            .as_ref()?
-                            .enable_preview_file_from_code_navigation
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enable_preview_file_from_code_navigation = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enable Keep Preview On Code Navigation",
-                description: "Whether to keep tabs in preview mode when code navigation is used to navigate away from them. If `enable_preview_file_from_code_navigation` or `enable_preview_multibuffer_from_code_navigation` is also true, the new tab may replace the existing one.",
-                field: Box::new(SettingField {
-                    json_path: Some("preview_tabs.enable_keep_preview_on_code_navigation"),
-                    pick: |settings_content| {
-                        settings_content
-                            .preview_tabs
-                            .as_ref()?
-                            .enable_keep_preview_on_code_navigation
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .preview_tabs
-                            .get_or_insert_default()
-                            .enable_keep_preview_on_code_navigation = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn layout_section() -> [SettingsPageItem; 6] {
         [
             SettingsPageItem::SectionHeader("Layout"),
@@ -4095,7 +3868,6 @@ fn window_and_layout_page() -> SettingsPage {
             title_bar_section(),
             tab_bar_section(),
             tab_settings_section(),
-            preview_tabs_section(),
             layout_section(),
             window_section(),
             pane_modifiers_section(),

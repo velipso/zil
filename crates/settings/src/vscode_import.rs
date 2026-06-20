@@ -201,7 +201,6 @@ impl VsCodeSettings {
             node: self.node_binary_settings(),
 
             outline_panel: self.outline_panel_settings_content(),
-            preview_tabs: self.preview_tabs_settings_content(),
             project: self.project_settings_content(),
             project_panel: self.project_panel_settings_content(),
             proxy: self.read_string("http.proxy"),
@@ -255,10 +254,7 @@ impl VsCodeSettings {
                 "all" => Some(CurrentLineHighlight::All),
                 _ => None,
             }),
-            double_click_in_multibuffer: None,
             drag_and_drop_selection: None,
-            excerpt_context_lines: None,
-            expand_excerpt_lines: None,
             fast_scroll_sensitivity: self.read_f32("editor.fastScrollSensitivity"),
             sticky_scroll: self.sticky_scroll_content(),
             gutter: self.gutter_content(),
@@ -683,20 +679,6 @@ impl VsCodeSettings {
                         ShowCloseButton::Hidden
                     }
                 }),
-        })
-    }
-
-    fn preview_tabs_settings_content(&self) -> Option<PreviewTabsSettingsContent> {
-        skip_default(PreviewTabsSettingsContent {
-            enabled: self.read_bool("workbench.editor.enablePreview"),
-            enable_preview_from_project_panel: None,
-            enable_preview_from_file_finder: self
-                .read_bool("workbench.editor.enablePreviewFromQuickOpen"),
-            enable_preview_from_multibuffer: None,
-            enable_preview_multibuffer_from_code_navigation: None,
-            enable_preview_file_from_code_navigation: None,
-            enable_keep_preview_on_code_navigation: self
-                .read_bool("workbench.editor.enablePreviewFromCodeNavigation"),
         })
     }
 

@@ -1,4 +1,4 @@
-use editor::{Bias, Editor, SelectionEffects, scroll::Autoscroll, styled_runs_for_code_label};
+use editor::{Bias, styled_runs_for_code_label};
 use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{
     App, Context, DismissEvent, Entity, HighlightStyle, ParentElement, StyledText, Task, TaskExt,
@@ -126,17 +126,19 @@ impl PickerDelegate for ProjectSymbolsDelegate {
             cx.spawn_in(window, async move |_, cx| {
                 let buffer = buffer.await?;
                 workspace.update_in(cx, |workspace, window, cx| {
-                    let position = buffer
+                    let _position = buffer
                         .read(cx)
                         .clip_point_utf16(symbol.range.start, Bias::Left);
-                    let pane = if secondary {
+                    let _pane = if secondary {
                         workspace.adjacent_pane(window, cx)
                     } else {
                         workspace.active_pane().clone()
                     };
 
-                    let editor = workspace.open_project_item::<Editor>(
-                        pane, buffer, true, true, true, true, window, cx,
+                    todo!("can't open project item");
+
+                    /*let editor = workspace.open_project_item::<Editor>(
+                        pane, buffer, true, true, window, cx,
                     );
 
                     editor.update(cx, |editor, cx| {
@@ -155,7 +157,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
                             cx,
                             |s| s.select_ranges([anchor..anchor]),
                         );
-                    });
+                    });*/
                 })?;
                 anyhow::Ok(())
             })

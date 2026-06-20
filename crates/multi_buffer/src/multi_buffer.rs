@@ -47,7 +47,7 @@ use std::{
     ops::{self, Add, AddAssign, ControlFlow, Range, Sub, SubAssign},
     rc::Rc,
     str,
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 use sum_tree::{Bias, Cursor, Dimension, Dimensions, SumTree, TreeMap};
 use text::{
@@ -59,12 +59,6 @@ use unicode_segmentation::UnicodeSegmentation;
 use ztracing::instrument;
 
 pub use self::path_key::PathKey;
-
-pub static EXCERPT_CONTEXT_LINES: OnceLock<fn(&App) -> u32> = OnceLock::new();
-
-pub fn excerpt_context_lines(cx: &App) -> u32 {
-    EXCERPT_CONTEXT_LINES.get().map(|f| f(cx)).unwrap_or(2)
-}
 
 /// One or more [`Buffers`](Buffer) being edited in a single view.
 ///
@@ -1157,7 +1151,6 @@ impl MultiBuffer {
             PathKey::sorted(0),
             buffer.clone(),
             [Point::zero()..buffer.read(cx).max_point()],
-            0,
             cx,
         );
         this
@@ -2547,15 +2540,14 @@ impl MultiBuffer {
 
 fn build_excerpt_ranges(
     ranges: impl IntoIterator<Item = Range<Point>>,
-    context_line_count: u32,
     buffer_snapshot: &BufferSnapshot,
 ) -> Vec<ExcerptRange<Point>> {
     ranges
         .into_iter()
         .map(|range| {
-            let start_row = range.start.row.saturating_sub(context_line_count);
+            let start_row = range.start.row;
             let start = Point::new(start_row, 0);
-            let end_row = (range.end.row + context_line_count).min(buffer_snapshot.max_point().row);
+            let end_row = range.end.row.min(buffer_snapshot.max_point().row);
             let end = Point::new(end_row, buffer_snapshot.line_len(end_row));
             ExcerptRange {
                 context: start..end,

@@ -6,7 +6,7 @@ use crate::{
     invalid_item_view::InvalidItemView,
     item::{
         ActivateOnClose, ClosePosition, Item, ItemBufferKind, ItemHandle, ItemSettings,
-        PreviewTabsSettings, ProjectItemKind, SaveOptions, ShowCloseButton,
+        ProjectItemKind, SaveOptions, ShowCloseButton,
         TabContentParams, TabTooltipContent, WeakItemHandle,
     },
     move_item,
@@ -379,7 +379,6 @@ pub struct Pane {
     zoomed: bool,
     was_focused: bool,
     active_item_index: usize,
-    preview_item_id: Option<EntityId>,
     last_focus_handle_by_item: HashMap<EntityId, WeakFocusHandle>,
     nav_history: NavHistory,
     toolbar: Entity<Toolbar>,
@@ -449,7 +448,6 @@ struct NavHistoryState {
     paths_by_item: HashMap<EntityId, (ProjectPath, Option<PathBuf>)>,
     pane: WeakEntity<Pane>,
     next_timestamp: Arc<AtomicUsize>,
-    preview_item_id: Option<EntityId>,
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -475,7 +473,6 @@ pub struct NavigationEntry {
     pub item: Arc<dyn WeakItemHandle + Send + Sync>,
     pub data: Option<Arc<dyn Any + Send + Sync>>,
     pub timestamp: usize,
-    pub is_preview: bool,
     /// Row position for Neovim-style deduplication. When set, entries with the
     /// same item and row are considered duplicates and deduplicated.
     pub row: Option<u32>,
@@ -539,7 +536,6 @@ impl Pane {
             was_focused: false,
             zoomed: false,
             active_item_index: 0,
-            preview_item_id: None,
             max_tabs,
             use_max_tabs,
             last_focus_handle_by_item: Default::default(),
@@ -553,7 +549,6 @@ impl Pane {
                 paths_by_item: Default::default(),
                 pane: handle,
                 next_timestamp,
-                preview_item_id: None,
             }))),
             toolbar: cx.new(|_| Toolbar::new()),
             tab_bar_scroll_handle: ScrollHandle::new(),
@@ -694,11 +689,6 @@ impl Pane {
 
         self.show_tab_bar_buttons = tab_bar_settings.show_tab_bar_buttons;
         self.show_tab_bar_stacked = tab_bar_settings.show_tab_bar_stacked;
-
-        if !PreviewTabsSettings::get_global(cx).enabled {
-            self.preview_item_id = None;
-            self.nav_history.0.lock().preview_item_id = None;
-        }
 
         let workspace_settings = WorkspaceSettings::get_global(cx);
 
@@ -881,80 +871,11 @@ impl Pane {
         self.toolbar.update(cx, |_, cx| cx.notify());
     }
 
-    pub fn preview_item_id(&self) -> Option<EntityId> {
-        self.preview_item_id
-    }
-
-    pub fn preview_item(&self) -> Option<Box<dyn ItemHandle>> {
-        self.preview_item_id
-            .and_then(|id| self.items.iter().find(|item| item.item_id() == id))
-            .cloned()
-    }
-
-    pub fn preview_item_idx(&self) -> Option<usize> {
-        if let Some(preview_item_id) = self.preview_item_id {
-            self.items
-                .iter()
-                .position(|item| item.item_id() == preview_item_id)
-        } else {
-            None
-        }
-    }
-
-    pub fn is_active_preview_item(&self, item_id: EntityId) -> bool {
-        self.preview_item_id == Some(item_id)
-    }
-
-    /// Promotes the item with the given ID to not be a preview item.
-    /// This does nothing if it wasn't already a preview item.
-    pub fn unpreview_item_if_preview(&mut self, item_id: EntityId) {
-        if self.is_active_preview_item(item_id) {
-            self.preview_item_id = None;
-            self.nav_history.0.lock().preview_item_id = None;
-        }
-    }
-
-    /// Marks the item with the given ID as the preview item.
-    /// This will be ignored if the global setting `preview_tabs` is disabled.
-    ///
-    /// The old preview item (if there was one) is closed and its index is returned.
-    pub fn replace_preview_item_id(
-        &mut self,
-        item_id: EntityId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<usize> {
-        let idx = self.close_current_preview_item(window, cx);
-        self.set_preview_item_id(Some(item_id), cx);
-        idx
-    }
-
-    /// Marks the item with the given ID as the preview item.
-    /// This will be ignored if the global setting `preview_tabs` is disabled.
-    ///
-    /// This is a low-level method. Prefer `unpreview_item_if_preview()` or `set_new_preview_item()`.
-    pub(crate) fn set_preview_item_id(&mut self, item_id: Option<EntityId>, cx: &App) {
-        if item_id.is_none() || PreviewTabsSettings::get_global(cx).enabled {
-            self.preview_item_id = item_id;
-            self.nav_history.0.lock().preview_item_id = item_id;
-        }
-    }
-
-    pub fn handle_item_edit(&mut self, item_id: EntityId, cx: &App) {
-        if let Some(preview_item) = self.preview_item()
-            && preview_item.item_id() == item_id
-            && !preview_item.preserve_preview(cx)
-        {
-            self.unpreview_item_if_preview(item_id);
-        }
-    }
-
     pub(crate) fn open_item(
         &mut self,
         project_entry_id: Option<ProjectEntryId>,
         project_path: ProjectPath,
         focus_item: bool,
-        allow_preview: bool,
         activate: bool,
         suggested_position: Option<usize>,
         window: &mut Window,
@@ -984,13 +905,8 @@ impl Pane {
             }
         }
 
-        let preview_was_active = self.preview_item_idx() == Some(self.active_item_index);
-
         let set_up_existing_item =
             |index: usize, pane: &mut Self, window: &mut Window, cx: &mut Context<Self>| {
-                if !allow_preview && let Some(item) = pane.items.get(index) {
-                    pane.unpreview_item_if_preview(item.item_id());
-                }
                 if activate {
                     pane.activate_item(index, focus_item, focus_item, window, cx);
                 }
@@ -1000,12 +916,6 @@ impl Pane {
                                pane: &mut Self,
                                window: &mut Window,
                                cx: &mut Context<Self>| {
-            let new_item_id = new_item.item_id();
-
-            if allow_preview && preview_was_active {
-                pane.set_preview_item_id(Some(new_item_id), cx);
-            }
-
             pane.add_item_inner(
                 new_item,
                 true,
@@ -1015,10 +925,6 @@ impl Pane {
                 window,
                 cx,
             );
-
-            if allow_preview && !preview_was_active {
-                pane.set_preview_item_id(Some(new_item_id), cx);
-            }
         };
 
         if let Some((index, existing_item)) = existing_item {
@@ -1027,11 +933,7 @@ impl Pane {
         } else {
             // If the item is being opened as preview and we have an existing preview tab,
             // open the new item in the position of the existing preview tab.
-            let destination_index = if allow_preview {
-                self.close_current_preview_item(window, cx)
-            } else {
-                suggested_position
-            };
+            let destination_index = suggested_position;
 
             let new_item = build_item(self, window, cx);
             // A special case that won't ever get a `project_entry_id` but has to be deduplicated nonetheless.
@@ -1074,30 +976,6 @@ impl Pane {
                 set_up_new_item(new_item.clone(), destination_index, self, window, cx);
                 new_item
             }
-        }
-    }
-
-    pub fn close_current_preview_item(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<usize> {
-        let item_idx = self.preview_item_idx()?;
-        let id = self.preview_item_id()?;
-        self.preview_item_id = None;
-
-        let prev_active_item_index = self.active_item_index;
-        self.remove_item(id, false, false, window, cx);
-        self.active_item_index = prev_active_item_index;
-        if item_idx < prev_active_item_index {
-            self.active_item_index -= 1;
-        }
-        self.nav_history.0.lock().preview_item_id = None;
-
-        if item_idx < self.items.len() {
-            Some(item_idx)
-        } else {
-            None
         }
     }
 
@@ -1208,9 +1086,7 @@ impl Pane {
             cx.notify();
 
             if activate {
-                if insertion_index <= self.active_item_index
-                    && self.preview_item_idx() != Some(self.active_item_index)
-                {
+                if insertion_index <= self.active_item_index {
                     self.active_item_index += 1;
                 }
 
@@ -1509,8 +1385,6 @@ impl Pane {
             Some(result) => result,
             None => self.active_item_id(),
         };
-
-        self.unpreview_item_if_preview(active_item_id);
 
         self.close_items(
             window,
@@ -1987,7 +1861,6 @@ impl Pane {
         item.deactivated(window, cx);
         item.on_removed(cx);
         self.nav_history.set_mode(mode);
-        self.unpreview_item_if_preview(item.item_id());
 
         if let Some(path) = item.project_path(cx) {
             let abs_path = self
@@ -2212,8 +2085,7 @@ impl Pane {
             }
 
             if can_save {
-                pane.update_in(cx, |pane, window, cx| {
-                    pane.unpreview_item_if_preview(item.item_id());
+                pane.update_in(cx, |_pane, window, cx| {
                     item.save(
                         SaveOptions {
                             format: should_format,
@@ -2276,8 +2148,7 @@ impl Pane {
 
                 save_task.await?;
                 if should_format {
-                    pane.update_in(cx, |pane, window, cx| {
-                        pane.unpreview_item_if_preview(item.item_id());
+                    pane.update_in(cx, |_pane, window, cx| {
                         item.save(
                             SaveOptions {
                                 format: true,
@@ -2451,16 +2322,11 @@ impl Pane {
         cx: &mut Context<Pane>,
     ) -> impl IntoElement + use<> {
         let is_active = ix == self.active_item_index;
-        let is_preview = self
-            .preview_item_id
-            .map(|id| id == item.item_id())
-            .unwrap_or(false);
 
         let label = item.tab_content(
             TabContentParams {
                 detail: Some(detail),
                 selected: is_active,
-                preview: is_preview,
                 deemphasized: !self.has_focus(window, cx),
             },
             window,
@@ -2530,7 +2396,6 @@ impl Pane {
                 let item_handle = item.boxed_clone();
                 move |pane: &mut Self, event: &ClickEvent, window, cx| {
                     if event.click_count() > 1 {
-                        pane.unpreview_item_if_preview(item_id);
                         let extra_actions = item_handle.tab_extra_context_menu_actions(window, cx);
                         if let Some((_, action)) = extra_actions
                             .into_iter()
@@ -3119,7 +2984,6 @@ impl Pane {
         let mut to_pane = cx.entity();
         let split_direction = self.drag_split_direction;
         let item_id = dragged_tab.item.item_id();
-        self.unpreview_item_if_preview(item_id);
 
         let is_clone = cfg!(target_os = "macos") && window.modifiers().alt
             || cfg!(not(target_os = "macos")) && window.modifiers().control;
@@ -3232,7 +3096,6 @@ impl Pane {
                                                 project_entry_id,
                                                 project_path,
                                                 true,
-                                                false,
                                                 true,
                                                 target,
                                                 window,
@@ -3528,19 +3391,6 @@ impl Render for Pane {
             .on_action(cx.listener(Self::activate_next_item))
             .on_action(cx.listener(Self::swap_item_left))
             .on_action(cx.listener(Self::swap_item_right))
-            .when(PreviewTabsSettings::get_global(cx).enabled, |this| {
-                this.on_action(
-                    cx.listener(|pane: &mut Pane, _: &TogglePreviewTab, window, cx| {
-                        if let Some(active_item_id) = pane.active_item().map(|i| i.item_id()) {
-                            if pane.is_active_preview_item(active_item_id) {
-                                pane.unpreview_item_if_preview(active_item_id);
-                            } else {
-                                pane.replace_preview_item_id(active_item_id, window, cx);
-                            }
-                        }
-                    }),
-                )
-            })
             .on_action(
                 cx.listener(|pane: &mut Self, action: &CloseActiveItem, window, cx| {
                     pane.close_active_item(action, window, cx)
@@ -3755,19 +3605,16 @@ impl ItemNavHistory {
             .upgrade()
             .is_some_and(|item| item.include_in_nav_history())
         {
-            let is_preview_item = self.history.0.lock().preview_item_id == Some(self.item.id());
             self.history
-                .push(data, self.item.clone(), is_preview_item, row, cx);
+                .push(data, self.item.clone(), row, cx);
         }
     }
 
     pub fn navigation_entry(&self, data: Option<Arc<dyn Any + Send + Sync>>) -> NavigationEntry {
-        let is_preview_item = self.history.0.lock().preview_item_id == Some(self.item.id());
         NavigationEntry {
             item: self.item.clone(),
             data,
             timestamp: 0,
-            is_preview: is_preview_item,
             row: None,
         }
     }
@@ -3871,7 +3718,6 @@ impl NavHistory {
         &mut self,
         data: Option<D>,
         item: Arc<dyn WeakItemHandle + Send + Sync>,
-        is_preview: bool,
         row: Option<u32>,
         cx: &mut App,
     ) {
@@ -3895,7 +3741,6 @@ impl NavHistory {
                     item,
                     data: data.map(|data| Arc::new(data) as Arc<dyn Any + Send + Sync>),
                     timestamp: state.next_timestamp.fetch_add(1, Ordering::SeqCst),
-                    is_preview,
                     row,
                 });
                 state.forward_stack.clear();
@@ -3910,7 +3755,6 @@ impl NavHistory {
                     item,
                     data: data.map(|data| Arc::new(data) as Arc<dyn Any + Send + Sync>),
                     timestamp: state.next_timestamp.fetch_add(1, Ordering::SeqCst),
-                    is_preview,
                     row,
                 });
             }
@@ -3926,11 +3770,9 @@ impl NavHistory {
                     item,
                     data: data.map(|data| Arc::new(data) as Arc<dyn Any + Send + Sync>),
                     timestamp: state.next_timestamp.fetch_add(1, Ordering::SeqCst),
-                    is_preview,
                     row,
                 });
             }
-            NavigationMode::ClosingItem if is_preview => return,
             NavigationMode::ClosingItem => {
                 if state.closed_stack.len() >= MAX_NAVIGATION_HISTORY_LEN {
                     state.closed_stack.pop_front();
@@ -3939,7 +3781,6 @@ impl NavHistory {
                     item,
                     data: data.map(|data| Arc::new(data) as Arc<dyn Any + Send + Sync>),
                     timestamp: state.next_timestamp.fetch_add(1, Ordering::SeqCst),
-                    is_preview,
                     row,
                 });
             }
@@ -4065,7 +3906,6 @@ impl Render for DraggedTab {
             TabContentParams {
                 detail: Some(self.detail),
                 selected: false,
-                preview: false,
                 deemphasized: false,
             },
             window,
@@ -4987,44 +4827,6 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_close_other_items_unpreviews_active_item(cx: &mut TestAppContext) {
-        init_test(cx);
-        let fs = FakeFs::new(cx.executor());
-
-        let project = Project::test(fs, None, cx).await;
-        let (workspace, cx) =
-            cx.add_window_view(|window, cx| Workspace::test_new(project.clone(), window, cx));
-        let pane = workspace.read_with(cx, |workspace, _| workspace.active_pane().clone());
-
-        add_labeled_item(&pane, "A", false, cx);
-        add_labeled_item(&pane, "B", false, cx);
-        let item_c = add_labeled_item(&pane, "C", false, cx);
-        assert_item_labels(&pane, ["A", "B", "C*"], cx);
-
-        pane.update(cx, |pane, cx| {
-            pane.set_preview_item_id(Some(item_c.item_id()), cx);
-        });
-        assert!(pane.read_with(cx, |pane, _| pane.preview_item_id()
-            == Some(item_c.item_id())));
-
-        pane.update_in(cx, |pane, window, cx| {
-            pane.close_other_items(
-                &CloseOtherItems {
-                    save_intent: None,
-                },
-                Some(item_c.item_id()),
-                window,
-                cx,
-            )
-        })
-        .await
-        .unwrap();
-
-        assert!(pane.read_with(cx, |pane, _| pane.preview_item_id().is_none()));
-        assert_item_labels(&pane, ["C*"], cx);
-    }
-
-    #[gpui::test]
     async fn test_close_clean_items(cx: &mut TestAppContext) {
         init_test(cx);
         let fs = FakeFs::new(cx.executor());
@@ -5567,63 +5369,6 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_reopening_closed_item_after_unpreview(cx: &mut TestAppContext) {
-        init_test(cx);
-
-        cx.update_global::<SettingsStore, ()>(|store, cx| {
-            store.update_user_settings(cx, |settings| {
-                settings.preview_tabs.get_or_insert_default().enabled = Some(true);
-            });
-        });
-
-        let fs = FakeFs::new(cx.executor());
-        let project = Project::test(fs, None, cx).await;
-        let (workspace, cx) =
-            cx.add_window_view(|window, cx| Workspace::test_new(project.clone(), window, cx));
-        let pane = workspace.read_with(cx, |workspace, _| workspace.active_pane().clone());
-
-        // Add an item as preview
-        let item = pane.update_in(cx, |pane, window, cx| {
-            let item = Box::new(cx.new(|cx| TestItem::new(cx).with_label("A")));
-            pane.add_item(item.clone(), true, true, None, window, cx);
-            pane.set_preview_item_id(Some(item.item_id()), cx);
-            item
-        });
-
-        // Verify item is preview
-        pane.read_with(cx, |pane, _| {
-            assert_eq!(pane.preview_item_id(), Some(item.item_id()));
-        });
-
-        // Unpreview the item
-        pane.update_in(cx, |pane, _window, _cx| {
-            pane.unpreview_item_if_preview(item.item_id());
-        });
-
-        // Verify item is no longer preview
-        pane.read_with(cx, |pane, _| {
-            assert_eq!(pane.preview_item_id(), None);
-        });
-
-        // Close the item
-        pane.update_in(cx, |pane, window, cx| {
-            pane.close_item_by_id(item.item_id(), SaveIntent::Skip, window, cx)
-                .detach_and_log_err(cx);
-        });
-
-        cx.run_until_parked();
-
-        // The item should be in the closed_stack and reopenable
-        let has_closed_items = pane.read_with(cx, |pane, _| {
-            !pane.nav_history.0.lock().closed_stack.is_empty()
-        });
-        assert!(
-            has_closed_items,
-            "closed item should be in closed_stack and reopenable"
-        );
-    }
-
-    #[gpui::test]
     async fn test_activate_item_with_wrap_around(cx: &mut TestAppContext) {
         init_test(cx);
         let fs = FakeFs::new(cx.executor());
@@ -6047,7 +5792,6 @@ mod tests {
             Open {
                 #[proptest(strategy = "arbitrary_path()")]
                 path: Arc<RelPath>,
-                allow_preview: bool,
             },
             GoBack,
             GoForward,
@@ -6145,7 +5889,6 @@ mod tests {
                 match operation {
                     Operation::Open {
                         path,
-                        allow_preview,
                     } => {
                         self.workspace
                             .update_in(&mut self.cx, |workspace, window, cx| {
@@ -6156,7 +5899,6 @@ mod tests {
                                     },
                                     None,
                                     true,
-                                    allow_preview,
                                     true,
                                     window,
                                     cx,
@@ -6193,9 +5935,6 @@ mod tests {
                     let active_path = pane
                         .active_item()
                         .map(|item| item.project_path(cx).unwrap());
-                    let preview_path = pane
-                        .preview_item()
-                        .map(|item| item.project_path(cx).unwrap());
 
                     let unique_paths = open_paths.iter().collect::<HashSet<_>>();
                     assert_eq!(
@@ -6214,12 +5953,6 @@ mod tests {
                             .as_ref()
                             .is_none_or(|path| open_paths.contains(path)),
                         "active path should be open"
-                    );
-                    assert!(
-                        preview_path
-                            .as_ref()
-                            .is_none_or(|path| open_paths.contains(path)),
-                        "preview path should be open"
                     );
 
                     if let Some(expected_active_path) = expected_path {

@@ -13,7 +13,7 @@ use gpui::{
 use itertools::Itertools;
 use language::{Buffer, BufferSnapshot, LanguageRegistry};
 use multi_buffer::{
-    Anchor, AnchorRangeExt, ExcerptRange, MultiBufferOffset, PathKey,
+    Anchor, AnchorRangeExt, ExcerptRange, MultiBufferOffset,
 };
 use parking_lot::RwLock;
 use project::{FakeFs, Project};
@@ -31,7 +31,7 @@ use util::{
     test::{generate_marked_text, marked_text_ranges},
 };
 
-use super::{build_editor, build_editor_with_project};
+use super::build_editor_with_project;
 
 pub struct EditorTestContext {
     pub cx: gpui::VisualTestContext,
@@ -113,53 +113,6 @@ impl EditorTestContext {
     }
 
     pub async fn for_editor(editor: WindowHandle<Editor>, cx: &mut gpui::TestAppContext) -> Self {
-        let editor_view = editor.root(cx).unwrap();
-        Self {
-            cx: VisualTestContext::from_window(*editor.deref(), cx),
-            window: editor.into(),
-            editor: editor_view,
-            assertion_cx: AssertionContextManager::new(),
-        }
-    }
-
-    #[track_caller]
-    pub fn new_multibuffer<const COUNT: usize>(
-        cx: &mut gpui::TestAppContext,
-        excerpts: [&str; COUNT],
-    ) -> EditorTestContext {
-        let mut multibuffer = MultiBuffer::new(language::Capability::ReadWrite);
-        let buffer = cx.new(|cx| {
-            for (index, excerpt) in excerpts.into_iter().enumerate() {
-                let (text, ranges) = marked_text_ranges(excerpt, false);
-                let buffer = cx.new(|cx| Buffer::local(text, cx));
-                let point_ranges: Vec<_> = {
-                    let snapshot = buffer.read(cx);
-                    ranges
-                        .into_iter()
-                        .map(|range| {
-                            snapshot.offset_to_point(range.start)
-                                ..snapshot.offset_to_point(range.end)
-                        })
-                        .collect()
-                };
-                multibuffer.set_excerpts_for_path(
-                    PathKey::sorted(index as u64),
-                    buffer,
-                    point_ranges,
-                    0,
-                    cx,
-                );
-            }
-            multibuffer
-        });
-
-        let editor = cx.add_window(|window, cx| {
-            let editor = build_editor(buffer, window, cx);
-            window.focus(&editor.focus_handle(cx), cx);
-
-            editor
-        });
-
         let editor_view = editor.root(cx).unwrap();
         Self {
             cx: VisualTestContext::from_window(*editor.deref(), cx),

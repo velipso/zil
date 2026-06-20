@@ -121,15 +121,6 @@ pub fn assert_text_with_selections(
     assert_eq!(actual, marked_text, "Selections don't match");
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub(crate) fn build_editor(
-    buffer: Entity<MultiBuffer>,
-    window: &mut Window,
-    cx: &mut Context<Editor>,
-) -> Editor {
-    Editor::new(EditorMode::full(), buffer, None, window, cx)
-}
-
 pub(crate) fn build_editor_with_project(
     project: Entity<Project>,
     buffer: Entity<MultiBuffer>,

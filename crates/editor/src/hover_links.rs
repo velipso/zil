@@ -5,7 +5,7 @@ use crate::{
     scroll::ScrollAmount,
 };
 use gpui::{
-    App, AsyncWindowContext, Context, Entity, HighlightStyle, Modifiers, Pixels, Task,
+    AsyncWindowContext, Context, Entity, HighlightStyle, Modifiers, Pixels, Task,
     UnderlineStyle, Window, px,
 };
 use language::{Bias, ToOffset};
@@ -129,25 +129,6 @@ impl TriggerPoint {
     }
 }
 
-pub fn exclude_link_to_position(
-    buffer: &Entity<language::Buffer>,
-    current_position: &text::Anchor,
-    location: &LocationLink,
-    cx: &App,
-) -> bool {
-    // Exclude definition links that points back to cursor position.
-    // (i.e., currently cursor upon definition).
-    let snapshot = buffer.read(cx).snapshot();
-    !(buffer == &location.target.buffer
-        && current_position
-            .bias_right(&snapshot)
-            .cmp(&location.target.range.start, &snapshot)
-            .is_ge()
-        && current_position
-            .cmp(&location.target.range.end, &snapshot)
-            .is_le())
-}
-
 impl Editor {
     pub(crate) fn update_hovered_link(
         &mut self,
@@ -192,12 +173,10 @@ impl Editor {
 
     pub(crate) fn handle_click_hovered_link(
         &mut self,
-        point: PointForPosition,
-        modifiers: Modifiers,
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        let reveal_task = self.cmd_click_reveal_task(point, modifiers, window, cx);
+        let reveal_task = self.cmd_click_reveal_task(window, cx);
         cx.spawn_in(window, async move |_editor, _cx| {
             reveal_task.await.log_err();
         })
@@ -215,8 +194,6 @@ impl Editor {
 
     fn cmd_click_reveal_task(
         &mut self,
-        point: PointForPosition,
-        modifiers: Modifiers,
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) -> Task<anyhow::Result<Navigated>> {
@@ -226,41 +203,8 @@ impl Editor {
                 if !self.focus_handle.is_focused(window) {
                     window.focus(&self.focus_handle, cx);
                 }
-
-                // exclude links pointing back to the current anchor
-                let current_position = point
-                    .next_valid
-                    .to_point(&self.snapshot(window, cx).display_snapshot);
-                let Some((buffer, anchor)) = self
-                    .buffer()
-                    .read(cx)
-                    .text_anchor_for_position(current_position, cx)
-                else {
-                    return Task::ready(Ok(Navigated::No));
-                };
-                let Some(multi_buffer_anchor) = self
-                    .buffer()
-                    .read(cx)
-                    .snapshot(cx)
-                    .anchor_in_excerpt(anchor)
-                else {
-                    return Task::ready(Ok(Navigated::No));
-                };
-                let links = hovered_link_state
-                    .links
-                    .into_iter()
-                    .filter(|link| {
-                        if let HoverLink::Text(location) = link {
-                            exclude_link_to_position(&buffer, &anchor, location, cx)
-                        } else {
-                            true
-                        }
-                    })
-                    .collect();
-                let nav_entry = self.navigation_entry(multi_buffer_anchor, cx);
-                let split = Self::is_alt_pressed(&modifiers, cx);
                 let navigate_task =
-                    self.navigate_to_hover_links(None, links, nav_entry, split, window, cx);
+                    self.navigate_to_hover_links(hovered_link_state.links, window, cx);
                 self.select(SelectPhase::End, window, cx);
                 return navigate_task;
             }
