@@ -166,19 +166,19 @@ pub(crate) struct ButtonLikeRounding {
 }
 
 impl ButtonLikeRounding {
-    pub const ALL: Self = Self {
+    pub(crate) const ALL: Self = Self {
         top_left: true,
         top_right: true,
         bottom_right: true,
         bottom_left: true,
     };
-    pub const LEFT: Self = Self {
+    pub(crate) const LEFT: Self = Self {
         top_left: true,
         top_right: false,
         bottom_right: false,
         bottom_left: true,
     };
-    pub const RIGHT: Self = Self {
+    pub(crate) const RIGHT: Self = Self {
         top_left: false,
         top_right: true,
         bottom_right: true,

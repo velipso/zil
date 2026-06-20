@@ -24,7 +24,7 @@ pub struct ApiKeyState {
 }
 
 #[derive(Debug, Clone)]
-pub enum LoadStatus {
+pub(crate) enum LoadStatus {
     NotPresent,
     Error(String),
     Loaded(ApiKey),

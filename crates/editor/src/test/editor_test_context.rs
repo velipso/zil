@@ -222,7 +222,7 @@ impl EditorTestContext {
         F: FnOnce(&Buffer, &App) -> T,
     {
         self.multibuffer(|multibuffer, cx| {
-            let buffer = multibuffer.as_singleton().unwrap().read(cx);
+            let buffer = multibuffer.as_singleton().read(cx);
             read(buffer, cx)
         })
     }
@@ -244,7 +244,7 @@ impl EditorTestContext {
         F: FnOnce(&mut Buffer, &mut Context<Buffer>) -> T,
     {
         self.update_multibuffer(|multibuffer, cx| {
-            let buffer = multibuffer.as_singleton().unwrap();
+            let buffer = multibuffer.as_singleton();
             buffer.update(cx, update)
         })
     }

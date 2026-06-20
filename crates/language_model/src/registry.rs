@@ -11,7 +11,7 @@ use thiserror::Error;
 /// Returns Some(extension_id) if the provider should be hidden when that extension is installed.
 pub type BuiltinProviderHidingFn = Box<dyn Fn(&str) -> Option<&'static str> + Send + Sync>;
 
-pub fn init(cx: &mut App) {
+pub(crate) fn init(cx: &mut App) {
     let registry = cx.new(|_cx| LanguageModelRegistry::default());
     cx.set_global(GlobalLanguageModelRegistry(registry));
 }

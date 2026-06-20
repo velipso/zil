@@ -185,12 +185,8 @@ impl FollowableItem for Editor {
     }
 
     fn to_state_proto(&self, _: &mut Window, cx: &mut App) -> Option<proto::view::Variant> {
-        let is_private = self
-            .buffer
-            .read(cx)
-            .as_singleton()
-            .and_then(|buffer| buffer.read(cx).file())
-            .is_some_and(|file| file.is_private());
+        let buffer = self.buffer.read(cx).as_singleton();
+        let is_private = buffer.read(cx).file().is_some_and(|file| file.is_private());
         if is_private {
             return None;
         }
@@ -337,8 +333,8 @@ impl FollowableItem for Editor {
     }
 
     fn dedup(&self, existing: &Self, _: &Window, cx: &App) -> Option<Dedup> {
-        let self_singleton = self.buffer.read(cx).as_singleton()?;
-        let other_singleton = existing.buffer.read(cx).as_singleton()?;
+        let self_singleton = self.buffer.read(cx).as_singleton();
+        let other_singleton = existing.buffer.read(cx).as_singleton();
         if self_singleton == other_singleton {
             Some(Dedup::KeepExisting)
         } else {
@@ -679,11 +675,8 @@ impl Item for Editor {
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
         let multi_buffer = self.buffer().read(cx);
-        if let Some(file) = multi_buffer
-            .as_singleton()
-            .and_then(|buffer| buffer.read(cx).file())
-            .and_then(|file| File::from_dyn(Some(file)))
-        {
+        let buffer = multi_buffer.as_singleton();
+        if let Some(file) = buffer.read(cx).file().and_then(|file| File::from_dyn(Some(file))) {
             Some(
                 file.worktree
                     .read(cx)
@@ -729,28 +722,26 @@ impl Item for Editor {
 
     fn tab_content(&self, params: TabContentParams, _: &Window, cx: &App) -> AnyElement {
         let label_color = if ItemSettings::get_global(cx).git_status {
-            self.buffer()
-                .read(cx)
-                .as_singleton()
-                .and_then(|buffer| {
-                    let buffer = buffer.read(cx);
-                    let path = buffer.project_path(cx)?;
-                    let buffer_id = buffer.remote_id();
-                    let project = self.project()?.read(cx);
-                    let entry = project.entry_for_path(&path, cx)?;
-                    let (repo, repo_path) = project
-                        .git_store()
-                        .read(cx)
-                        .repository_and_path_for_buffer_id(buffer_id, cx)?;
-                    let status = repo.read(cx).status_for_path(&repo_path)?.status;
+            (|| {
+                let buffer = self.buffer().read(cx).as_singleton();
+                let buffer = buffer.read(cx);
+                let path = buffer.project_path(cx)?;
+                let buffer_id = buffer.remote_id();
+                let project = self.project()?.read(cx);
+                let entry = project.entry_for_path(&path, cx)?;
+                let (repo, repo_path) = project
+                    .git_store()
+                    .read(cx)
+                    .repository_and_path_for_buffer_id(buffer_id, cx)?;
+                let status = repo.read(cx).status_for_path(&repo_path)?.status;
 
-                    Some(entry_git_aware_label_color(
-                        status.summary(),
-                        entry.is_ignored,
-                        params.selected,
-                    ))
-                })
-                .unwrap_or_else(|| entry_label_color(params.selected))
+                Some(entry_git_aware_label_color(
+                    status.summary(),
+                    entry.is_ignored,
+                    params.selected,
+                ))
+            })()
+            .unwrap_or_else(|| entry_label_color(params.selected))
         } else {
             entry_label_color(params.selected)
         };
@@ -767,12 +758,10 @@ impl Item for Editor {
         });
 
         // Whether the file was saved in the past but is now deleted.
-        let was_deleted: bool = self
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .and_then(|buffer| buffer.read(cx).file())
-            .is_some_and(|file| file.disk_state().is_deleted());
+        let was_deleted: bool = {
+            let buffer = self.buffer().read(cx).as_singleton();
+            buffer.read(cx).file().is_some_and(|file| file.disk_state().is_deleted())
+        };
 
         h_flex()
             .gap_2()
@@ -862,18 +851,17 @@ impl Item for Editor {
     // Note: this mirrors the logic in `Editor::toggle_read_only`, but is reachable
     // without relying on focus-based action dispatch.
     fn toggle_read_only(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(buffer) = self.buffer.read(cx).as_singleton() {
-            buffer.update(cx, |buffer, cx| {
-                buffer.set_capability(
-                    match buffer.capability() {
-                        Capability::ReadWrite => Capability::Read,
-                        Capability::Read => Capability::ReadWrite,
-                        Capability::ReadOnly => Capability::ReadOnly,
-                    },
-                    cx,
-                );
-            });
-        }
+        let buffer = self.buffer.read(cx).as_singleton();
+        buffer.update(cx, |buffer, cx| {
+            buffer.set_capability(
+                match buffer.capability() {
+                    Capability::ReadWrite => Capability::Read,
+                    Capability::Read => Capability::ReadWrite,
+                    Capability::ReadOnly => Capability::ReadOnly,
+                },
+                cx,
+            );
+        });
         cx.notify();
         window.refresh();
     }
@@ -888,11 +876,8 @@ impl Item for Editor {
 
     fn can_save(&self, cx: &App) -> bool {
         let buffer = &self.buffer().read(cx);
-        if let Some(buffer) = buffer.as_singleton() {
-            buffer.read(cx).project_path(cx).is_some()
-        } else {
-            true
-        }
+        let buffer = buffer.as_singleton();
+        buffer.read(cx).project_path(cx).is_some()
     }
 
     fn save(
@@ -940,8 +925,7 @@ impl Item for Editor {
         let buffer = self
             .buffer()
             .read(cx)
-            .as_singleton()
-            .expect("cannot call save_as on an excerpt list");
+            .as_singleton();
 
         project.update(cx, |project, cx| project.save_buffer_as(buffer, path, cx))
     }
@@ -1018,12 +1002,12 @@ impl Item for Editor {
             .is_some();
 
         if !has_folds {
-            if let Some(workspace_id) = workspace.database_id()
-                && let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
-                    project::File::from_dyn(buffer.read(cx).file()).map(|file| file.abs_path(cx))
-                })
-            {
-                self.load_folds_from_db(workspace_id, file_path, window, cx);
+            if let Some(workspace_id) = workspace.database_id() {
+                let buffer = self.buffer().read(cx).as_singleton();
+                if let Some(file_path) =
+                    project::File::from_dyn(buffer.read(cx).file()).map(|file| file.abs_path(cx)) {
+                    self.load_folds_from_db(workspace_id, file_path, window, cx);
+                }
             }
         }
     }
@@ -1300,7 +1284,7 @@ impl SerializableItem for Editor {
 
         let workspace_id = workspace.database_id()?;
 
-        let buffer = self.buffer().read(cx).as_singleton()?;
+        let buffer = self.buffer().read(cx).as_singleton();
 
         let abs_path = buffer.read(cx).file().and_then(|file| {
             let worktree_id = file.worktree_id(cx);
@@ -1462,7 +1446,7 @@ impl Editor {
             editor.update(cx, |editor, cx| {
                 let kind = Editor::project_item_kind()?;
                 let pane = editor.workspace()?.read(cx).pane_for(&cx.entity())?;
-                let buffer = editor.buffer().read(cx).as_singleton()?;
+                let buffer = editor.buffer().read(cx).as_singleton();
                 let file_abs_path = project::File::from_dyn(buffer.read(cx).file())?.abs_path(cx);
                 pane.update(cx, |pane, _| {
                     let data = pane
@@ -1971,7 +1955,7 @@ fn path_for_buffer<'a>(
     include_filename: bool,
     cx: &'a App,
 ) -> Option<Cow<'a, str>> {
-    let file = buffer.read(cx).as_singleton()?.read(cx).file()?;
+    let file = buffer.read(cx).as_singleton().read(cx).file()?;
     path_for_file(file, height, include_filename, cx)
 }
 

@@ -748,10 +748,11 @@ impl Editor {
         };
 
         // Get file path for path-based fold storage (survives tab close)
-        let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
+        let buffer = self.buffer().read(cx).as_singleton();
+        let Some(file_path) =
             project::File::from_dyn(buffer.read(cx).file())
                 .map(|file| Arc::<Path>::from(file.abs_path(cx)))
-        }) else {
+        else {
             return;
         };
 

@@ -2471,11 +2471,10 @@ impl KeybindingEditorModal {
 
                 let language = load_keybind_context_language(workspace, cx).await;
                 editor_entity.update(cx, |editor, cx| {
-                    if let Some(buffer) = editor.buffer().read(cx).as_singleton() {
-                        buffer.update(cx, |buffer, cx| {
-                            buffer.set_language(Some(language), cx);
-                        });
-                    }
+                    let buffer = editor.buffer().read(cx).as_singleton();
+                    buffer.update(cx, |buffer, cx| {
+                        buffer.set_language(Some(language), cx);
+                    });
                 });
             })
             .detach();
@@ -3220,11 +3219,10 @@ impl ActionArgumentsEditor {
                 let json_language = load_json_language(workspace.clone(), cx).await;
                 this.update(cx, |this, cx| {
                     this.editor.update(cx, |editor, cx| {
-                        if let Some(buffer) = editor.buffer().read(cx).as_singleton() {
-                            buffer.update(cx, |buffer, cx| {
-                                buffer.set_language(Some(json_language.clone()), cx)
-                            });
-                        }
+                        let buffer = editor.buffer().read(cx).as_singleton();
+                        buffer.update(cx, |buffer, cx| {
+                            buffer.set_language(Some(json_language.clone()), cx)
+                        });
                     })
                     // .context("Failed to load JSON language for editing keybinding action arguments input")
                 })

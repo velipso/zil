@@ -2,7 +2,7 @@ use serde::de::{self, Deserializer, Visitor};
 use std::fmt;
 
 /// Deserializes a non-empty string array.
-pub fn non_empty_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+pub(crate) fn non_empty_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {

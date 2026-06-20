@@ -1985,9 +1985,8 @@ impl Editor {
             editor.colors = Some(LspColorData::new(cx));
             editor.use_document_folding_ranges = true;
 
-            if let Some(buffer) = multi_buffer.read(cx).as_singleton() {
-                editor.register_buffer(buffer.read(cx).remote_id(), cx);
-            }
+            let buffer = multi_buffer.read(cx).as_singleton();
+            editor.register_buffer(buffer.read(cx).remote_id(), cx);
         }
 
         editor
@@ -2052,19 +2051,16 @@ impl Editor {
             }
         }
 
-        if let Some(singleton_buffer) = self.buffer.read(cx).as_singleton() {
-            if let Some(extension) = singleton_buffer.read(cx).file().and_then(|file| {
-                Some(
-                    file.full_path(cx)
-                        .extension()?
-                        .to_string_lossy()
-                        .to_lowercase(),
-                )
-            }) {
-                key_context.set("extension", extension);
-            }
-        } else {
-            key_context.add("multibuffer");
+        let singleton_buffer = self.buffer.read(cx).as_singleton();
+        if let Some(extension) = singleton_buffer.read(cx).file().and_then(|file| {
+            Some(
+                file.full_path(cx)
+                    .extension()?
+                    .to_string_lossy()
+                    .to_lowercase(),
+            )
+        }) {
+            key_context.set("extension", extension);
         }
 
         if self.in_leading_whitespace {
@@ -2103,12 +2099,11 @@ impl Editor {
     }
 
     pub fn working_directory(&self, cx: &App) -> Option<PathBuf> {
-        if let Some(buffer) = self.buffer().read(cx).as_singleton() {
-            if let Some(file) = buffer.read(cx).file().and_then(|f| f.as_local())
-                && let Some(dir) = file.abs_path(cx).parent()
-            {
-                return Some(dir.to_owned());
-            }
+        let buffer = self.buffer().read(cx).as_singleton();
+        if let Some(file) = buffer.read(cx).file().and_then(|f| f.as_local())
+            && let Some(dir) = file.abs_path(cx).parent()
+        {
+            return Some(dir.to_owned());
         }
 
         None
@@ -2591,12 +2586,8 @@ impl Editor {
             transaction.0.keys().all(|buffer| {
                 other_editors.iter().any(|editor| {
                     let multi_buffer = editor.read(cx).buffer();
-                    multi_buffer
-                        .read(cx)
-                        .as_singleton()
-                        .map_or(false, |singleton| {
-                            singleton.entity_id() == buffer.entity_id()
-                        })
+                    let singleton = multi_buffer.read(cx).as_singleton();
+                    singleton.entity_id() == buffer.entity_id()
                 })
             })
         };
@@ -3964,18 +3955,17 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(buffer) = self.buffer.read(cx).as_singleton() {
-            buffer.update(cx, |buffer, cx| {
-                buffer.set_capability(
-                    match buffer.capability() {
-                        Capability::ReadWrite => Capability::Read,
-                        Capability::Read => Capability::ReadWrite,
-                        Capability::ReadOnly => Capability::ReadOnly,
-                    },
-                    cx,
-                );
-            })
-        }
+        let buffer = self.buffer.read(cx).as_singleton();
+        buffer.update(cx, |buffer, cx| {
+            buffer.set_capability(
+                match buffer.capability() {
+                    Capability::ReadWrite => Capability::Read,
+                    Capability::Read => Capability::ReadWrite,
+                    Capability::ReadOnly => Capability::ReadOnly,
+                },
+                cx,
+            );
+        })
     }
 
     pub fn reload_file(&mut self, _: &ReloadFile, window: &mut Window, cx: &mut Context<Self>) {
@@ -5893,7 +5883,6 @@ impl Editor {
             this.buffer
                 .read(cx)
                 .as_singleton()
-                .expect("you can only call set_text on editors for singleton buffers")
                 .update(cx, |buffer, cx| buffer.set_text(text, cx));
         });
     }
@@ -6119,56 +6108,6 @@ impl Editor {
                 });
             this.edit(edits, cx);
         });
-    }
-
-    pub fn open_selections_in_multibuffer(
-        &mut self,
-        _: &OpenSelectionsInMultibuffer,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let multibuffer = self.buffer.read(cx);
-
-        let Some(buffer) = multibuffer.as_singleton() else {
-            return;
-        };
-        let buffer_snapshot = buffer.read(cx).snapshot();
-
-        let Some(workspace) = self.workspace() else {
-            return;
-        };
-
-        let title = multibuffer.title(cx).to_string();
-
-        let locations = self
-            .selections
-            .all_anchors(&self.display_snapshot(cx))
-            .iter()
-            .map(|selection| {
-                (
-                    buffer.clone(),
-                    (selection.start.text_anchor_in(&buffer_snapshot)
-                        ..selection.end.text_anchor_in(&buffer_snapshot))
-                        .to_point(buffer.read(cx)),
-                )
-            })
-            .into_group_map();
-
-        cx.spawn_in(window, async move |_, cx| {
-            workspace.update_in(cx, |workspace, window, cx| {
-                Self::open_locations_in_multibuffer(
-                    workspace,
-                    locations,
-                    format!("Selections for '{title}'"),
-                    false,
-                    false,
-                    MultibufferSelectionMode::All,
-                    window,
-                    cx,
-                );
-            })
-        })
-        .detach();
     }
 
     /// Adds a row highlight for the given range. If a row has multiple highlights, the
@@ -7428,11 +7367,11 @@ impl Editor {
             let buffer_snapshot = OnceCell::new();
 
             // Get file path for path-based fold lookup
-            let file_path: Option<Arc<Path>> =
-                self.buffer().read(cx).as_singleton().and_then(|buffer| {
-                    project::File::from_dyn(buffer.read(cx).file())
-                        .map(|file| Arc::from(file.abs_path(cx)))
-                });
+            let file_path: Option<Arc<Path>> = {
+                let buffer = self.buffer().read(cx).as_singleton();
+                project::File::from_dyn(buffer.read(cx).file())
+                    .map(|file| Arc::from(file.abs_path(cx)))
+            };
 
             // Try file_folds (path-based) first, fallback to editor_folds (migration)
             let db = EditorDb::global(cx);

@@ -99,7 +99,7 @@ use gpui::{
 };
 use language::{
     LanguageAwareStyling, Point, Subscription as BufferSubscription,
-    language_settings::{AllLanguageSettings, LanguageSettings},
+    language_settings::LanguageSettings,
 };
 
 use multi_buffer::{
@@ -108,7 +108,6 @@ use multi_buffer::{
 };
 use project::{lsp_store::LspFoldingRange, lsp_store::TokenType};
 use serde::Deserialize;
-use settings::Settings;
 use smallvec::SmallVec;
 use sum_tree::{Bias};
 use text::{BufferId, LineIndent, Patch};
@@ -1064,11 +1063,8 @@ impl DisplayMap {
 
     #[instrument(skip_all)]
     fn tab_size(buffer: &Entity<MultiBuffer>, cx: &App) -> NonZeroU32 {
-        if let Some(buffer) = buffer.read(cx).as_singleton().map(|buffer| buffer.read(cx)) {
-            LanguageSettings::for_buffer(buffer, cx).tab_size
-        } else {
-            AllLanguageSettings::get_global(cx).defaults.tab_size
-        }
+        let buffer = buffer.read(cx).as_singleton().read(cx);
+        LanguageSettings::for_buffer(buffer, cx).tab_size
     }
 
     #[cfg(test)]

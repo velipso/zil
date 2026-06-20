@@ -1777,9 +1777,8 @@ fn open_local_file(
             editor
                 .downgrade()
                 .update(cx, |editor, cx| {
-                    if let Some(buffer) = editor.buffer().read(cx).as_singleton()
-                        && buffer.read(cx).is_empty()
-                    {
+                    let buffer = editor.buffer().read(cx).as_singleton();
+                    if buffer.read(cx).is_empty() {
                         buffer.update(cx, |buffer, cx| {
                             buffer.edit([(0..0, initial_contents)], None, cx)
                         });
@@ -1815,7 +1814,7 @@ fn open_bundled_file(
                     .buffer()
                     .read(cx)
                     .as_singleton()
-                    .is_some_and(|buffer| buffer.read(cx).file().is_none())
+                    .read(cx).file().is_none()
         })
     });
     if let Some(existing) = existing {

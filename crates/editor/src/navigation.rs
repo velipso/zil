@@ -1355,9 +1355,8 @@ impl Editor {
                         .map(|r| editor.range_for_match(&r))
                         .map(collapse_multiline_range)
                         .collect::<Vec<_>>();
-                    if !split
-                        && Some(&target_buffer) == editor.buffer.read(cx).as_singleton().as_ref()
-                    {
+                    if !split {
+                        let target_buffer = &editor.buffer.read(cx).as_singleton();
                         let multibuffer = editor.buffer.read(cx);
                         let target_ranges = target_ranges
                             .into_iter()
@@ -1441,9 +1440,7 @@ impl Editor {
                                 pane.update(cx, |pane, _| pane.disable_history());
 
                                 let multibuffer = target_editor.buffer.read(cx);
-                                let Some(target_buffer) = multibuffer.as_singleton() else {
-                                    return Navigated::No;
-                                };
+                                let target_buffer = multibuffer.as_singleton();
                                 let target_ranges = target_ranges
                                     .into_iter()
                                     .filter_map(|r| {
@@ -1509,7 +1506,7 @@ impl Editor {
 
         cx.spawn_in(window, async move |editor, wcx| -> Result<()> {
             let Ok(Some(remote_id)) = editor.update(wcx, |ed, cx| {
-                let buffer = ed.buffer.read(cx).as_singleton()?;
+                let buffer = ed.buffer.read(cx).as_singleton();
                 Some(buffer.read(cx).remote_id())
             }) else {
                 return Ok(());

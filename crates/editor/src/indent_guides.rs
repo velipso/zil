@@ -36,13 +36,10 @@ impl Editor {
         cx: &mut Context<Editor>,
     ) -> Option<Vec<IndentGuide>> {
         let show_indent_guides = self.should_show_indent_guides().unwrap_or_else(|| {
-            if let Some(buffer) = self.buffer().read(cx).as_singleton() {
-                LanguageSettings::for_buffer(buffer.read(cx), cx)
-                    .indent_guides
-                    .enabled
-            } else {
-                true
-            }
+            let buffer = self.buffer().read(cx).as_singleton();
+            LanguageSettings::for_buffer(buffer.read(cx), cx)
+                .indent_guides
+                .enabled
         });
 
         if !show_indent_guides {

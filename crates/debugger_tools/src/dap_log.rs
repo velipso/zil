@@ -819,7 +819,6 @@ impl DapLogView {
                 .buffer()
                 .read(cx)
                 .as_singleton()
-                .expect("log buffer should be a singleton")
                 .update(cx, |_, cx| {
                     cx.spawn({
                         async move |buffer, cx| {
@@ -858,8 +857,7 @@ impl DapLogView {
                 .read(cx)
                 .buffer()
                 .read(cx)
-                .as_singleton()
-                .expect("log buffer should be a singleton");
+                .as_singleton();
 
             self.editor = editor;
             self.editor_subscriptions = editor_subscriptions;
@@ -889,7 +887,6 @@ impl DapLogView {
                 .buffer()
                 .read(cx)
                 .as_singleton()
-                .expect("log buffer should be a singleton")
                 .update(cx, |_, cx| {
                     cx.spawn({
                         let buffer = cx.entity();

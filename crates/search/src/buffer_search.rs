@@ -666,8 +666,7 @@ impl BufferSearchBar {
                 .read(cx)
                 .buffer()
                 .read(cx)
-                .as_singleton()
-                .expect("query editor should be backed by a singleton buffer");
+                .as_singleton();
 
             query_buffer
                 .read(cx)
@@ -1700,8 +1699,7 @@ impl BufferSearchBar {
             .read(cx)
             .buffer()
             .read(cx)
-            .as_singleton()
-            .expect("query editor should be backed by a singleton buffer");
+            .as_singleton();
 
         if enable {
             if let Some(regex_language) = self.regex_language.clone() {

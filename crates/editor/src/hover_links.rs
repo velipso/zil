@@ -583,9 +583,7 @@ impl ResolvedFileTarget {
                     .update_in(cx, |editor, window, cx| {
                         let row = row.saturating_sub(1);
                         let col = col.saturating_sub(1);
-                        let Some(buffer) = editor.buffer().read(cx).as_singleton() else {
-                            return;
-                        };
+                        let buffer = editor.buffer().read(cx).as_singleton();
                         let point = buffer
                             .read(cx)
                             .snapshot()

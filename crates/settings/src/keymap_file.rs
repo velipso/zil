@@ -142,7 +142,7 @@ impl JsonSchema for KeymapAction {
 
 #[derive(Debug, Deserialize, Default, Clone)]
 #[serde(transparent)]
-pub struct UnbindTargetAction(Value);
+pub(crate) struct UnbindTargetAction(Value);
 
 impl JsonSchema for UnbindTargetAction {
     fn schema_name() -> Cow<'static, str> {
