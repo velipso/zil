@@ -83,7 +83,6 @@ members = [
     "crates/picker",
     "crates/platform_title_bar",
     "crates/project",
-    "crates/project_symbols",
     "crates/proto",
     "crates/recent_projects",
     "crates/refineable",
@@ -251,7 +250,6 @@ perf = { path = "tooling/perf" }
 picker = { path = "crates/picker" }
 platform_title_bar = { path = "crates/platform_title_bar" }
 project = { path = "crates/project" }
-project_symbols = { path = "crates/project_symbols" }
 prompt_store = { path = "crates/prompt_store" }
 proto = { path = "crates/proto" }
 recent_projects = { path = "crates/recent_projects" }
@@ -701,7 +699,6 @@ json_schema_store = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }
 paths = { codegen-units = 1 }
-project_symbols = { codegen-units = 1 }
 refineable = { codegen-units = 1 }
 release_channel = { codegen-units = 1 }
 reqwest_client = { codegen-units = 1 }

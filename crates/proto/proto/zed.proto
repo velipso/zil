@@ -59,8 +59,6 @@ message Envelope {
 
     GetDocumentHighlights get_document_highlights = 38;
     GetDocumentHighlightsResponse get_document_highlights_response = 39;
-    GetProjectSymbols get_project_symbols = 40;
-    GetProjectSymbolsResponse get_project_symbols_response = 41;
     OpenBufferForSymbol open_buffer_for_symbol = 42;
     OpenBufferForSymbolResponse open_buffer_for_symbol_response = 43;
 

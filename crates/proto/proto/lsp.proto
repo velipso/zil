@@ -31,15 +31,6 @@ message DocumentHighlight {
   }
 }
 
-message GetProjectSymbols {
-  uint64 project_id = 1;
-  string query = 2;
-}
-
-message GetProjectSymbolsResponse {
-  repeated Symbol symbols = 4;
-}
-
 message Symbol {
   uint64 source_worktree_id = 1;
   uint64 worktree_id = 2;

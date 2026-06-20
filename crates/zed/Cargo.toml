@@ -120,7 +120,6 @@ parking_lot.workspace = true
 paths.workspace = true
 profiling.workspace = true
 project.workspace = true
-project_symbols.workspace = true
 proto.workspace = true
 recent_projects.workspace = true
 release_channel.workspace = true

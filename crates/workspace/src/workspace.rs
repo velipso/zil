@@ -431,15 +431,6 @@ pub struct CloseItemInAllPanes {
 #[action(namespace = workspace)]
 pub struct SendKeystrokes(pub String);
 
-actions!(
-    project_symbols,
-    [
-        /// Toggles the project symbols search.
-        #[action(name = "Toggle")]
-        ToggleProjectSymbols
-    ]
-);
-
 /// Opens a new terminal in the center.
 #[derive(Default, PartialEq, Eq, Clone, Deserialize, JsonSchema, Action)]
 #[action(namespace = workspace)]

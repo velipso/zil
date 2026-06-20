@@ -81,7 +81,7 @@ use lsp::{
     FileOperationRegistrationOptions, FileRename, FileSystemWatcher, LanguageServer,
     LanguageServerBinary, LanguageServerBinaryOptions, LanguageServerId, LanguageServerName,
     LanguageServerSelector, LspRequestFuture, MessageActionItem, MessageType, OneOf,
-    RenameFilesParams, SymbolKind, TextDocumentSyncSaveOptions, Uri, WillRenameFiles,
+    RenameFilesParams, TextDocumentSyncSaveOptions, Uri, WillRenameFiles,
     WorkDoneProgressCancelParams, WorkspaceFolder, notification::DidRenameFiles,
 };
 use parking_lot::Mutex;
@@ -101,7 +101,7 @@ use std::{
     collections::hash_map,
     convert::TryInto,
     ffi::OsStr,
-    iter, mem,
+    mem,
     ops::{ControlFlow, Range},
     path::{self, Path, PathBuf},
     sync::{
@@ -3074,15 +3074,6 @@ pub enum SymbolLocation {
     },
 }
 
-impl SymbolLocation {
-    fn file_name(&self) -> Option<&str> {
-        match self {
-            Self::InProject(path) => path.path.file_name(),
-            Self::OutsideProject { abs_path, .. } => abs_path.file_name()?.to_str(),
-        }
-    }
-}
-
 fn should_log_lsp_request_failure(message: &str) -> bool {
     // content modified is a weird failure mode of rust-analyzer
     // where requests are denied before its loaded a project
@@ -3100,7 +3091,6 @@ impl LspStore {
         client.add_entity_message_handler(Self::handle_update_language_server);
         client.add_entity_message_handler(Self::handle_language_server_log);
         client.add_entity_request_handler(Self::handle_format_buffers);
-        client.add_entity_request_handler(Self::handle_get_project_symbols);
         client.add_entity_request_handler(Self::handle_get_color_presentation);
         client.add_entity_request_handler(Self::handle_open_buffer_for_symbol);
         client.add_entity_request_handler(Self::handle_refresh_semantic_tokens);
@@ -4292,211 +4282,6 @@ impl LspStore {
                         .collect::<Vec<Hover>>(),
                 )
             })
-        }
-    }
-
-    pub fn symbols(&self, query: &str, cx: &mut Context<Self>) -> Task<Result<Vec<Symbol>>> {
-        let language_registry = self.languages.clone();
-
-        if let Some((upstream_client, project_id)) = self.upstream_client().as_ref() {
-            let request = upstream_client.request(proto::GetProjectSymbols {
-                project_id: *project_id,
-                query: query.to_string(),
-            });
-            cx.foreground_executor().spawn(async move {
-                let response = request.await?;
-                let mut symbols = Vec::new();
-                let core_symbols = response
-                    .symbols
-                    .into_iter()
-                    .filter_map(|symbol| Self::deserialize_symbol(symbol).log_err())
-                    .collect::<Vec<_>>();
-                populate_labels_for_symbols(core_symbols, &language_registry, None, &mut symbols)
-                    .await;
-                Ok(symbols)
-            })
-        } else if let Some(local) = self.as_local() {
-            struct WorkspaceSymbolsResult {
-                server_id: LanguageServerId,
-                lsp_adapter: Arc<CachedLspAdapter>,
-                worktree: WeakEntity<Worktree>,
-                lsp_symbols: Vec<(String, SymbolKind, lsp::Location, Option<String>)>,
-            }
-
-            let mut requests = Vec::new();
-            let mut requested_servers = BTreeSet::new();
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-
-            for (seed, state) in local.language_server_ids.iter() {
-                let Some(worktree_handle) = self
-                    .worktree_store
-                    .read(cx)
-                    .worktree_for_id(seed.worktree_id, cx)
-                else {
-                    continue;
-                };
-
-                let worktree = worktree_handle.read(cx);
-                if !worktree.is_visible() {
-                    continue;
-                }
-
-                if !requested_servers.insert(state.id) {
-                    continue;
-                }
-
-                let (lsp_adapter, server) = match local.language_servers.get(&state.id) {
-                    Some(LanguageServerState::Running {
-                        adapter, server, ..
-                    }) => (adapter.clone(), server),
-
-                    _ => continue,
-                };
-
-                let supports_workspace_symbol_request =
-                    match server.capabilities().workspace_symbol_provider {
-                        Some(OneOf::Left(supported)) => supported,
-                        Some(OneOf::Right(_)) => true,
-                        None => false,
-                    };
-
-                if !supports_workspace_symbol_request {
-                    continue;
-                }
-
-                let worktree_handle = worktree_handle.clone();
-                let server_id = server.server_id();
-                requests.push(
-                    server
-                        .request::<lsp::request::WorkspaceSymbolRequest>(
-                            lsp::WorkspaceSymbolParams {
-                                query: query.to_string(),
-                                ..Default::default()
-                            },
-                            request_timeout,
-                        )
-                        .map(move |response| {
-                            let lsp_symbols = response
-                                .into_response()
-                                .context("workspace symbols request")
-                                .log_err()
-                                .flatten()
-                                .map(|symbol_response| match symbol_response {
-                                    lsp::WorkspaceSymbolResponse::Flat(flat_responses) => {
-                                        flat_responses
-                                            .into_iter()
-                                            .map(|lsp_symbol| {
-                                                (
-                                                    lsp_symbol.name,
-                                                    lsp_symbol.kind,
-                                                    lsp_symbol.location,
-                                                    lsp_symbol.container_name,
-                                                )
-                                            })
-                                            .collect::<Vec<_>>()
-                                    }
-                                    lsp::WorkspaceSymbolResponse::Nested(nested_responses) => {
-                                        nested_responses
-                                            .into_iter()
-                                            .filter_map(|lsp_symbol| {
-                                                let location = match lsp_symbol.location {
-                                                    OneOf::Left(location) => location,
-                                                    OneOf::Right(_) => {
-                                                        log::error!(
-                                                            "Unexpected: client capabilities \
-                                                            forbid symbol resolutions in \
-                                                            workspace.symbol.resolveSupport"
-                                                        );
-                                                        return None;
-                                                    }
-                                                };
-                                                Some((
-                                                    lsp_symbol.name,
-                                                    lsp_symbol.kind,
-                                                    location,
-                                                    lsp_symbol.container_name,
-                                                ))
-                                            })
-                                            .collect::<Vec<_>>()
-                                    }
-                                })
-                                .unwrap_or_default();
-
-                            WorkspaceSymbolsResult {
-                                server_id,
-                                lsp_adapter,
-                                worktree: worktree_handle.downgrade(),
-                                lsp_symbols,
-                            }
-                        }),
-                );
-            }
-
-            cx.spawn(async move |this, cx| {
-                let responses = futures::future::join_all(requests).await;
-                let this = match this.upgrade() {
-                    Some(this) => this,
-                    None => return Ok(Vec::new()),
-                };
-
-                let mut symbols = Vec::new();
-                for result in responses {
-                    let core_symbols = this.update(cx, |this, cx| {
-                        result
-                            .lsp_symbols
-                            .into_iter()
-                            .filter_map(
-                                |(symbol_name, symbol_kind, symbol_location, container_name)| {
-                                    let abs_path = symbol_location.uri.to_file_path().ok()?;
-                                    let source_worktree = result.worktree.upgrade()?;
-                                    let source_worktree_id = source_worktree.read(cx).id();
-
-                                    let path = if let Some((tree, rel_path)) =
-                                        this.worktree_store.read(cx).find_worktree(&abs_path, cx)
-                                    {
-                                        let worktree_id = tree.read(cx).id();
-                                        SymbolLocation::InProject(ProjectPath {
-                                            worktree_id,
-                                            path: rel_path,
-                                        })
-                                    } else {
-                                        SymbolLocation::OutsideProject {
-                                            signature: this.symbol_signature(&abs_path),
-                                            abs_path: abs_path.into(),
-                                        }
-                                    };
-
-                                    Some(CoreSymbol {
-                                        source_language_server_id: result.server_id,
-                                        language_server_name: result.lsp_adapter.name.clone(),
-                                        source_worktree_id,
-                                        path,
-                                        kind: symbol_kind,
-                                        name: collapse_newlines(&symbol_name, "↵ "),
-                                        range: range_from_lsp(symbol_location.range),
-                                        container_name: container_name
-                                            .map(|c| collapse_newlines(&c, "↵ ")),
-                                    })
-                                },
-                            )
-                            .collect::<Vec<_>>()
-                    });
-
-                    populate_labels_for_symbols(
-                        core_symbols,
-                        &language_registry,
-                        Some(result.lsp_adapter),
-                        &mut symbols,
-                    )
-                    .await;
-                }
-
-                Ok(symbols)
-            })
-        } else {
-            Task::ready(Err(anyhow!("No upstream client or local language server")))
         }
     }
 
@@ -6107,22 +5892,6 @@ impl LspStore {
         hasher.update(abs_path.to_string_lossy().as_bytes());
         hasher.update(self.nonce.to_be_bytes());
         hasher.finalize().as_slice().try_into().unwrap()
-    }
-
-    pub async fn handle_get_project_symbols(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::GetProjectSymbols>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::GetProjectSymbolsResponse> {
-        let symbols = this
-            .update(&mut cx, |this, cx| {
-                this.symbols(&envelope.payload.query, cx)
-            })
-            .await?;
-
-        Ok(proto::GetProjectSymbolsResponse {
-            symbols: symbols.iter().map(Self::serialize_symbol).collect(),
-        })
     }
 
     pub async fn handle_restart_language_servers(
@@ -8587,94 +8356,6 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
             .with_context(|| format!("no worktree entry for path {path:?}"))?;
         let abs_path = self.worktree.absolutize(&entry.path);
         self.fs.load(&abs_path).await
-    }
-}
-
-async fn populate_labels_for_symbols(
-    symbols: Vec<CoreSymbol>,
-    language_registry: &Arc<LanguageRegistry>,
-    lsp_adapter: Option<Arc<CachedLspAdapter>>,
-    output: &mut Vec<Symbol>,
-) {
-    #[allow(clippy::mutable_key_type)]
-    let mut symbols_by_language = HashMap::<Option<Arc<Language>>, Vec<CoreSymbol>>::default();
-
-    let mut unknown_paths = BTreeSet::<Arc<str>>::new();
-    for symbol in symbols {
-        let Some(file_name) = symbol.path.file_name() else {
-            continue;
-        };
-        let language = language_registry
-            .load_language_for_file_path(Path::new(file_name))
-            .await
-            .ok()
-            .or_else(|| {
-                unknown_paths.insert(file_name.into());
-                None
-            });
-        symbols_by_language
-            .entry(language)
-            .or_default()
-            .push(symbol);
-    }
-
-    for unknown_path in unknown_paths {
-        log::info!("no language found for symbol in file {unknown_path:?}");
-    }
-
-    let mut label_params = Vec::new();
-    for (language, mut symbols) in symbols_by_language {
-        label_params.clear();
-        label_params.extend(symbols.iter_mut().map(|symbol| language::Symbol {
-            name: mem::take(&mut symbol.name),
-            kind: symbol.kind,
-            container_name: symbol.container_name.take(),
-        }));
-
-        let mut labels = Vec::new();
-        if let Some(language) = language {
-            let lsp_adapter = lsp_adapter.clone().or_else(|| {
-                language_registry
-                    .lsp_adapters(&language.name())
-                    .first()
-                    .cloned()
-            });
-            if let Some(lsp_adapter) = lsp_adapter {
-                labels = lsp_adapter
-                    .labels_for_symbols(&label_params, &language)
-                    .await
-                    .log_err()
-                    .unwrap_or_default();
-            }
-        }
-
-        for (
-            (
-                symbol,
-                language::Symbol {
-                    name,
-                    container_name,
-                    ..
-                },
-            ),
-            label,
-        ) in symbols
-            .into_iter()
-            .zip(label_params.drain(..))
-            .zip(labels.into_iter().chain(iter::repeat(None)))
-        {
-            output.push(Symbol {
-                language_server_name: symbol.language_server_name,
-                source_worktree_id: symbol.source_worktree_id,
-                source_language_server_id: symbol.source_language_server_id,
-                path: symbol.path,
-                label: label.unwrap_or_else(|| CodeLabel::plain(name.clone(), None)),
-                name,
-                kind: symbol.kind,
-                range: symbol.range,
-                container_name,
-            });
-        }
     }
 }
 

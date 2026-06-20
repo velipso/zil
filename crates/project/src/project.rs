@@ -3641,11 +3641,6 @@ impl Project {
         )
     }
 
-    pub fn symbols(&self, query: &str, cx: &mut Context<Self>) -> Task<Result<Vec<Symbol>>> {
-        self.lsp_store
-            .update(cx, |lsp_store, cx| lsp_store.symbols(query, cx))
-    }
-
     pub fn open_buffer_for_symbol(
         &mut self,
         symbol: &Symbol,
