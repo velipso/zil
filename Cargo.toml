@@ -20,15 +20,11 @@ members = [
     "crates/dap",
     "crates/dap_adapters",
     "crates/db",
-    "crates/debug_adapter_extension",
     "crates/debugger_tools",
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
     "crates/explorer_command_injector",
-    "crates/extension",
-    "crates/extension_api",
-    "crates/extension_host",
     "crates/feature_flags",
     "crates/feature_flags_macros",
     "crates/file_icons",
@@ -59,7 +55,6 @@ members = [
     "crates/keymap_editor",
     "crates/language",
     "crates/language_core",
-    "crates/language_extension",
     "crates/language_model",
     "crates/language_model_core",
     "crates/language_onboarding",
@@ -108,7 +103,6 @@ members = [
     "crates/task",
     "crates/text",
     "crates/theme",
-    "crates/theme_extension",
     "crates/theme_selector",
     "crates/theme_settings",
     "crates/title_bar",
@@ -133,14 +127,6 @@ members = [
     "crates/zlog_settings",
     "crates/ztracing",
     "crates/ztracing_macro",
-
-    #
-    # Extensions
-    #
-
-    "extensions/glsl",
-    "extensions/proto",
-    "extensions/test-extension", "tooling/grammar-builder",
 
     #
     # Tooling
@@ -181,15 +167,12 @@ crossbeam = "0.8.4"
 dap = { path = "crates/dap" }
 dap_adapters = { path = "crates/dap_adapters" }
 db = { path = "crates/db" }
-debug_adapter_extension = { path = "crates/debug_adapter_extension" }
 debugger_tools = { path = "crates/debugger_tools" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
-extension = { path = "crates/extension" }
-extension_host = { path = "crates/extension_host" }
 feature_flags = { path = "crates/feature_flags" }
 feature_flags_macros = { path = "crates/feature_flags_macros" }
 file_icons = { path = "crates/file_icons" }
@@ -220,7 +203,6 @@ json_schema_store = { path = "crates/json_schema_store" }
 keymap_editor = { path = "crates/keymap_editor" }
 language = { path = "crates/language" }
 language_core = { path = "crates/language_core" }
-language_extension = { path = "crates/language_extension" }
 language_model = { path = "crates/language_model" }
 language_model_core = { path = "crates/language_model_core" }
 language_onboarding = { path = "crates/language_onboarding" }
@@ -271,7 +253,6 @@ tab_switcher = { path = "crates/tab_switcher" }
 task = { path = "crates/task" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }
-theme_extension = { path = "crates/theme_extension" }
 theme_selector = { path = "crates/theme_selector" }
 theme_settings = { path = "crates/theme_settings" }
 title_bar = { path = "crates/title_bar" }
