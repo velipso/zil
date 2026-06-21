@@ -162,8 +162,6 @@ pub struct SubmitEditPredictionJumpExampleBody {
     pub recently_viewed_files: Vec<JumpExampleRecentFile>,
     pub cursor_path: Arc<Path>,
     pub cursor_position: String,
-    pub edit_history: Vec<Arc<zeta_prompt::Event>>,
-    pub diagnostics: Vec<zeta_prompt::ActiveBufferDiagnostic>,
     pub future_edit_history: String,
     pub navigation_history: Vec<JumpExampleRecentFile>,
     pub is_in_open_source_repo: bool,

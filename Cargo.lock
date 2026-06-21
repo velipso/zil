@@ -1439,7 +1439,6 @@ dependencies = [
  "serde_json",
  "strum",
  "uuid",
- "zeta_prompt",
 ]
 
 [[package]]
@@ -1451,7 +1450,6 @@ dependencies = [
  "serde_json",
  "strum",
  "uuid",
- "zeta_prompt",
 ]
 
 [[package]]
@@ -13987,17 +13985,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "zeta_prompt"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "imara-diff",
- "indoc",
- "serde",
- "strum",
 ]
 
 [[package]]
