@@ -25,8 +25,6 @@ members = [
     "crates/encoding_selector",
     "crates/env_var",
     "crates/explorer_command_injector",
-    "crates/feature_flags",
-    "crates/feature_flags_macros",
     "crates/file_icons",
     "crates/fs",
     "crates/fuzzy",
@@ -68,7 +66,6 @@ members = [
     "crates/menu",
     "crates/mermaid_render",
     "crates/migrator",
-    "crates/miniprofiler_ui",
     "crates/multi_buffer",
     "crates/net",
     "crates/notifications",
@@ -173,8 +170,6 @@ dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
-feature_flags = { path = "crates/feature_flags" }
-feature_flags_macros = { path = "crates/feature_flags_macros" }
 file_icons = { path = "crates/file_icons" }
 fs = { path = "crates/fs" }
 fuzzy = { path = "crates/fuzzy" }
@@ -216,7 +211,6 @@ media = { path = "crates/media" }
 menu = { path = "crates/menu" }
 mermaid_render = { path = "crates/mermaid_render" }
 migrator = { path = "crates/migrator" }
-miniprofiler_ui = { path = "crates/miniprofiler_ui" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
 notifications = { path = "crates/notifications" }
@@ -640,7 +634,6 @@ debug = "full"
 # proc-macros start
 gpui_macros = { opt-level = 3 }
 derive_refineable = { opt-level = 3 }
-feature_flags_macros = { opt-level = 3 }
 settings_macros = { opt-level = 3 }
 sqlez_macros = { opt-level = 3, codegen-units = 1 }
 ui_macros = { opt-level = 3 }
@@ -664,7 +657,6 @@ breadcrumbs = { codegen-units = 1 }
 collections = { codegen-units = 1 }
 command_palette = { codegen-units = 1 }
 command_palette_hooks = { codegen-units = 1 }
-feature_flags = { codegen-units = 1 }
 file_icons = { codegen-units = 1 }
 image_viewer = { codegen-units = 1 }
 json_schema_store = { codegen-units = 1 }

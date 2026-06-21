@@ -483,7 +483,6 @@ fn main() {
         project::Project::init(&client, cx);
         debugger_tools::init(cx);
         client::init(&client, cx);
-        feature_flags::FeatureFlagStore::init(cx);
 
         let system_id = cx.foreground_executor().block_on(system_id).ok();
         let installation_id = cx.foreground_executor().block_on(installation_id).ok();
@@ -577,7 +576,6 @@ fn main() {
         keymap_editor::init(cx);
         inspector_ui::init(app_state.clone(), cx);
         json_schema_store::init(cx);
-        miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
         which_key::init(cx);
 
         cx.observe_global::<SettingsStore>({

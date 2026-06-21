@@ -18,7 +18,6 @@ use assets::Assets;
 use breadcrumbs::Breadcrumbs;
 use client::zed_urls;
 use editor::{Editor, MultiBuffer};
-use feature_flags::{FeatureFlagAppExt as _, PanicFeatureFlag};
 use futures::{StreamExt, channel::mpsc, select_biased};
 use gpui::{
     Action, App, AppContext as _, ClipboardItem, Context, DismissEvent, Element, Entity,
@@ -143,25 +142,6 @@ pub fn init(cx: &mut App) {
 
     cx.on_action(|_: &RestoreBanner, cx| title_bar::restore_banner(cx));
 
-    cx.observe_flag::<PanicFeatureFlag, _>({
-        let mut added = false;
-        move |flag, cx| {
-            if added || !*flag {
-                return;
-            }
-            added = true;
-            cx.on_action(|_: &TestPanic, _| panic!("Ran the TestPanic action"))
-                .on_action(|_: &TestCrash, _| {
-                    unsafe extern "C" {
-                        fn puts(s: *const i8);
-                    }
-                    unsafe {
-                        puts(0xabad1d3a as *const i8);
-                    }
-                });
-        }
-    })
-    .detach();
     cx.on_action(|&zed_actions::OpenKeymapFile, cx| {
         with_active_or_new_workspace(cx, |_, window, cx| {
             open_settings_file(

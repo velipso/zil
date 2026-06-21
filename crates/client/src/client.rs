@@ -18,7 +18,6 @@ use cloud_api_client::websocket_protocol::MessageToClient;
 use cloud_api_client::{ClientApiError, CloudApiClient};
 use cloud_api_types::OrganizationId;
 use credentials_provider::CredentialsProvider;
-use feature_flags::FeatureFlagAppExt as _;
 use futures::{
     AsyncReadExt, FutureExt, SinkExt, Stream, StreamExt, TryFutureExt as _, TryStreamExt,
     channel::{mpsc, oneshot},
@@ -971,116 +970,15 @@ impl Client {
         }
     }
 
-    /// Maintains a WebSocket connection with Cloud for receiving updates from the server.
-    ///
-    /// The connection is re-established with exponential backoff if it drops or fails to
-    /// establish.
-    fn connect_to_cloud(self: &Arc<Self>, cx: &AsyncApp) {
-        let this = self.clone();
-        let task = cx.spawn(async move |cx| {
-            #[cfg(any(test, feature = "test-support"))]
-            let mut rng = StdRng::seed_from_u64(0);
-            #[cfg(not(any(test, feature = "test-support")))]
-            let mut rng = StdRng::from_os_rng();
-
-            let mut delay = INITIAL_RECONNECTION_DELAY;
-            loop {
-                match Self::run_cloud_connection(&this, cx).await {
-                    Ok(()) => {
-                        log::info!("cloud websocket disconnected, will reconnect");
-                        delay = INITIAL_RECONNECTION_DELAY;
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "cloud websocket connect failed: {err:#}; retrying in {delay:?}"
-                        );
-                    }
-                }
-
-                let jitter = Duration::from_millis(rng.random_range(0..delay.as_millis() as u64));
-                cx.background_executor().timer(delay + jitter).await;
-                delay = cmp::min(delay * 2, MAX_RECONNECTION_DELAY);
-            }
-        });
-        self.state.write()._cloud_connection_task = Some(task);
-    }
-
-    /// Runs a single attempt of the cloud websocket connection, returning once the connection
-    /// closes (cleanly or otherwise) or fails to establish.
-    async fn run_cloud_connection(self: &Arc<Self>, cx: &mut AsyncApp) -> Result<()> {
-        let connect_task = cx.update({
-            let cloud_client = self.cloud_client.clone();
-            move |cx| cloud_client.connect(cx)
-        })?;
-        let connection = connect_task.await?;
-
-        let (mut messages, _cloud_io_task) = cx.update(|cx| connection.spawn(cx));
-
-        {
-            let mut state = self.state.write();
-            let mut cloud_connection_id = state.cloud_connection_id.0.borrow_mut();
-            *cloud_connection_id = cloud_connection_id.saturating_add(1);
-        }
-
-        while let Some(message) = messages.next().await {
-            if let Some(message) = message.log_err() {
-                self.handle_message_to_client(message, cx);
-            }
-        }
-
-        Ok(())
-    }
-
     /// Performs a sign-in and also (optionally) connects to Collab.
     ///
     /// Only Zed staff automatically connect to Collab.
     pub async fn sign_in_with_optional_connect(
         self: &Arc<Self>,
-        try_provider: bool,
-        cx: &AsyncApp,
+        _try_provider: bool,
+        _cx: &AsyncApp,
     ) -> Result<()> {
-        // Don't try to sign in again if we're already connected to Collab, as it will temporarily disconnect us.
-        if self.status().borrow().is_connected() {
-            return Ok(());
-        }
-
-        let (is_staff_tx, is_staff_rx) = oneshot::channel::<bool>();
-        let mut is_staff_tx = Some(is_staff_tx);
-        cx.update(|cx| {
-            cx.on_flags_ready(move |state, _cx| {
-                if let Some(is_staff_tx) = is_staff_tx.take() {
-                    is_staff_tx.send(state.is_staff).log_err();
-                }
-            })
-            .detach();
-        });
-
-        let credentials = self.sign_in(try_provider, cx).await?;
-
-        self.connect_to_cloud(cx);
-
-        cx.update(move |cx| {
-            cx.spawn({
-                let client = self.clone();
-                async move |cx| {
-                    let is_staff = is_staff_rx.await?;
-                    if is_staff {
-                        match client.connect_with_credentials(credentials, cx).await {
-                            ConnectionResult::Timeout => Err(anyhow!("connection timed out")),
-                            ConnectionResult::ConnectionReset => Err(anyhow!("connection reset")),
-                            ConnectionResult::Result(result) => {
-                                result.context("client auth and connect")
-                            }
-                        }
-                    } else {
-                        Ok(())
-                    }
-                }
-            })
-            .detach_and_log_err(cx);
-        });
-
-        Ok(())
+        todo!("sign_in_with_optional_connect");
     }
 
     pub async fn connect(
@@ -1850,14 +1748,6 @@ impl Client {
         self.message_to_client_handlers
             .lock()
             .push(Box::new(handler));
-    }
-
-    fn handle_message_to_client(self: &Arc<Client>, message: MessageToClient, cx: &AsyncApp) {
-        cx.update(|cx| {
-            for handler in self.message_to_client_handlers.lock().iter() {
-                handler(&message, cx);
-            }
-        });
     }
 
     pub fn telemetry(&self) -> &Arc<Telemetry> {

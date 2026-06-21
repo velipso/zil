@@ -12,7 +12,6 @@ use cloud_llm_client::{
 };
 use collections::{HashMap, HashSet, hash_map::Entry};
 use derive_more::Deref;
-use feature_flags::FeatureFlagAppExt;
 use futures::{Future, StreamExt, channel::mpsc};
 use gpui::{
     App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, SharedString, SharedUri, Task,
@@ -867,14 +866,6 @@ impl UserStore {
         response: GetAuthenticatedUserResponse,
         cx: &mut Context<Self>,
     ) {
-        let staff = response.user.is_staff && !*feature_flags::ZED_DISABLE_STAFF;
-        cx.update_flags(staff, response.feature_flags);
-        if let Some(client) = self.client.upgrade() {
-            client
-                .telemetry
-                .set_authenticated_user_info(Some(response.user.metrics_id.clone()), staff);
-        }
-
         self.organizations = response.organizations.into_iter().map(Arc::new).collect();
 
         self.current_organization = response
