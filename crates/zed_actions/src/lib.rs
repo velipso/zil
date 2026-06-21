@@ -346,15 +346,6 @@ pub mod settings_profile_selector {
     pub struct Toggle;
 }
 
-/// Opens the recent projects interface.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = projects)]
-#[serde(deny_unknown_fields)]
-pub struct OpenRecent {
-    #[serde(default)]
-    pub create_new_window: bool,
-}
-
 /// Where to spawn the task in the UI.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

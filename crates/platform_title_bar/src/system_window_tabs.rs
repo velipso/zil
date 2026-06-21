@@ -470,27 +470,6 @@ impl Render for SystemWindowTabs {
                         .size_full(),
                     ),
             )
-            .child(
-                h_flex()
-                    .h_full()
-                    .px(DynamicSpacing::Base06.rems(cx))
-                    .border_t_1()
-                    .border_l_1()
-                    .border_color(cx.theme().colors().border)
-                    .child(
-                        IconButton::new("plus", IconName::Plus)
-                            .icon_size(IconSize::Small)
-                            .icon_color(Color::Muted)
-                            .on_click(|_event, window, cx| {
-                                window.dispatch_action(
-                                    Box::new(zed_actions::OpenRecent {
-                                        create_new_window: true,
-                                    }),
-                                    cx,
-                                );
-                            }),
-                    ),
-            )
             .into_any_element()
     }
 }

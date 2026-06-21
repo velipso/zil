@@ -504,8 +504,6 @@ fn main() {
         Client::set_global(client.clone(), cx);
 
         zed::init(cx);
-        #[cfg(target_os = "macos")]
-        zed::move_to_applications::init(cx);
         project::Project::init(&client, cx);
         debugger_tools::init(cx);
         client::init(&client, cx);
@@ -579,8 +577,6 @@ fn main() {
             cx,
         );
         zed::remote_debug::init(cx);
-
-        recent_projects::init(cx);
 
         load_embedded_fonts(cx);
 

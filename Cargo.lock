@@ -7591,15 +7591,6 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordered-float"
-version = "2.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "ordered-float"
 version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bb71e1b3fa6ca1c61f383464aaf2bb0e2f8e772a1f01d486832464de363b951"
@@ -8938,40 +8929,6 @@ dependencies = [
  "bytemuck",
  "core_maths",
  "font-types 0.11.0",
-]
-
-[[package]]
-name = "recent_projects"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "editor",
- "extension",
- "fs",
- "futures",
- "fuzzy_nucleo",
- "gpui",
- "http_client",
- "indoc",
- "language",
- "menu",
- "ordered-float 2.10.1",
- "paths",
- "picker",
- "project",
- "release_channel",
- "remote",
- "serde",
- "serde_json",
- "settings",
- "task",
- "ui",
- "ui_input",
- "util",
- "windows-registry 0.6.1",
- "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -13105,7 +13062,7 @@ dependencies = [
  "objc2-metal 0.3.2",
  "objc2-quartz-core 0.3.2",
  "once_cell",
- "ordered-float 4.6.0",
+ "ordered-float",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",
@@ -13600,17 +13557,6 @@ dependencies = [
  "windows-link 0.1.3",
  "windows-result 0.3.4",
  "windows-strings 0.4.2",
-]
-
-[[package]]
-name = "windows-registry"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
-dependencies = [
- "windows-link 0.2.1",
- "windows-result 0.4.1",
- "windows-strings 0.5.1",
 ]
 
 [[package]]
@@ -14786,7 +14732,6 @@ dependencies = [
  "project",
  "proto",
  "rayon",
- "recent_projects",
  "release_channel",
  "remote",
  "reqwest_client",

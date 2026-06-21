@@ -105,12 +105,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     },
                     workspace::Open::default(),
                 ),
-                MenuItem::action(
-                    "Open Recent...",
-                    zed_actions::OpenRecent {
-                        create_new_window: false,
-                    },
-                ),
                 MenuItem::separator(),
                 MenuItem::action("Add Folder to Project…", workspace::AddFolderToProject),
                 MenuItem::separator(),

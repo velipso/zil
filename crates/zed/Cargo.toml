@@ -23,7 +23,6 @@ test-support = [
     "project/test-support",
     "editor/test-support",
     "image_viewer/test-support",
-    "recent_projects/test-support",
     "title_bar/test-support",
 ]
 visual-tests = [
@@ -40,7 +39,6 @@ visual-tests = [
     "db/test-support",
     "language_model/test-support",
     "fs/test-support",
-    "recent_projects/test-support",
     "title_bar/test-support",
 ]
 
@@ -119,7 +117,6 @@ paths.workspace = true
 profiling.workspace = true
 project.workspace = true
 proto.workspace = true
-recent_projects.workspace = true
 release_channel.workspace = true
 remote.workspace = true
 reqwest_client.workspace = true

@@ -347,10 +347,6 @@
     "context": "Workspace",
     "use_key_equivalents": true,
     "bindings": {
-      // Change the default action on `menu::Confirm` by setting the parameter
-      // "alt-cmd-o": ["projects::OpenRecent", {"create_new_window": true }],
-      "alt-cmd-o": ["projects::OpenRecent", { "create_new_window": false }],
-      "ctrl-r": ["projects::OpenRecent", { "create_new_window": false }],
       "cmd-s": "workspace::Save",
       "cmd-k s": "workspace::SaveWithoutFormat",
       "alt-shift-enter": "toast::RunAction",
@@ -516,16 +512,6 @@
     "use_key_equivalents": true,
     "bindings": {
       "cmd-shift-a": "toolchain::AddToolchain",
-    },
-  },
-  {
-    "context": "RecentProjects || (RecentProjects > Picker > Editor)",
-    "use_key_equivalents": true,
-    "bindings": {
-      "cmd-k": "recent_projects::ToggleActionsMenu",
-      "cmd-shift-a": "workspace::AddFolderToProject",
-      "shift-backspace": "recent_projects::RemoveSelected",
-      "cmd-shift-enter": "recent_projects::AddToWorkspace",
     },
   },
   {

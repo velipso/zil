@@ -83,7 +83,6 @@ members = [
     "crates/platform_title_bar",
     "crates/project",
     "crates/proto",
-    "crates/recent_projects",
     "crates/refineable",
     "crates/refineable/derive_refineable",
     "crates/release_channel",
@@ -248,7 +247,6 @@ platform_title_bar = { path = "crates/platform_title_bar" }
 project = { path = "crates/project" }
 prompt_store = { path = "crates/prompt_store" }
 proto = { path = "crates/proto" }
-recent_projects = { path = "crates/recent_projects" }
 refineable = { path = "crates/refineable" }
 release_channel = { path = "crates/release_channel" }
 remote = { path = "crates/remote" }

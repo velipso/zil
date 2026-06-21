@@ -2,8 +2,6 @@ mod app_menus;
 #[cfg(target_os = "macos")]
 pub(crate) mod mac_only_instance;
 mod migrate;
-#[cfg(target_os = "macos")]
-pub(crate) mod move_to_applications;
 mod open_listener;
 mod open_url_modal;
 mod quick_action_bar;
