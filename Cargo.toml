@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/agent_skills",
     "crates/askpass",
     "crates/assets",
     "crates/breadcrumbs",
@@ -162,7 +161,6 @@ edition = "2024"
 # Workspace member crates
 #
 
-agent_skills = { path = "crates/agent_skills" }
 askpass = { path = "crates/askpass" }
 assets = { path = "crates/assets" }
 breadcrumbs = { path = "crates/breadcrumbs" }

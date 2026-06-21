@@ -2,7 +2,6 @@ mod components;
 mod page_data;
 pub mod pages;
 
-use agent_skills::SkillIndex;
 use anyhow::{Context as _, Result};
 use editor::{Editor, EditorEvent};
 use futures::{StreamExt, channel::mpsc};
@@ -27,7 +26,7 @@ use settings::{
 use std::{
     any::{Any, TypeId, type_name},
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     num::{NonZero, NonZeroU32},
     ops::Range,
     path::PathBuf,
@@ -740,7 +739,6 @@ pub struct SettingsWindow {
     files_focus_handle: FocusHandle,
     search_index: Option<Arc<SearchIndex>>,
     list_state: ListState,
-    pub(crate) hidden_deleted_skill_directory_paths: HashSet<PathBuf>,
     pub(crate) regex_validation_error: Option<String>,
     last_copied_link_path: Option<&'static str>,
     /// Directory path of the skill whose share link was most recently copied,
@@ -1519,28 +1517,6 @@ impl SettingsWindow {
         })
         .detach();
 
-        cx.observe_global_in::<SkillIndex>(window, |this, _window, cx| {
-            if let Some(skill_index) = cx.try_global::<SkillIndex>() {
-                this.hidden_deleted_skill_directory_paths
-                    .retain(|directory_path| {
-                        skill_index
-                            .global_skills
-                            .iter()
-                            .chain(
-                                skill_index
-                                    .project_skills
-                                    .iter()
-                                    .flat_map(|group| group.skills.iter()),
-                            )
-                            .any(|skill| skill.directory_path.as_path() == directory_path.as_path())
-                    });
-            } else {
-                this.hidden_deleted_skill_directory_paths.clear();
-            }
-            cx.notify();
-        })
-        .detach();
-
         cx.on_window_closed(|cx, _window_id| {
             if let Some(existing_window) = cx
                 .windows()
@@ -1685,7 +1661,6 @@ impl SettingsWindow {
                 .tab_index(HEADER_CONTAINER_TAB_INDEX)
                 .tab_stop(false),
             search_index: None,
-            hidden_deleted_skill_directory_paths: HashSet::default(),
             regex_validation_error: None,
             list_state,
             last_copied_link_path: None,
@@ -4509,7 +4484,6 @@ pub mod test {
                 files_focus_handle: cx.focus_handle(),
                 search_index: None,
                 list_state: ListState::new(0, gpui::ListAlignment::Top, px(0.0)),
-                hidden_deleted_skill_directory_paths: HashSet::default(),
                 regex_validation_error: None,
                 last_copied_link_path: None,
                 last_copied_skill_directory_path: None,
@@ -4636,7 +4610,6 @@ pub mod test {
             files_focus_handle: cx.focus_handle(),
             search_index: None,
             list_state: ListState::new(0, gpui::ListAlignment::Top, px(0.0)),
-            hidden_deleted_skill_directory_paths: HashSet::default(),
             regex_validation_error: None,
             last_copied_link_path: None,
             last_copied_skill_directory_path: None,
