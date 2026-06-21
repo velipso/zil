@@ -129,16 +129,8 @@ impl Manager {
         })
     }
 
-    fn connection_lost(&mut self, cx: &mut Context<Self>) {
-        for project in self.projects.drain() {
-            if let Some(project) = project.upgrade() {
-                project.update(cx, |project, cx| {
-                    project.disconnected_from_host(cx);
-                    project.close(cx);
-                });
-            }
-        }
-        self.maintain_connection.take();
+    fn connection_lost(&mut self, _cx: &mut Context<Self>) {
+        todo!("connection_lost");
     }
 
     async fn maintain_connection(

@@ -5181,35 +5181,9 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn formatting_section() -> [SettingsPageItem; 7] {
+    fn formatting_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader("Formatting"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Format On Save",
-                description: "Whether or not to perform a buffer format before saving.",
-                field: Box::new(
-                    // TODO(settings_ui): this setting should just be a bool
-                    SettingField {
-                        json_path: Some("languages.$(language).format_on_save"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.format_on_save.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.format_on_save = value;
-                                },
-                            )
-                        },
-                    },
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Remove Trailing Whitespace On Save",
                 description: "Whether or not to remove any trailing whitespace from lines of a buffer before saving it.",
@@ -5268,58 +5242,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
                     should_do_titlecase: Some(false),
                     ..Default::default()
                 })),
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Formatter",
-                description: "How to perform a buffer format.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).formatter"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.formatter.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.formatter = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Code Actions On Format",
-                description: "Additional code actions to run when formatting.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).code_actions_on_format"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.code_actions_on_format.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.code_actions_on_format = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
                 files: USER | PROJECT,
             }),
         ]
@@ -5776,138 +5698,8 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn debugger_section() -> [SettingsPageItem; 2] {
-        [
-            SettingsPageItem::SectionHeader("Debuggers"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Debuggers",
-                description: "Preferred debuggers for this language.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).debuggers"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.debuggers.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.debuggers = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
-    fn prettier_section() -> [SettingsPageItem; 5] {
-        [
-            SettingsPageItem::SectionHeader("Prettier"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Allowed",
-                description: "Enables or disables formatting with Prettier for a given language.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).prettier.allowed"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.prettier.as_ref()?.allowed.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.prettier.get_or_insert_default().allowed = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Parser",
-                description: "Forces Prettier integration to use a specific parser name when formatting files with the language.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).prettier.parser"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.prettier.as_ref()?.parser.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.prettier.get_or_insert_default().parser = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Plugins",
-                description: "Forces Prettier integration to use specific plugins when formatting files with the language.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).prettier.plugins"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.prettier.as_ref()?.plugins.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.prettier.get_or_insert_default().plugins = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Options",
-                description: "Default Prettier options, in the format as in package.json section for Prettier.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).prettier.options"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.prettier.as_ref()?.options.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.prettier.get_or_insert_default().options = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     concat_sections!(
         lsp_section(),
-        debugger_section(),
-        prettier_section(),
     )
 }
 

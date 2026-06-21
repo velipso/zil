@@ -14,7 +14,7 @@ use itertools::{Either, Itertools};
 use settings::{DocumentFoldingRanges, DocumentSymbols, SemanticTokens};
 
 pub use settings::{
-    AutoIndentMode, FormatOnSave, Formatter, FormatterList,
+    AutoIndentMode,
     InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode, RewrapBehavior,
     ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
@@ -71,8 +71,6 @@ pub struct LanguageSettings {
     pub wrap_guides: Vec<usize>,
     /// Indent guide related settings.
     pub indent_guides: IndentGuideSettings,
-    /// Whether or not to perform a buffer format before saving.
-    pub format_on_save: FormatOnSave,
     /// Whether or not to remove any trailing whitespace from lines of a buffer
     /// before saving it.
     pub remove_trailing_whitespace_on_save: bool,
@@ -82,10 +80,6 @@ pub struct LanguageSettings {
     /// How line endings are initialized for new files and normalized during
     /// format and save.
     pub line_ending: LineEndingSetting,
-    /// How to perform a buffer format.
-    pub formatter: settings::FormatterList,
-    /// Zed's Prettier integration settings.
-    pub prettier: PrettierSettings,
     /// Whether to use language servers to provide code intelligence.
     pub enable_language_server: bool,
     /// The list of language servers to use (or disable) for this language.
@@ -119,12 +113,8 @@ pub struct LanguageSettings {
     pub auto_indent: AutoIndentMode,
     /// Whether indentation of pasted content should be adjusted based on the context.
     pub auto_indent_on_paste: bool,
-    /// Which code actions to run on save
-    pub code_actions_on_format: HashMap<String, bool>,
     /// Task configuration for this language.
     pub tasks: LanguageTaskSettings,
-    /// Preferred debuggers for this language.
-    pub debuggers: Vec<String>,
     /// Whether to enable word diff highlighting in the editor.
     ///
     /// When enabled, changed words within modified lines are highlighted
@@ -188,26 +178,6 @@ pub struct LanguageTaskSettings {
     /// * Zed task from either of the task config file
     /// * Zed task from history (e.g. one-off task was spawned before)
     pub prefer_lsp: bool,
-}
-
-/// Allows to enable/disable formatting with Prettier
-/// and configure default Prettier, used when no project-level Prettier installation is found.
-/// Prettier formatting is disabled by default.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PrettierSettings {
-    /// Enables or disables formatting with Prettier for a given language.
-    pub allowed: bool,
-
-    /// Forces Prettier integration to use a specific parser name when formatting files with the language.
-    pub parser: Option<String>,
-
-    /// Forces Prettier integration to use specific plugins when formatting files with the language.
-    /// The default Prettier will be installed with these plugins.
-    pub plugins: HashSet<String>,
-
-    /// Default Prettier options, in the format as in package.json section for Prettier.
-    /// If project installs Prettier via its package.json, these options will be ignored.
-    pub options: HashMap<String, serde_json::Value>,
 }
 
 impl LanguageSettings {
@@ -510,7 +480,6 @@ impl settings::Settings for AllLanguageSettings {
         let all_languages = &content.project.all_languages;
 
         fn load_from_content(settings: LanguageSettingsContent) -> LanguageSettings {
-            let prettier = settings.prettier.unwrap();
             let indent_guides = settings.indent_guides.unwrap();
             let tasks = settings.tasks.unwrap();
             let whitespace_map = settings.whitespace_map.unwrap();
@@ -529,19 +498,11 @@ impl settings::Settings for AllLanguageSettings {
                     coloring: indent_guides.coloring.unwrap(),
                     background_coloring: indent_guides.background_coloring.unwrap(),
                 },
-                format_on_save: settings.format_on_save.unwrap(),
                 remove_trailing_whitespace_on_save: settings
                     .remove_trailing_whitespace_on_save
                     .unwrap(),
                 ensure_final_newline_on_save: settings.ensure_final_newline_on_save.unwrap(),
                 line_ending: settings.line_ending.unwrap(),
-                formatter: settings.formatter.unwrap(),
-                prettier: PrettierSettings {
-                    allowed: prettier.allowed.unwrap(),
-                    parser: prettier.parser.filter(|parser| !parser.is_empty()),
-                    plugins: prettier.plugins.unwrap_or_default(),
-                    options: prettier.options.unwrap_or_default(),
-                },
                 enable_language_server: settings.enable_language_server.unwrap(),
                 language_servers: settings.language_servers.unwrap(),
                 semantic_tokens: settings.semantic_tokens.unwrap(),
@@ -557,13 +518,11 @@ impl settings::Settings for AllLanguageSettings {
                 indent_list_on_tab: settings.indent_list_on_tab.unwrap(),
                 auto_indent: settings.auto_indent.unwrap(),
                 auto_indent_on_paste: settings.auto_indent_on_paste.unwrap(),
-                code_actions_on_format: settings.code_actions_on_format.unwrap(),
                 tasks: LanguageTaskSettings {
                     variables: tasks.variables.unwrap_or_default(),
                     enabled: tasks.enabled.unwrap(),
                     prefer_lsp: tasks.prefer_lsp.unwrap(),
                 },
-                debuggers: settings.debuggers.unwrap(),
                 word_diff_enabled: settings.word_diff_enabled.unwrap(),
             }
         }

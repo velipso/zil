@@ -509,14 +509,6 @@ impl VsCodeSettings {
             }),
             extend_list_on_newline: None,
             indent_list_on_tab: None,
-            format_on_save: self.read_bool("editor.guides.formatOnSave").map(|b| {
-                if b {
-                    FormatOnSave::On
-                } else {
-                    FormatOnSave::Off
-                }
-            }),
-            formatter: None,
             hard_tabs: self.read_bool("editor.insertSpaces").map(|v| !v),
             indent_guides: skip_default(IndentGuideSettingsContent {
                 enabled: self.read_bool("editor.guides.indentation"),
@@ -535,7 +527,6 @@ impl VsCodeSettings {
             document_folding_ranges: None,
             document_symbols: None,
             preferred_line_length: self.read_u32("editor.wordWrapColumn"),
-            prettier: None,
             remove_trailing_whitespace_on_save: self.read_bool("editor.trimAutoWhitespace"),
             show_whitespaces: self.read_enum("editor.renderWhitespace", |s| {
                 Some(match s {

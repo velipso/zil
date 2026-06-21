@@ -24,7 +24,7 @@ use crate::{
     Symbol,
     buffer_store::{BufferStore, BufferStoreEvent},
     environment::ProjectEnvironment,
-    lsp_command::{self, *},
+    lsp_command::*,
     lsp_store::{
         self,
         folding_ranges::FoldingRangeData,
@@ -47,7 +47,7 @@ use client::{TypedEnvelope, proto};
 use clock::Global;
 use collections::{BTreeMap, BTreeSet, HashMap, HashSet, btree_map};
 use futures::{
-    AsyncWriteExt, Future, FutureExt, StreamExt,
+    Future, FutureExt, StreamExt,
     future::{Shared, join_all},
     select,
     stream::FuturesUnordered,
@@ -60,20 +60,17 @@ use gpui::{
 use http_client::HttpClient;
 use itertools::Itertools as _;
 use language::{
-    Bias, BinaryStatus, Buffer, CachedLspAdapter, Capability, CodeLabel, Diff,
+    Bias, BinaryStatus, Buffer, CachedLspAdapter, Capability, CodeLabel,
     File as _, Language, LanguageName, LanguageRegistry, LocalFile,
     LspAdapter, LspAdapterDelegate, LspInstaller, ManifestDelegate, ManifestName, ModelineSettings, PointUtf16, TextBufferSnapshot, ToOffset,
     Toolchain, Transaction, Unclipped,
     language_settings::{
-        AllLanguageSettings, FormatOnSave, Formatter, LanguageSettings, LineEndingSetting,
+        AllLanguageSettings, LanguageSettings,
         all_language_settings,
     },
     modeline, point_to_lsp,
-    proto::{
-        deserialize_anchor, deserialize_anchor_range, deserialize_version,
-        serialize_anchor_range,
-    },
-    range_from_lsp, range_to_lsp,
+    proto::{deserialize_anchor, deserialize_version},
+    range_from_lsp,
 };
 use lsp::{
     AdapterServerCapabilities,
@@ -112,7 +109,7 @@ use std::{
     vec,
 };
 use sum_tree::Dimensions;
-use text::{Anchor, BufferId, LineEnding, OffsetRangeExt};
+use text::{Anchor, BufferId};
 
 use util::{
     ResultExt as _, debug_panic, defer, maybe, merge_json_value_into,
@@ -186,31 +183,10 @@ impl ProgressToken {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FormatTrigger {
-    Save,
-    Manual,
-}
-
-pub enum LspFormatTarget {
-    Buffers,
-    Ranges(BTreeMap<BufferId, Vec<Range<Anchor>>>),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpenLspBufferHandle(Entity<OpenLspBuffer>);
 
 struct OpenLspBuffer(Entity<Buffer>);
-
-impl FormatTrigger {
-    fn from_proto(value: i32) -> FormatTrigger {
-        match value {
-            0 => FormatTrigger::Save,
-            1 => FormatTrigger::Manual,
-            _ => FormatTrigger::Save,
-        }
-    }
-}
 
 #[derive(Clone)]
 struct UnifiedLanguageServer {
@@ -252,7 +228,6 @@ pub struct LocalLspStore {
     language_server_ids: HashMap<LanguageServerSeed, UnifiedLanguageServer>,
     yarn: Entity<YarnPathStore>,
     pub language_servers: HashMap<LanguageServerId, LanguageServerState>,
-    buffers_being_formatted: HashSet<BufferId>,
     last_workspace_edits_by_language_server: HashMap<LanguageServerId, ProjectTransaction>,
     language_server_watched_paths: HashMap<LanguageServerId, LanguageServerWatchedPaths>,
     watched_manifest_filenames: HashSet<ManifestName>,
@@ -1253,566 +1228,6 @@ impl LocalLspStore {
                 } => Some((adapter, server)),
                 _ => None,
             })
-    }
-
-    async fn format_locally(
-        lsp_store: WeakEntity<LspStore>,
-        mut buffers: Vec<FormattableBuffer>,
-        push_to_history: bool,
-        trigger: FormatTrigger,
-        logger: zlog::Logger,
-        cx: &mut AsyncApp,
-    ) -> anyhow::Result<ProjectTransaction> {
-        // Do not allow multiple concurrent formatting requests for the
-        // same buffer.
-        lsp_store.update(cx, |this, cx| {
-            let this = this.as_local_mut().unwrap();
-            buffers.retain(|buffer| {
-                this.buffers_being_formatted
-                    .insert(buffer.handle.read(cx).remote_id())
-            });
-        })?;
-
-        let _cleanup = defer({
-            let this = lsp_store.clone();
-            let mut cx = cx.clone();
-            let buffers = &buffers;
-            move || {
-                this.update(&mut cx, |this, cx| {
-                    let this = this.as_local_mut().unwrap();
-                    for buffer in buffers {
-                        this.buffers_being_formatted
-                            .remove(&buffer.handle.read(cx).remote_id());
-                    }
-                })
-                .ok();
-            }
-        });
-
-        let mut project_transaction = ProjectTransaction::default();
-
-        for buffer in &buffers {
-            zlog::debug!(
-                logger =>
-                "formatting buffer '{:?}'",
-                buffer.abs_path.as_ref().unwrap_or(&PathBuf::from("unknown")).display()
-            );
-            // Create an empty transaction to hold all of the formatting edits.
-            let formatting_transaction_id = buffer.handle.update(cx, |buffer, cx| {
-                // ensure no transactions created while formatting are
-                // grouped with the previous transaction in the history
-                // based on the transaction group interval
-                buffer.finalize_last_transaction();
-                buffer
-                    .start_transaction()
-                    .context("transaction already open")?;
-                buffer.end_transaction(cx);
-                let transaction_id = buffer.push_empty_transaction(cx.background_executor().now());
-                buffer.finalize_last_transaction();
-                anyhow::Ok(transaction_id)
-            })?;
-
-            let result = Self::format_buffer_locally(
-                lsp_store.clone(),
-                buffer,
-                formatting_transaction_id,
-                trigger,
-                logger,
-                cx,
-            )
-            .await;
-
-            buffer.handle.update(cx, |buffer, cx| {
-                let Some(formatting_transaction) =
-                    buffer.get_transaction(formatting_transaction_id).cloned()
-                else {
-                    zlog::warn!(logger => "no formatting transaction");
-                    return;
-                };
-                if formatting_transaction.edit_ids.is_empty() {
-                    zlog::debug!(logger => "no changes made while formatting");
-                    buffer.forget_transaction(formatting_transaction_id);
-                    return;
-                }
-                if !push_to_history {
-                    zlog::trace!(logger => "forgetting format transaction");
-                    buffer.forget_transaction(formatting_transaction.id);
-                }
-                project_transaction
-                    .0
-                    .insert(cx.entity(), formatting_transaction);
-            });
-
-            result?;
-        }
-
-        Ok(project_transaction)
-    }
-
-    async fn format_buffer_locally(
-        lsp_store: WeakEntity<LspStore>,
-        buffer: &FormattableBuffer,
-        formatting_transaction_id: clock::Lamport,
-        trigger: FormatTrigger,
-        logger: zlog::Logger,
-        cx: &mut AsyncApp,
-    ) -> Result<()> {
-        let (adapters_and_servers, settings) =
-            lsp_store.update(cx, |lsp_store, cx| {
-                buffer.handle.update(cx, |buffer, cx| {
-                    let adapters_and_servers = lsp_store
-                        .as_local()
-                        .unwrap()
-                        .language_servers_for_buffer(buffer, cx)
-                        .map(|(adapter, lsp)| (adapter.clone(), lsp.clone()))
-                        .collect::<Vec<_>>();
-                    let settings = LanguageSettings::for_buffer(buffer, cx).into_owned();
-                    (adapters_and_servers, settings)
-                })
-            })?;
-        let had_existing_line_endings = buffer
-            .handle
-            .read_with(cx, |buffer, _| buffer.max_point().row > 0);
-
-        // handle whitespace formatting
-        if settings.remove_trailing_whitespace_on_save {
-            zlog::trace!(logger => "removing trailing whitespace");
-            let diff = buffer
-                .handle
-                .read_with(cx, |buffer, cx| buffer.remove_trailing_whitespace(cx))
-                .await;
-            extend_formatting_transaction(buffer, formatting_transaction_id, cx, |buffer, cx| {
-                buffer.apply_diff(diff, cx);
-            })?;
-        }
-
-        if settings.ensure_final_newline_on_save {
-            zlog::trace!(logger => "ensuring final newline");
-            extend_formatting_transaction(buffer, formatting_transaction_id, cx, |buffer, cx| {
-                buffer.ensure_final_newline(cx);
-            })?;
-        }
-
-        let line_ending_policy = match settings.line_ending {
-            LineEndingSetting::Detect => None,
-            LineEndingSetting::PreferLf => Some((LineEnding::Unix, true)),
-            LineEndingSetting::PreferCrlf => Some((LineEnding::Windows, true)),
-            LineEndingSetting::EnforceLf => Some((LineEnding::Unix, false)),
-            LineEndingSetting::EnforceCrlf => Some((LineEnding::Windows, false)),
-        };
-        if let Some((desired_line_ending, preserve_existing)) = line_ending_policy {
-            buffer.handle.update(cx, |buffer, cx| {
-                if buffer.line_ending() == desired_line_ending {
-                    return;
-                }
-                if preserve_existing && had_existing_line_endings {
-                    zlog::trace!(
-                        logger => "preserving existing line endings ({}) on save",
-                        buffer.line_ending().label()
-                    );
-                    return;
-                }
-                zlog::trace!(logger => "normalizing line endings to {}", desired_line_ending.label());
-                buffer.set_line_ending(desired_line_ending, cx);
-            });
-        }
-
-        let formatters = match (trigger, &settings.format_on_save) {
-            (FormatTrigger::Save, FormatOnSave::Off) => &[],
-            (FormatTrigger::Manual, _) | (FormatTrigger::Save, FormatOnSave::On) => {
-                settings.formatter.as_ref()
-            }
-        };
-
-        for formatter in formatters {
-            let formatter = if formatter == &Formatter::Auto {
-                zlog::trace!(logger => "Formatter set to auto: defaulting to primary language server");
-                &Formatter::LanguageServer(settings::LanguageServerFormatterSpecifier::Current)
-            } else {
-                formatter
-            };
-            if let Err(err) = Self::apply_formatter(
-                formatter,
-                &lsp_store,
-                buffer,
-                formatting_transaction_id,
-                &adapters_and_servers,
-                &settings,
-                logger,
-                cx,
-            )
-            .await
-            {
-                zlog::error!(logger => "Formatter failed, skipping: {err:#}");
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn apply_formatter(
-        formatter: &Formatter,
-        lsp_store: &WeakEntity<LspStore>,
-        buffer: &FormattableBuffer,
-        formatting_transaction_id: clock::Lamport,
-        adapters_and_servers: &[(Arc<CachedLspAdapter>, Arc<LanguageServer>)],
-        settings: &LanguageSettings,
-        logger: zlog::Logger,
-        cx: &mut AsyncApp,
-    ) -> anyhow::Result<()> {
-        match formatter {
-            Formatter::None => {
-                zlog::trace!(logger => "skipping formatter 'none'");
-                return Ok(());
-            }
-            Formatter::Auto => {
-                debug_panic!("Auto resolved above");
-                return Ok(());
-            }
-            Formatter::External { command, arguments } => {
-                let logger = zlog::scoped!(logger => "command");
-
-                if buffer.ranges.is_some() {
-                    zlog::debug!(logger => "External formatter does not support range formatting; skipping");
-                    return Ok(());
-                }
-
-                zlog::trace!(logger => "formatting");
-                let _timer = zlog::time!(logger => "Formatting buffer via external command");
-
-                let diff =
-                    Self::format_via_external_command(buffer, &command, arguments.as_deref(), cx)
-                        .await
-                        .with_context(|| {
-                            format!("Failed to format buffer via external command: {}", command)
-                        })?;
-                let Some(diff) = diff else {
-                    zlog::trace!(logger => "No changes");
-                    return Ok(());
-                };
-
-                extend_formatting_transaction(
-                    buffer,
-                    formatting_transaction_id,
-                    cx,
-                    |buffer, cx| {
-                        buffer.apply_diff(diff, cx);
-                    },
-                )?;
-            }
-            Formatter::LanguageServer(specifier) => {
-                let logger = zlog::scoped!(logger => "language-server");
-                zlog::trace!(logger => "formatting");
-                let _timer = zlog::time!(logger => "Formatting buffer using language server");
-
-                let Some(buffer_path_abs) = buffer.abs_path.as_ref() else {
-                    zlog::warn!(logger => "Cannot format buffer that is not backed by a file on disk using language servers. Skipping");
-                    return Ok(());
-                };
-
-                let language_server = match specifier {
-                    settings::LanguageServerFormatterSpecifier::Specific { name } => {
-                        adapters_and_servers.iter().find_map(|(adapter, server)| {
-                            if adapter.name.0.as_ref() == name {
-                                Some(server.clone())
-                            } else {
-                                None
-                            }
-                        })
-                    }
-                    settings::LanguageServerFormatterSpecifier::Current => adapters_and_servers
-                        .iter()
-                        .find(|(_, server)| Self::server_supports_formatting(server))
-                        .map(|(_, server)| server.clone()),
-                };
-
-                let Some(language_server) = language_server else {
-                    log::debug!(
-                        "No language server found to format buffer '{:?}'. Skipping",
-                        buffer_path_abs.as_path().to_string_lossy()
-                    );
-                    return Ok(());
-                };
-
-                zlog::trace!(
-                    logger =>
-                    "Formatting buffer '{:?}' using language server '{:?}'",
-                    buffer_path_abs.as_path().to_string_lossy(),
-                    language_server.name()
-                );
-
-                let edits = if let Some(ranges) = buffer.ranges.as_ref() {
-                    zlog::trace!(logger => "formatting ranges");
-                    Self::format_ranges_via_lsp(
-                        &lsp_store,
-                        &buffer.handle,
-                        ranges,
-                        buffer_path_abs,
-                        &language_server,
-                        &settings,
-                        cx,
-                    )
-                    .await
-                    .context("Failed to format ranges via language server")?
-                } else {
-                    zlog::trace!(logger => "formatting full");
-                    Self::format_via_lsp(
-                        &lsp_store,
-                        &buffer.handle,
-                        buffer_path_abs,
-                        &language_server,
-                        &settings,
-                        cx,
-                    )
-                    .await
-                    .context("failed to format via language server")?
-                };
-
-                if edits.is_empty() {
-                    zlog::trace!(logger => "No changes");
-                    return Ok(());
-                }
-                extend_formatting_transaction(
-                    buffer,
-                    formatting_transaction_id,
-                    cx,
-                    |buffer, cx| {
-                        buffer.edit(edits, None, cx);
-                    },
-                )?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn format_ranges_via_lsp(
-        this: &WeakEntity<LspStore>,
-        buffer_handle: &Entity<Buffer>,
-        ranges: &[Range<Anchor>],
-        abs_path: &Path,
-        language_server: &Arc<LanguageServer>,
-        settings: &LanguageSettings,
-        cx: &mut AsyncApp,
-    ) -> Result<Vec<(Range<Anchor>, Arc<str>)>> {
-        let capabilities = &language_server.capabilities();
-        let range_formatting_provider = capabilities.document_range_formatting_provider.as_ref();
-        if range_formatting_provider == Some(&OneOf::Left(false)) {
-            anyhow::bail!(
-                "{} language server does not support range formatting",
-                language_server.name()
-            );
-        }
-
-        let uri = file_path_to_lsp_url(abs_path)?;
-        let text_document = lsp::TextDocumentIdentifier::new(uri);
-
-        let request_timeout = cx.update(|app| {
-            ProjectSettings::get_global(app)
-                .global_lsp_settings
-                .get_request_timeout()
-        });
-        let lsp_edits = {
-            let mut lsp_ranges = Vec::new();
-            this.update(cx, |_this, cx| {
-                // TODO(#22930): In the case of formatting multibuffer selections, this buffer may
-                // not have been sent to the language server. This seems like a fairly systemic
-                // issue, though, the resolution probably is not specific to formatting.
-                //
-                // TODO: Instead of using current snapshot, should use the latest snapshot sent to
-                // LSP.
-                let snapshot = buffer_handle.read(cx).snapshot();
-                for range in ranges {
-                    lsp_ranges.push(range_to_lsp(range.to_point_utf16(&snapshot))?);
-                }
-                anyhow::Ok(())
-            })??;
-
-            let mut edits = None;
-            for range in lsp_ranges {
-                if let Some(mut edit) = language_server
-                    .request::<lsp::request::RangeFormatting>(
-                        lsp::DocumentRangeFormattingParams {
-                            text_document: text_document.clone(),
-                            range,
-                            options: lsp_command::lsp_formatting_options(settings),
-                            work_done_progress_params: Default::default(),
-                        },
-                        request_timeout,
-                    )
-                    .await
-                    .into_response()?
-                {
-                    edits.get_or_insert_with(Vec::new).append(&mut edit);
-                }
-            }
-            edits
-        };
-
-        if let Some(lsp_edits) = lsp_edits {
-            this.update(cx, |this, cx| {
-                this.as_local_mut().unwrap().edits_from_lsp(
-                    buffer_handle,
-                    lsp_edits,
-                    language_server.server_id(),
-                    None,
-                    cx,
-                )
-            })?
-            .await
-        } else {
-            Ok(Vec::with_capacity(0))
-        }
-    }
-
-    fn server_supports_formatting(server: &Arc<LanguageServer>) -> bool {
-        let capabilities = server.capabilities();
-        let formatting = capabilities.document_formatting_provider.as_ref();
-        matches!(formatting, Some(p) if *p != OneOf::Left(false))
-            || server_capabilities_support_range_formatting(&capabilities)
-    }
-
-    async fn format_via_lsp(
-        this: &WeakEntity<LspStore>,
-        buffer: &Entity<Buffer>,
-        abs_path: &Path,
-        language_server: &Arc<LanguageServer>,
-        settings: &LanguageSettings,
-        cx: &mut AsyncApp,
-    ) -> Result<Vec<(Range<Anchor>, Arc<str>)>> {
-        let logger = zlog::scoped!("lsp_format");
-        zlog::debug!(logger => "Formatting via LSP");
-
-        let uri = file_path_to_lsp_url(abs_path)?;
-        let text_document = lsp::TextDocumentIdentifier::new(uri);
-        let capabilities = &language_server.capabilities();
-
-        let formatting_provider = capabilities.document_formatting_provider.as_ref();
-        let range_formatting_provider = capabilities.document_range_formatting_provider.as_ref();
-
-        let request_timeout = cx.update(|app| {
-            ProjectSettings::get_global(app)
-                .global_lsp_settings
-                .get_request_timeout()
-        });
-
-        let lsp_edits = if matches!(formatting_provider, Some(p) if *p != OneOf::Left(false)) {
-            let _timer = zlog::time!(logger => "format-full");
-            language_server
-                .request::<lsp::request::Formatting>(
-                    lsp::DocumentFormattingParams {
-                        text_document,
-                        options: lsp_command::lsp_formatting_options(settings),
-                        work_done_progress_params: Default::default(),
-                    },
-                    request_timeout,
-                )
-                .await
-                .into_response()?
-        } else if matches!(range_formatting_provider, Some(p) if *p != OneOf::Left(false)) {
-            let _timer = zlog::time!(logger => "format-range");
-            let buffer_start = lsp::Position::new(0, 0);
-            let buffer_end = buffer.read_with(cx, |b, _| point_to_lsp(b.max_point_utf16()));
-            language_server
-                .request::<lsp::request::RangeFormatting>(
-                    lsp::DocumentRangeFormattingParams {
-                        text_document: text_document.clone(),
-                        range: lsp::Range::new(buffer_start, buffer_end),
-                        options: lsp_command::lsp_formatting_options(settings),
-                        work_done_progress_params: Default::default(),
-                    },
-                    request_timeout,
-                )
-                .await
-                .into_response()?
-        } else {
-            None
-        };
-
-        if let Some(lsp_edits) = lsp_edits {
-            this.update(cx, |this, cx| {
-                this.as_local_mut().unwrap().edits_from_lsp(
-                    buffer,
-                    lsp_edits,
-                    language_server.server_id(),
-                    None,
-                    cx,
-                )
-            })?
-            .await
-        } else {
-            Ok(Vec::with_capacity(0))
-        }
-    }
-
-    async fn format_via_external_command(
-        buffer: &FormattableBuffer,
-        command: &str,
-        arguments: Option<&[String]>,
-        cx: &mut AsyncApp,
-    ) -> Result<Option<Diff>> {
-        let working_dir_path = buffer.handle.update(cx, |buffer, cx| {
-            let file = File::from_dyn(buffer.file())?;
-            let worktree = file.worktree.read(cx);
-            let mut worktree_path = worktree.abs_path().to_path_buf();
-            if worktree.root_entry()?.is_file() {
-                worktree_path.pop();
-            }
-            Some(worktree_path)
-        });
-
-        use util::command::Stdio;
-        let mut child = util::command::new_command(command);
-
-        if let Some(buffer_env) = buffer.env.as_ref() {
-            child.envs(buffer_env);
-        }
-
-        if let Some(working_dir_path) = working_dir_path {
-            child.current_dir(working_dir_path);
-        }
-
-        if let Some(arguments) = arguments {
-            child.args(arguments.iter().map(|arg| {
-                if let Some(buffer_abs_path) = buffer.abs_path.as_ref() {
-                    arg.replace("{buffer_path}", &buffer_abs_path.to_string_lossy())
-                } else {
-                    arg.replace("{buffer_path}", "Untitled")
-                }
-            }));
-        }
-
-        let mut child = child
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-
-        let stdin = child.stdin.as_mut().context("failed to acquire stdin")?;
-        let text = buffer
-            .handle
-            .read_with(cx, |buffer, _| buffer.as_rope().clone());
-        for chunk in text.chunks() {
-            stdin.write_all(chunk.as_bytes()).await?;
-        }
-        stdin.flush().await?;
-
-        let output = child.output().await?;
-        anyhow::ensure!(
-            output.status.success(),
-            "command failed with exit code {:?}:\nstdout: {}\nstderr: {}",
-            output.status.code(),
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-
-        let stdout = String::from_utf8(output.stdout)?;
-        Ok(Some(
-            buffer
-                .handle
-                .update(cx, |buffer, cx| buffer.diff(stdout, cx))
-                .await,
-        ))
     }
 
     fn initialize_buffer(&mut self, buffer_handle: &Entity<Buffer>, cx: &mut Context<LspStore>) {
@@ -2932,14 +2347,6 @@ fn notify_server_capabilities_updated(server: &LanguageServer, cx: &mut Context<
     }
 }
 
-#[derive(Debug)]
-pub struct FormattableBuffer {
-    handle: Entity<Buffer>,
-    abs_path: Option<PathBuf>,
-    env: Option<HashMap<String, String>>,
-    ranges: Option<Vec<Range<Anchor>>>,
-}
-
 pub struct RemoteLspStore {
     upstream_client: Option<AnyProtoClient>,
     upstream_project_id: u64,
@@ -2952,7 +2359,6 @@ pub(crate) enum LspStoreMode {
 
 pub struct LspStore {
     mode: LspStoreMode,
-    last_formatting_failure: Option<String>,
     downstream_client: Option<(AnyProtoClient, u64)>,
     nonce: u128,
     buffer_store: Entity<BufferStore>,
@@ -3090,7 +2496,6 @@ impl LspStore {
         client.add_entity_message_handler(Self::handle_start_language_server);
         client.add_entity_message_handler(Self::handle_update_language_server);
         client.add_entity_message_handler(Self::handle_language_server_log);
-        client.add_entity_request_handler(Self::handle_format_buffers);
         client.add_entity_request_handler(Self::handle_get_color_presentation);
         client.add_entity_request_handler(Self::handle_open_buffer_for_symbol);
         client.add_entity_request_handler(Self::handle_refresh_semantic_tokens);
@@ -3192,7 +2597,6 @@ impl LspStore {
                 language_server_watched_paths: Default::default(),
                 language_server_paths_watched_for_rename: Default::default(),
                 language_server_dynamic_registrations: Default::default(),
-                buffers_being_formatted: Default::default(),
                 buffer_snapshots: Default::default(),
                 environment,
                 http_client,
@@ -3215,7 +2619,6 @@ impl LspStore {
                 watched_manifest_filenames: ManifestProvidersStore::global(cx)
                     .manifest_file_names(),
             }),
-            last_formatting_failure: None,
             downstream_client: None,
             buffer_store,
             worktree_store,
@@ -3276,7 +2679,6 @@ impl LspStore {
                 upstream_project_id: project_id,
             }),
             downstream_client: None,
-            last_formatting_failure: None,
             buffer_store,
             worktree_store,
             languages: languages.clone(),
@@ -3842,40 +3244,6 @@ impl LspStore {
         F: FnMut(&lsp::ServerCapabilities) -> bool,
     {
         self.check_if_any_relevant_server_matches(buffer, |_, capabilities| check(capabilities), cx)
-    }
-
-    pub fn supports_range_formatting(&self, buffer: &Entity<Buffer>, cx: &App) -> bool {
-        let settings = LanguageSettings::for_buffer(buffer.read(cx), cx);
-        settings.formatter.as_ref().iter().any(|formatter| {
-            match formatter {
-                Formatter::None => false,
-                Formatter::Auto => {
-                    self.check_if_capable_for_proto_request(
-                        buffer,
-                        server_capabilities_support_range_formatting,
-                        cx,
-                    )
-                }
-                Formatter::External { .. } => false,
-                Formatter::LanguageServer(settings::LanguageServerFormatterSpecifier::Current) => {
-                    self.check_if_capable_for_proto_request(
-                        buffer,
-                        server_capabilities_support_range_formatting,
-                        cx,
-                    )
-                }
-                Formatter::LanguageServer(
-                    settings::LanguageServerFormatterSpecifier::Specific { name },
-                ) => self.check_if_any_relevant_server_matches(
-                    buffer,
-                    |server_status, capabilities| {
-                        server_status.name.0.as_ref() == name
-                            && server_capabilities_support_range_formatting(capabilities)
-                    },
-                    cx,
-                ),
-            }
-        })
     }
 
     pub fn request_lsp<R>(
@@ -6020,14 +5388,6 @@ impl LspStore {
             .collect::<Vec<_>>()
     }
 
-    pub fn last_formatting_failure(&self) -> Option<&str> {
-        self.last_formatting_failure.as_deref()
-    }
-
-    pub fn reset_last_formatting_failure(&mut self) {
-        self.last_formatting_failure = None;
-    }
-
     pub fn environment_for_buffer(
         &self,
         buffer: &Entity<Buffer>,
@@ -6040,182 +5400,6 @@ impl LspStore {
         } else {
             Task::ready(None).shared()
         }
-    }
-
-    pub fn format(
-        &mut self,
-        buffers: HashSet<Entity<Buffer>>,
-        target: LspFormatTarget,
-        push_to_history: bool,
-        trigger: FormatTrigger,
-        cx: &mut Context<Self>,
-    ) -> Task<anyhow::Result<ProjectTransaction>> {
-        let logger = zlog::scoped!("format");
-        if self.as_local().is_some() {
-            zlog::trace!(logger => "Formatting locally");
-            let logger = zlog::scoped!(logger => "local");
-            let buffers = buffers
-                .into_iter()
-                .map(|buffer_handle| {
-                    let buffer = buffer_handle.read(cx);
-                    let buffer_abs_path = File::from_dyn(buffer.file())
-                        .and_then(|file| file.as_local().map(|f| f.abs_path(cx)));
-
-                    (buffer_handle, buffer_abs_path, buffer.remote_id())
-                })
-                .collect::<Vec<_>>();
-
-            cx.spawn(async move |lsp_store, cx| {
-                let mut formattable_buffers = Vec::with_capacity(buffers.len());
-
-                for (handle, abs_path, id) in buffers {
-                    let env = lsp_store
-                        .update(cx, |lsp_store, cx| {
-                            lsp_store.environment_for_buffer(&handle, cx)
-                        })?
-                        .await;
-
-                    let ranges = match &target {
-                        LspFormatTarget::Buffers => None,
-                        LspFormatTarget::Ranges(ranges) => {
-                            Some(ranges.get(&id).context("No format ranges provided for buffer")?.clone())
-                        }
-                    };
-
-                    formattable_buffers.push(FormattableBuffer {
-                        handle,
-                        abs_path,
-                        env,
-                        ranges,
-                    });
-                }
-                zlog::trace!(logger => "Formatting {:?} buffers", formattable_buffers.len());
-
-                let format_timer = zlog::time!(logger => "Formatting buffers");
-                let result = LocalLspStore::format_locally(
-                    lsp_store.clone(),
-                    formattable_buffers,
-                    push_to_history,
-                    trigger,
-                    logger,
-                    cx,
-                )
-                .await;
-                format_timer.end();
-
-                zlog::trace!(logger => "Formatting completed with result {:?}", result.as_ref().map(|_| "<project-transaction>"));
-
-                lsp_store.update(cx, |lsp_store, _| {
-                    lsp_store.update_last_formatting_failure(&result);
-                })?;
-
-                result
-            })
-        } else if let Some((client, project_id)) = self.upstream_client() {
-            zlog::trace!(logger => "Formatting remotely");
-            let logger = zlog::scoped!(logger => "remote");
-
-            let buffer_ranges = match &target {
-                LspFormatTarget::Buffers => Vec::new(),
-                LspFormatTarget::Ranges(ranges) => ranges
-                    .iter()
-                    .map(|(buffer_id, ranges)| proto::BufferFormatRanges {
-                        buffer_id: buffer_id.to_proto(),
-                        ranges: ranges.iter().cloned().map(serialize_anchor_range).collect(),
-                    })
-                    .collect(),
-            };
-
-            let buffer_store = self.buffer_store();
-            cx.spawn(async move |lsp_store, cx| {
-                zlog::trace!(logger => "Sending remote format request");
-                let request_timer = zlog::time!(logger => "remote format request");
-                let result = client
-                    .request(proto::FormatBuffers {
-                        project_id,
-                        trigger: trigger as i32,
-                        buffer_ids: buffers
-                            .iter()
-                            .map(|buffer| buffer.read_with(cx, |buffer, _| buffer.remote_id().to_proto()))
-                            .collect(),
-                        buffer_ranges,
-                    })
-                    .await
-                    .and_then(|result| result.transaction.context("missing transaction"));
-                request_timer.end();
-
-                zlog::trace!(logger => "Remote format request resolved to {:?}", result.as_ref().map(|_| "<project_transaction>"));
-
-                lsp_store.update(cx, |lsp_store, _| {
-                    lsp_store.update_last_formatting_failure(&result);
-                })?;
-
-                let transaction_response = result?;
-                let _timer = zlog::time!(logger => "deserializing project transaction");
-                buffer_store
-                    .update(cx, |buffer_store, cx| {
-                        buffer_store.deserialize_project_transaction(
-                            transaction_response,
-                            push_to_history,
-                            cx,
-                        )
-                    })
-                    .await
-            })
-        } else {
-            zlog::trace!(logger => "Not formatting");
-            Task::ready(Ok(ProjectTransaction::default()))
-        }
-    }
-
-    async fn handle_format_buffers(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::FormatBuffers>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::FormatBuffersResponse> {
-        let sender_id = envelope.original_sender_id().unwrap_or_default();
-        let format = this.update(&mut cx, |this, cx| {
-            let mut buffers = HashSet::default();
-            for buffer_id in &envelope.payload.buffer_ids {
-                let buffer_id = BufferId::new(*buffer_id)?;
-                buffers.insert(this.buffer_store.read(cx).get_existing(buffer_id)?);
-            }
-
-            let target = if envelope.payload.buffer_ranges.is_empty() {
-                LspFormatTarget::Buffers
-            } else {
-                let mut ranges_map = BTreeMap::new();
-                for buffer_range in &envelope.payload.buffer_ranges {
-                    let buffer_id = BufferId::new(buffer_range.buffer_id)?;
-                    let ranges: Result<Vec<_>> = buffer_range
-                        .ranges
-                        .iter()
-                        .map(|range| {
-                            deserialize_anchor_range(range.clone()).context("invalid anchor range")
-                        })
-                        .collect();
-                    ranges_map.insert(buffer_id, ranges?);
-                }
-                LspFormatTarget::Ranges(ranges_map)
-            };
-
-            let trigger = FormatTrigger::from_proto(envelope.payload.trigger);
-            anyhow::Ok(this.format(buffers, target, false, trigger, cx))
-        })?;
-
-        let project_transaction = format.await?;
-        let project_transaction = this.update(&mut cx, |this, cx| {
-            this.buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store.serialize_project_transaction_for_peer(
-                    project_transaction,
-                    sender_id,
-                    cx,
-                )
-            })
-        });
-        Ok(proto::FormatBuffersResponse {
-            transaction: Some(project_transaction),
-        })
     }
 
     async fn shutdown_language_server(
@@ -7013,18 +6197,6 @@ impl LspStore {
         })
     }
 
-    fn update_last_formatting_failure<T>(&mut self, formatting_result: &anyhow::Result<T>) {
-        match &formatting_result {
-            Ok(_) => self.last_formatting_failure = None,
-            Err(error) => {
-                let error_string = format!("{error:#}");
-                log::error!("Formatting failed: {error_string}");
-                self.last_formatting_failure
-                    .replace(error_string.lines().join(" "));
-            }
-        }
-    }
-
     fn cleanup_lsp_data(&mut self, for_server: LanguageServerId) {
         self.lsp_server_capabilities.remove(&for_server);
         self.semantic_token_config.remove_server_data(for_server);
@@ -7602,13 +6774,6 @@ fn parse_register_capabilities<T: serde::de::DeserializeOwned>(
         Some(options) => OneOf::Right(serde_json::from_value::<T>(options)?),
         None => OneOf::Left(true),
     })
-}
-
-fn server_capabilities_support_range_formatting(capabilities: &lsp::ServerCapabilities) -> bool {
-    matches!(
-        capabilities.document_range_formatting_provider.as_ref(),
-        Some(provider) if *provider != OneOf::Left(false)
-    )
 }
 
 fn subscribe_to_binary_statuses(
@@ -8488,26 +7653,4 @@ pub fn ensure_uniform_list_compatible_label(label: &mut CodeLabel) {
     }
 
     label.text = new_text;
-}
-
-/// Apply edits to the buffer that will become part of the formatting transaction.
-/// Fails if the buffer has been edited since the start of that transaction.
-fn extend_formatting_transaction(
-    buffer: &FormattableBuffer,
-    formatting_transaction_id: text::TransactionId,
-    cx: &mut AsyncApp,
-    operation: impl FnOnce(&mut Buffer, &mut Context<Buffer>),
-) -> anyhow::Result<()> {
-    buffer.handle.update(cx, |buffer, cx| {
-        let last_transaction_id = buffer.peek_undo_stack().map(|t| t.transaction_id());
-        if last_transaction_id != Some(formatting_transaction_id) {
-            anyhow::bail!("Buffer edited while formatting. Aborting")
-        }
-        buffer.start_transaction();
-        operation(buffer, cx);
-        if let Some(transaction_id) = buffer.end_transaction(cx) {
-            buffer.merge_transactions(transaction_id, formatting_transaction_id);
-        }
-        Ok(())
-    })
 }

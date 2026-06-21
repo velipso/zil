@@ -185,10 +185,6 @@ pub struct LanguageSettingsContent {
     pub wrap_guides: Option<Vec<usize>>,
     /// Indent guide related settings.
     pub indent_guides: Option<IndentGuideSettingsContent>,
-    /// Whether or not to perform a buffer format before saving.
-    ///
-    /// Default: on
-    pub format_on_save: Option<FormatOnSave>,
     /// Whether or not to remove any trailing whitespace from lines of a buffer
     /// before saving it.
     ///
@@ -216,16 +212,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: detect
     pub line_ending: Option<LineEndingSetting>,
-    /// How to perform a buffer format.
-    ///
-    /// Default: auto
-    pub formatter: Option<FormatterList>,
-    /// Zed's Prettier integration settings.
-    /// Allows to enable/disable formatting with Prettier
-    /// and configure default Prettier, used when no project-level Prettier installation is found.
-    ///
-    /// Default: off
-    pub prettier: Option<PrettierSettingsContent>,
     /// Whether to use language servers to provide code intelligence.
     ///
     /// Default: true
@@ -549,29 +535,6 @@ pub struct PrettierSettingsContent {
     pub options: Option<HashMap<String, serde_json::Value>>,
 }
 
-/// TODO: this should just be a bool
-/// Controls the behavior of formatting files when they are saved.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum FormatOnSave {
-    /// Files should be formatted on save.
-    On,
-    /// Files should not be formatted on save.
-    Off,
-}
-
 /// Controls how line endings are normalized when a buffer is saved.
 #[derive(
     Debug,
@@ -606,90 +569,6 @@ pub enum LineEndingSetting {
     /// Normalize line endings to CRLF (`\r\n`) during format and save.
     #[strum(serialize = "Enforce CRLF")]
     EnforceCrlf,
-}
-
-/// Controls which formatters should be used when formatting code.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
-#[serde(untagged)]
-pub enum FormatterList {
-    Single(Formatter),
-    Vec(Vec<Formatter>),
-}
-
-impl Default for FormatterList {
-    fn default() -> Self {
-        Self::Single(Formatter::default())
-    }
-}
-
-impl AsRef<[Formatter]> for FormatterList {
-    fn as_ref(&self) -> &[Formatter] {
-        match &self {
-            Self::Single(single) => std::slice::from_ref(single),
-            Self::Vec(v) => v,
-        }
-    }
-}
-
-/// Controls which formatter should be used when formatting code. If there are multiple formatters, they are executed in the order of declaration.
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub enum Formatter {
-    /// Format files using Zed's Prettier integration (if applicable),
-    /// or falling back to formatting via language server.
-    #[default]
-    Auto,
-    /// Do not format code.
-    None,
-    /// Format code using an external command.
-    External {
-        /// The external program to run.
-        command: String,
-        /// The arguments to pass to the program.
-        arguments: Option<Vec<String>>,
-    },
-    /// Format code using a language server.
-    #[serde(untagged)]
-    LanguageServer(LanguageServerFormatterSpecifier),
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
-#[serde(
-    rename_all = "snake_case",
-    // allow specifying language servers as "language_server" or {"language_server": {"name": ...}}
-    from = "LanguageServerVariantContent",
-    into = "LanguageServerVariantContent"
-)]
-pub enum LanguageServerFormatterSpecifier {
-    Specific {
-        name: String,
-    },
-    #[default]
-    Current,
-}
-
-impl From<LanguageServerVariantContent> for LanguageServerFormatterSpecifier {
-    fn from(value: LanguageServerVariantContent) -> Self {
-        match value {
-            LanguageServerVariantContent::Specific {
-                language_server: LanguageServerSpecifierContent { name: Some(name) },
-            } => Self::Specific { name },
-            _ => Self::Current,
-        }
-    }
-}
-
-impl From<LanguageServerFormatterSpecifier> for LanguageServerVariantContent {
-    fn from(value: LanguageServerFormatterSpecifier) -> Self {
-        match value {
-            LanguageServerFormatterSpecifier::Specific { name } => Self::Specific {
-                language_server: LanguageServerSpecifierContent { name: Some(name) },
-            },
-            LanguageServerFormatterSpecifier::Current => {
-                Self::Current(CurrentLanguageServerContent::LanguageServer)
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
