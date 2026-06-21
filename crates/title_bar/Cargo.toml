@@ -28,10 +28,6 @@ test-support = [
 
 [dependencies]
 platform_title_bar.workspace = true
-chrono.workspace = true
-client.workspace = true
-db.workspace = true
-
 gpui = { workspace = true, features = ["screen-capture"] }
 project.workspace = true
 schemars.workspace = true
@@ -39,7 +35,6 @@ serde.workspace = true
 settings.workspace = true
 smallvec.workspace = true
 ui.workspace = true
-util.workspace = true
 workspace.workspace = true
 arrayvec = "0.7.6"
 

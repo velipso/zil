@@ -1,5 +1,4 @@
 mod application_menu;
-mod onboarding_banner;
 mod title_bar_settings;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
@@ -14,25 +13,16 @@ use crate::application_menu::{
     ActivateDirection, ActivateMenuLeft, ActivateMenuRight, OpenApplicationMenu,
 };
 
-use client::UserStore;
-
 use gpui::{
-    AnyElement, App, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    App, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
     Render, Styled, Subscription, WeakEntity, Window, actions,
 };
-use onboarding_banner::OnboardingBanner;
 use project::{Project, git_store::GitStoreEvent, trusted_worktrees::TrustedWorktrees};
 use settings::Settings as _;
 
 use title_bar_settings::TitleBarSettings;
-use ui::{
-    Tooltip, prelude::*,
-    utils::platform_title_bar_height,
-};
-use util::ResultExt;
+use ui::{prelude::*, utils::platform_title_bar_height};
 use workspace::{MultiWorkspace, Workspace};
-
-pub use onboarding_banner::restore_banner;
 
 actions!(
     collab,
@@ -112,12 +102,10 @@ pub fn init(cx: &mut App) {
 pub struct TitleBar {
     platform_titlebar: Entity<PlatformTitleBar>,
     project: Entity<Project>,
-    user_store: Entity<UserStore>,
     workspace: WeakEntity<Workspace>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
     application_menu: Option<Entity<ApplicationMenu>>,
     _subscriptions: Vec<Subscription>,
-    banner: Option<Entity<OnboardingBanner>>,
     _diagnostics_subscription: Option<gpui::Subscription>,
 }
 
@@ -149,12 +137,6 @@ impl Render for TitleBar {
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .into_any_element(),
         );
-
-        if title_bar_settings.show_onboarding_banner {
-            if let Some(banner) = &self.banner {
-                children.push(banner.clone().into_any_element())
-            }
-        }
 
         if show_menus {
             self.platform_titlebar.update(cx, |this, _| {
@@ -204,7 +186,6 @@ impl TitleBar {
     ) -> Self {
         let project = workspace.project().clone();
         let git_store = project.read(cx).git_store().clone();
-        let user_store = workspace.app_state().user_store.clone();
 
         let platform_style = PlatformStyle::platform();
         let application_menu = match platform_style {
@@ -237,7 +218,6 @@ impl TitleBar {
                 _ => {}
             }),
         );
-        subscriptions.push(cx.observe(&user_store, |_a, _, cx| cx.notify()));
         if let Some(workspace_entity) = workspace.weak_handle().upgrade() {
             subscriptions.push(cx.subscribe(
                 &workspace_entity,
@@ -263,17 +243,13 @@ impl TitleBar {
             titlebar
         });
 
-        let banner = None;
-
         Self {
             platform_titlebar,
             application_menu,
             workspace: workspace.weak_handle(),
             multi_workspace,
             project,
-            user_store,
             _subscriptions: subscriptions,
-            banner,
             _diagnostics_subscription: None,
         }
     }
@@ -297,51 +273,6 @@ impl TitleBar {
         }
 
         project.visible_worktrees(cx).next()
-    }
-
-    pub fn render_project_host(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.project.read(cx).is_disconnected(cx) {
-            return Some(
-                Button::new("disconnected", "Disconnected")
-                    .disabled(true)
-                    .color(Color::Disabled)
-                    .label_size(LabelSize::Small)
-                    .into_any_element(),
-            );
-        }
-
-        let host = self.project.read(cx).host()?;
-        let host_user = self.user_store.read(cx).get_cached_user(host.user_id)?;
-        let participant_index = self
-            .user_store
-            .read(cx)
-            .participant_indices()
-            .get(&host_user.legacy_id)?;
-
-        Some(
-            Button::new("project_owner_trigger", host_user.github_login.clone())
-                .color(Color::Player(participant_index.0))
-                .label_size(LabelSize::Small)
-                .tooltip(move |_, cx| {
-                    let tooltip_title = format!(
-                        "{} is sharing this project. Click to follow.",
-                        host_user.github_login
-                    );
-
-                    Tooltip::with_meta(tooltip_title, None, "Click to Follow", cx)
-                })
-                .on_click({
-                    let host_peer_id = host.peer_id;
-                    cx.listener(move |this, _, window, cx| {
-                        this.workspace
-                            .update(cx, |workspace, cx| {
-                                workspace.follow(host_peer_id, window, cx);
-                            })
-                            .log_err();
-                    })
-                })
-                .into_any_element(),
-        )
     }
 
     fn window_activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {

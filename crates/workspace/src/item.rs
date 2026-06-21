@@ -797,12 +797,6 @@ impl<T: Item> ItemHandle for Entity<T> {
                     if let Some(item) = item.to_followable_item_handle(cx) {
                         let leader_id = workspace.leader_for_pane(&pane);
 
-                        if let Some(leader_id) = leader_id
-                            && let Some(FollowEvent::Unfollow) = item.to_follow_event(event)
-                        {
-                            workspace.unfollow(leader_id, window, cx);
-                        }
-
                         if item.item_focus_handle(cx).contains_focused(window, cx) {
                             match leader_id {
                                 Some(CollaboratorId::Agent) => {}

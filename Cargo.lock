@@ -10602,9 +10602,7 @@ name = "title_bar"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
- "chrono",
  "client",
- "db",
  "gpui",
  "notifications",
  "platform_title_bar",
