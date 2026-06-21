@@ -4,7 +4,7 @@ use std::rc::Rc;
 use collections::HashMap;
 use file_icons::FileIcons;
 use gpui::{
-    Action, AnyElement, App, AvailableSpace, Bounds, ClickEvent, ClipboardItem, ContentMask,
+    AnyElement, App, AvailableSpace, Bounds, ClickEvent, ClipboardItem, ContentMask,
     CursorStyle, DefiniteLength, Entity, Focusable as _, Hitbox, HitboxBehavior, Hsla, IntoElement,
     Length, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels,
     ShapedLine, SharedString, Styled, TextAlign, Window, div, fill, linear_color_stop,
@@ -12,7 +12,6 @@ use gpui::{
 };
 use language::language_settings::ShowWhitespaceSetting;
 use multi_buffer::{Anchor, ExcerptBoundaryInfo};
-use project::Entry;
 use settings::{RelativeLineNumbers, Settings};
 use smallvec::SmallVec;
 use sum_tree::Bias;
@@ -23,7 +22,7 @@ use ui::{
     text_for_keystroke,
 };
 use util::ResultExt;
-use workspace::{ItemHandle, ItemSettings, OpenInTerminal, OpenTerminal, RevealInProjectPanel};
+use workspace::{ItemHandle, ItemSettings};
 
 use super::{
     BlockLayout, EditorElement, EditorLayout, LineWithInvisibles, layout_line,
@@ -925,7 +924,6 @@ pub(crate) fn render_buffer_header(
                     && let Some(worktree) =
                         project.read(cx).worktree_for_id(file.worktree_id(cx), cx)
                 {
-                    let path_style = file.path_style(cx);
                     let worktree = worktree.read(cx);
                     let relative_path = file.path();
                     let entry_for_path = worktree.entry_for_path(relative_path);
@@ -934,19 +932,7 @@ pub(crate) fn render_buffer_header(
                             .as_deref()
                             .map_or_else(|| worktree.absolutize(relative_path), Path::to_path_buf)
                     });
-                    let has_relative_path = worktree.root_entry().is_some_and(Entry::is_dir);
 
-                    let parent_abs_path = abs_path
-                        .as_ref()
-                        .and_then(|abs_path| Some(abs_path.parent()?.to_path_buf()));
-                    let relative_path = has_relative_path
-                        .then_some(relative_path)
-                        .map(ToOwned::to_owned);
-
-                    let visible_in_project_panel = relative_path.is_some() && worktree.is_visible();
-                    let reveal_in_project_panel = entry_for_path
-                        .filter(|_| visible_in_project_panel)
-                        .map(|entry| entry.id);
                     menu = menu
                         .when_some(abs_path, |menu, abs_path| {
                             menu.entry(

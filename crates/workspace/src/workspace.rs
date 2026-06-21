@@ -282,8 +282,6 @@ actions!(
         NewWindow,
         /// Opens multiple files.
         OpenFiles,
-        /// Opens the current location in terminal.
-        OpenInTerminal,
         /// Opens the component preview.
         OpenComponentPreview,
         /// Reloads the active item.

@@ -359,7 +359,6 @@ impl EditorElement {
         register_action(editor, window, Editor::stop_language_server);
         register_action(editor, window, Editor::show_character_palette);
         register_action(editor, window, Editor::display_cursor_names);
-        register_action(editor, window, Editor::open_active_item_in_terminal);
         register_action(editor, window, Editor::toggle_read_only);
         register_action(editor, window, Editor::reload_file);
 
