@@ -17,10 +17,7 @@ members = [
     "crates/component",
     "crates/crashes",
     "crates/credentials_provider",
-    "crates/dap",
-    "crates/dap_adapters",
     "crates/db",
-    "crates/debugger_tools",
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
@@ -161,10 +158,7 @@ console = "0.16"
 crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
-dap = { path = "crates/dap" }
-dap_adapters = { path = "crates/dap_adapters" }
 db = { path = "crates/db" }
-debugger_tools = { path = "crates/debugger_tools" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
@@ -321,7 +315,6 @@ core-video = { version = "0.5.2", features = ["metal"] }
 crash-handler = "0.7"
 criterion = { version = "0.5", features = ["html_reports"] }
 ctor = "1.0.6"
-dap-types = { path = "crates/dap-types" }
 derive_more = { version = "2.1.1", features = [
     "add",
     "add_assign",

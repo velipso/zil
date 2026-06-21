@@ -29,9 +29,6 @@ use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWor
 pub struct OpenRequest {
     pub kind: Option<OpenRequestKind>,
     pub open_paths: Vec<String>,
-    pub diff_paths: Vec<[String; 2]>,
-    pub diff_all: bool,
-    pub dev_container: bool,
     pub open_channel_notes: Vec<(u64, Option<String>)>,
     pub join_channel: Option<u64>,
     pub remote_connection: Option<RemoteConnectionOptions>,
@@ -83,7 +80,6 @@ impl OpenRequest {
     pub fn is_focus_app_only(&self) -> bool {
         matches!(self.kind, Some(OpenRequestKind::FocusApp))
             && self.open_paths.is_empty()
-            && self.diff_paths.is_empty()
             && self.remote_connection.is_none()
             && self.join_channel.is_none()
             && self.open_channel_notes.is_empty()
@@ -92,9 +88,6 @@ impl OpenRequest {
     pub fn parse(request: RawOpenRequest, cx: &App) -> Result<Self> {
         let mut this = Self::default();
 
-        this.diff_paths = request.diff_paths;
-        this.diff_all = request.diff_all;
-        this.dev_container = request.dev_container;
         this.open_behavior = request.open_behavior;
         if let Some(wsl) = request.wsl {
             let (user, distro_name) = if let Some((user, distro)) = wsl.split_once('@') {
@@ -167,9 +160,6 @@ pub struct OpenListener(UnboundedSender<RawOpenRequest>);
 #[derive(Default)]
 pub struct RawOpenRequest {
     pub urls: Vec<String>,
-    pub diff_paths: Vec<[String; 2]>,
-    pub diff_all: bool,
-    pub dev_container: bool,
     pub wsl: Option<String>,
     pub open_behavior: Option<cli::OpenBehavior>,
 }
@@ -278,8 +268,6 @@ pub fn navigate_to_positions(
 
 pub async fn open_paths_with_positions(
     path_positions: &[PathWithPosition],
-    _diff_paths: &[[String; 2]],
-    _diff_all: bool,
     app_state: Arc<AppState>,
     open_options: workspace::OpenOptions,
     cx: &mut AsyncApp,
@@ -328,24 +316,17 @@ pub async fn handle_cli_connection(
             CliRequest::Open {
                 urls,
                 paths,
-                diff_paths,
-                diff_all,
                 wait,
                 wsl,
                 mut open_behavior,
                 env,
                 user_data_dir: _,
-                dev_container,
-                cwd,
             } => {
                 if !urls.is_empty() {
                     cx.update(|cx| {
                         match OpenRequest::parse(
                             RawOpenRequest {
                                 urls,
-                                diff_paths,
-                                diff_all,
-                                dev_container,
                                 wsl,
                                 open_behavior: Some(open_behavior),
                             },
@@ -393,15 +374,11 @@ pub async fn handle_cli_connection(
 
                 let open_workspace_result = open_workspaces(
                     paths,
-                    diff_paths,
-                    diff_all,
                     open_behavior,
                     responses.as_ref(),
                     wait,
-                    dev_container,
                     app_state.clone(),
                     env,
-                    cwd,
                     cx,
                 )
                 .await;
@@ -560,23 +537,19 @@ pub(crate) fn open_options_for_behavior(
 
 async fn open_workspaces(
     paths: Vec<String>,
-    diff_paths: Vec<[String; 2]>,
-    diff_all: bool,
     open_behavior: cli::OpenBehavior,
     responses: &dyn CliResponseSink,
     wait: bool,
-    dev_container: bool,
     app_state: Arc<AppState>,
     env: Option<collections::HashMap<String, String>>,
-    cwd: Option<PathBuf>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
-    if paths.is_empty() && diff_paths.is_empty() && open_behavior != cli::OpenBehavior::AlwaysNew {
+    if paths.is_empty() && open_behavior != cli::OpenBehavior::AlwaysNew {
         return restore_or_create_workspace(app_state, cx).await;
     }
 
     let grouped_locations: Vec<(SerializedWorkspaceLocation, PathList)> =
-        if paths.is_empty() && diff_paths.is_empty() {
+        if paths.is_empty() {
             Vec::new()
         } else {
             vec![(
@@ -607,7 +580,6 @@ async fn open_workspaces(
         let open_options = workspace::OpenOptions {
             wait,
             env: env.clone(),
-            open_in_dev_container: dev_container,
             ..base_open_options
         };
 
@@ -621,10 +593,7 @@ async fn open_workspaces(
 
                 let workspace_failed_to_open = open_local_workspace(
                     workspace_paths,
-                    diff_paths.clone(),
-                    diff_all,
                     open_options,
-                    cwd.clone(),
                     responses,
                     &app_state,
                     cx,
@@ -644,36 +613,19 @@ async fn open_workspaces(
 }
 
 async fn open_local_workspace(
-    mut workspace_paths: Vec<String>,
-    diff_paths: Vec<[String; 2]>,
-    diff_all: bool,
+    workspace_paths: Vec<String>,
     open_options: workspace::OpenOptions,
-    cwd: Option<PathBuf>,
     responses: &dyn CliResponseSink,
     app_state: &Arc<AppState>,
     cx: &mut AsyncApp,
 ) -> bool {
     let user_provided_paths = !workspace_paths.is_empty();
 
-    // When only diff paths are provided (no regular paths), add the CLI's
-    // working directory so the workspace opens with the right context.
-    // Note: must use the CLI process's cwd (forwarded via `cli_cwd`), not
-    // `std::env::current_dir()`, since the Zed app process's cwd is typically
-    // `/` on macOS bundles or the launch dir of an already-running instance.
-    if !user_provided_paths
-        && !diff_paths.is_empty()
-        && let Some(cwd) = cwd
-    {
-        workspace_paths.push(cwd.to_string_lossy().to_string());
-    }
-
     let paths_with_position =
         derive_paths_with_position(app_state.fs.as_ref(), workspace_paths).await;
 
     let (workspace, items) = match open_paths_with_positions(
         &paths_with_position,
-        &diff_paths,
-        diff_all,
         app_state.clone(),
         open_options.clone(),
         cx,
@@ -703,7 +655,7 @@ async fn open_local_workspace(
     // If --wait flag is used with no paths, or a directory, then wait until
     // the entire workspace is closed.
     if open_options.wait {
-        let mut wait_for_window_close = paths_with_position.is_empty() && diff_paths.is_empty();
+        let mut wait_for_window_close = paths_with_position.is_empty();
         if user_provided_paths {
             for path_with_position in &paths_with_position {
                 if app_state.fs.is_dir(&path_with_position.path).await {

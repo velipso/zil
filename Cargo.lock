@@ -2288,67 +2288,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dap"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-compression",
- "async-pipe",
- "async-tar",
- "async-trait",
- "client",
- "collections",
- "dap-types",
- "fs",
- "futures",
- "gpui",
- "http_client",
- "language",
- "libc",
- "log",
- "parking_lot",
- "paths",
- "proto",
- "schemars",
- "serde",
- "serde_json",
- "settings",
- "smallvec",
- "smol",
- "task",
- "util",
- "zlog",
-]
-
-[[package]]
-name = "dap-types"
-version = "0.0.1"
-dependencies = [
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "dap_adapters"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "collections",
- "dap",
- "fs",
- "gpui",
- "http_client",
- "language",
- "serde",
- "serde_json",
- "settings",
- "task",
- "util",
-]
-
-[[package]]
 name = "darling"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2412,23 +2351,6 @@ dependencies = [
  "util",
  "uuid",
  "zed_env_vars",
-]
-
-[[package]]
-name = "debugger_tools"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dap",
- "editor",
- "futures",
- "gpui",
- "project",
- "serde_json",
- "settings",
- "smol",
- "util",
- "workspace",
 ]
 
 [[package]]
@@ -5271,7 +5193,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
- "dap",
  "gpui",
  "language",
  "parking_lot",
@@ -8010,7 +7931,6 @@ dependencies = [
  "client",
  "clock",
  "collections",
- "dap",
  "encoding_rs",
  "fancy-regex",
  "fs",
@@ -13756,9 +13676,7 @@ dependencies = [
  "command_palette",
  "component",
  "crashes",
- "dap_adapters",
  "db",
- "debugger_tools",
  "editor",
  "encoding_selector",
  "env_logger",

@@ -324,12 +324,6 @@ async fn resolve_dynamic_schema(
                 deprecation_messages: &HashMap::default(),
             })
         }
-        "debug_tasks" => {
-            let adapter_schemas = cx.read_global::<dap::DapRegistry, _>(|dap_registry, _| {
-                dap_registry.adapters_schema()
-            });
-            task::DebugTaskFile::generate_json_schema(&adapter_schemas)
-        }
         "keymap" => cx.update(settings::KeymapFile::generate_json_schema_for_registered_actions),
         "action" => {
             let normalized_action_name = rest.context("No Action name provided")?;

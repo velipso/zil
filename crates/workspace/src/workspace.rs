@@ -19,7 +19,6 @@ pub mod shared_screen;
 pub use shared_screen::SharedScreen;
 pub mod focus_follows_mouse;
 mod status_bar;
-pub mod tasks;
 mod theme_preview;
 mod toast_layer;
 mod toolbar;
@@ -70,7 +69,7 @@ pub use item::{
     ProjectItem, SerializableItem, SerializableItemHandle, WeakItemHandle,
 };
 use itertools::Itertools;
-use language::{Buffer, LanguageRegistry, Rope};
+use language::{LanguageRegistry, Rope};
 pub use modal_layer::*;
 use notifications::{
     DetachAndPromptErr, Notifications, dismiss_app_notification,
@@ -94,7 +93,6 @@ use postage::stream::Stream;
 use project::{
     DirectoryLister, Project, ProjectEntryId, ProjectPath, ResolvedPath, Worktree, WorktreeId,
     WorktreeSettings,
-    debugger::session::ThreadStatus,
     project_settings::ProjectSettings,
     toolchain_store::ToolchainStoreEvent,
     trusted_worktrees::{RemoteHostLocation, TrustedWorktrees, TrustedWorktreesEvent},
@@ -123,7 +121,6 @@ use std::{
     env,
     hash::Hash,
     path::{Path, PathBuf},
-    process::ExitStatus,
     rc::Rc,
     sync::{
         Arc, LazyLock,
@@ -131,7 +128,6 @@ use std::{
     },
     time::Duration,
 };
-use task::{DebugScenario, SharedTaskContext, SpawnInTerminal};
 use theme::{ActiveTheme, SystemAppearance};
 use theme_settings::ThemeSettings;
 pub use toolbar::{
@@ -176,34 +172,6 @@ static ZED_WINDOW_POSITION: LazyLock<Option<Point<Pixels>>> = LazyLock::new(|| {
         .as_deref()
         .and_then(parse_pixel_position_env_var)
 });
-
-pub trait TerminalProvider {
-    fn spawn(
-        &self,
-        task: SpawnInTerminal,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Task<Option<Result<ExitStatus>>>;
-}
-
-pub trait DebuggerProvider {
-    // `active_buffer` is used to resolve build task's name against language-specific tasks.
-    fn start_session(
-        &self,
-        definition: DebugScenario,
-        task_context: SharedTaskContext,
-        active_buffer: Option<Entity<Buffer>>,
-        worktree_id: Option<WorktreeId>,
-        window: &mut Window,
-        cx: &mut App,
-    );
-
-    fn task_scheduled(&self, cx: &mut App);
-    fn debug_scenario_scheduled(&self, cx: &mut App);
-    fn debug_scenario_scheduled_last(&self, cx: &App) -> bool;
-
-    fn active_thread_state(&self, cx: &App) -> Option<ThreadStatus>;
-}
 
 /// Opens a file or directory.
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
@@ -1339,16 +1307,11 @@ pub struct Workspace {
     bounds_save_task_queued: Option<Task<()>>,
     on_prompt_for_new_path: Option<PromptForNewPath>,
     on_prompt_for_open_path: Option<PromptForOpenPath>,
-    terminal_provider: Option<Box<dyn TerminalProvider>>,
-    debugger_provider: Option<Arc<dyn DebuggerProvider>>,
     serializable_items_tx: UnboundedSender<Box<dyn SerializableItemHandle>>,
     _items_serializer: Task<Result<()>>,
     session_id: Option<String>,
-    scheduled_tasks: Vec<Task<()>>,
     last_open_dock_positions: Vec<DockPosition>,
     removing: bool,
-    open_in_dev_container: bool,
-    _dev_container_task: Option<Task<Result<()>>>,
     _panels_task: Option<Task<Result<()>>>,
     sidebar_focus_handle: Option<FocusHandle>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
@@ -1772,20 +1735,14 @@ impl Workspace {
             bounds_save_task_queued: None,
             on_prompt_for_new_path: None,
             on_prompt_for_open_path: None,
-            terminal_provider: None,
-            debugger_provider: None,
             serializable_items_tx,
             _items_serializer,
             session_id: Some(session_id),
-
-            scheduled_tasks: Vec::new(),
             last_open_dock_positions: Vec::new(),
             removing: false,
             sidebar_focus_handle: None,
             multi_workspace,
             active_worktree_creation: ActiveWorktreeCreation::default(),
-            open_in_dev_container: false,
-            _dev_container_task: None,
             deferred_save_items: Vec::new(),
         }
     }
@@ -2874,30 +2831,6 @@ impl Workspace {
 
     pub fn set_prompt_for_open_path(&mut self, prompt: PromptForOpenPath) {
         self.on_prompt_for_open_path = Some(prompt)
-    }
-
-    pub fn set_terminal_provider(&mut self, provider: impl TerminalProvider + 'static) {
-        self.terminal_provider = Some(Box::new(provider));
-    }
-
-    pub fn set_debugger_provider(&mut self, provider: impl DebuggerProvider + 'static) {
-        self.debugger_provider = Some(Arc::new(provider));
-    }
-
-    pub fn set_open_in_dev_container(&mut self, value: bool) {
-        self.open_in_dev_container = value;
-    }
-
-    pub fn open_in_dev_container(&self) -> bool {
-        self.open_in_dev_container
-    }
-
-    pub fn set_dev_container_task(&mut self, task: Task<Result<()>>) {
-        self._dev_container_task = Some(task);
-    }
-
-    pub fn debugger_provider(&self) -> Option<Arc<dyn DebuggerProvider>> {
-        self.debugger_provider.clone()
     }
 
     pub fn prompt_for_open_path(
@@ -7044,19 +6977,6 @@ impl Workspace {
         let mut context = KeyContext::new_with_defaults();
         context.add("Workspace");
         context.set("keyboard_layout", cx.keyboard_layout().name().to_string());
-        if let Some(status) = self
-            .debugger_provider
-            .as_ref()
-            .and_then(|provider| provider.active_thread_state(cx))
-        {
-            match status {
-                ThreadStatus::Running | ThreadStatus::Stepping => {
-                    context.add("debugger_running");
-                }
-                ThreadStatus::Stopped => context.add("debugger_stopped"),
-                ThreadStatus::Exited | ThreadStatus::Ended => {}
-            }
-        }
 
         if self.left_dock.read(cx).is_open() {
             if let Some(active_panel) = self.left_dock.read(cx).active_panel() {
@@ -9449,7 +9369,6 @@ pub struct OpenOptions {
     pub requesting_window: Option<WindowHandle<MultiWorkspace>>,
     pub open_mode: OpenMode,
     pub env: Option<HashMap<String, String>>,
-    pub open_in_dev_container: bool,
 }
 
 impl Default for OpenOptions {
@@ -9463,7 +9382,6 @@ impl Default for OpenOptions {
             requesting_window: None,
             open_mode: OpenMode::default(),
             env: None,
-            open_in_dev_container: false,
         }
     }
 }
@@ -9649,17 +9567,12 @@ pub fn open_paths(
             }
         }
 
-        let open_in_dev_container = open_options.open_in_dev_container;
-
         let result = if let Some((existing, target_workspace)) = existing {
             let open_task = existing
                 .update(cx, |multi_workspace, window, cx| {
                     window.activate_window();
                     multi_workspace.activate(target_workspace.clone(), None, window, cx);
                     target_workspace.update(cx, |workspace, cx| {
-                        if open_in_dev_container {
-                            workspace.set_open_in_dev_container(true);
-                        }
                         workspace.open_paths(
                             abs_paths,
                             OpenOptions {
@@ -9687,13 +9600,6 @@ pub fn open_paths(
 
             Ok(OpenResult { window: existing, workspace: target_workspace, opened_items: open_task })
         } else {
-            let init = if open_in_dev_container {
-                Some(Box::new(|workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Workspace>| {
-                    workspace.set_open_in_dev_container(true);
-                }) as Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>)
-            } else {
-                None
-            };
             let result = cx
                 .update(move |cx| {
                     Workspace::new_local(
@@ -9701,7 +9607,7 @@ pub fn open_paths(
                         app_state.clone(),
                         open_options.requesting_window,
                         open_options.env,
-                        init,
+                        None,
                         open_options.open_mode,
                         cx,
                     )

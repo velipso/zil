@@ -403,7 +403,6 @@ fn main() {
         move |urls| {
             open_listener.open(RawOpenRequest {
                 urls,
-                diff_paths: Vec::new(),
                 ..Default::default()
             })
         }
@@ -481,7 +480,6 @@ fn main() {
 
         zed::init(cx);
         project::Project::init(&client, cx);
-        debugger_tools::init(cx);
         client::init(&client, cx);
 
         let system_id = cx.foreground_executor().block_on(system_id).ok();
@@ -527,7 +525,6 @@ fn main() {
         });
         AppState::set_global(app_state.clone(), cx);
 
-        dap_adapters::init(cx);
         reliability::init(client.clone(), cx);
 
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
@@ -665,30 +662,15 @@ fn main() {
             .map(|arg| parse_url_arg(arg, cx))
             .collect();
 
-        // Check if any diff paths are directories to determine diff_all mode
-        let diff_all_mode = args
-            .diff
-            .chunks(2)
-            .any(|pair| Path::new(&pair[0]).is_dir() || Path::new(&pair[1]).is_dir());
-
-        let diff_paths: Vec<[String; 2]> = args
-            .diff
-            .chunks(2)
-            .map(|chunk| [chunk[0].clone(), chunk[1].clone()])
-            .collect();
-
         #[cfg(target_os = "windows")]
         let wsl = args.wsl;
         #[cfg(not(target_os = "windows"))]
         let wsl = None;
 
-        if !urls.is_empty() || !diff_paths.is_empty() {
+        if !urls.is_empty() {
             open_listener.open(RawOpenRequest {
                 urls,
-                diff_paths,
                 wsl,
-                diff_all: diff_all_mode,
-                dev_container: args.dev_container,
                 ..Default::default()
             })
         }
@@ -860,8 +842,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     }
 
     let mut task = None;
-    let dev_container = request.dev_container;
-    if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
+    if !request.open_paths.is_empty() {
         let app_state = app_state.clone();
         let base_open_options = zed::open_options_for_request(
             request.open_behavior,
@@ -873,11 +854,8 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                 derive_paths_with_position(app_state.fs.as_ref(), request.open_paths).await;
             let (_window, results) = open_paths_with_positions(
                 &paths_with_position,
-                &request.diff_paths,
-                request.diff_all,
                 app_state,
                 workspace::OpenOptions {
-                    open_in_dev_container: dev_container,
                     ..base_open_options
                 },
                 cx,
@@ -1218,17 +1196,6 @@ struct Args {
     #[cfg(target_os = "windows")]
     #[arg(long, value_name = "USER@DISTRO")]
     wsl: Option<String>,
-
-    /// Open the project in a dev container.
-    ///
-    /// Automatically triggers "Reopen in Dev Container" if a `.devcontainer/`
-    /// configuration is found in the project directory.
-    #[arg(long)]
-    dev_container: bool,
-
-    /// Instructs zed to run as a dev server on this machine. (not implemented)
-    #[arg(long)]
-    dev_server_token: Option<String>,
 
     /// Prints system specs.
     ///
