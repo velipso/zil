@@ -4,12 +4,9 @@ use fs::Fs;
 use gpui::{AppContext, Entity, Global, MenuItem};
 use smallvec::SmallVec;
 use ui::{App, Context};
-use util::{ResultExt, paths::PathExt};
+use util::paths::PathExt;
 
-use crate::{
-    NewWindow, SerializedWorkspaceLocation, WorkspaceId, path_list::PathList,
-    persistence::WorkspaceDb,
-};
+use crate::{NewWindow, WorkspaceId, path_list::PathList};
 
 pub fn init(fs: Arc<dyn Fs>, cx: &mut App) {
     let manager = cx.new(|_| HistoryManager::new());
@@ -40,28 +37,9 @@ impl HistoryManager {
         }
     }
 
-    fn init(this: Entity<HistoryManager>, fs: Arc<dyn Fs>, cx: &App) {
-        let db = WorkspaceDb::global(cx);
+    fn init(this: Entity<HistoryManager>, _fs: Arc<dyn Fs>, cx: &App) {
         cx.spawn(async move |cx| {
-            let recent_folders = db
-                .recent_project_workspaces(fs.as_ref())
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .rev()
-                .filter_map(|workspace| {
-                    if matches!(workspace.location, SerializedWorkspaceLocation::Local) {
-                        Some(HistoryManagerEntry::new(
-                            workspace.workspace_id,
-                            &workspace.paths,
-                        ))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
             this.update(cx, |this, cx| {
-                this.history = recent_folders;
                 this.update_jump_list(cx);
             })
         })
@@ -107,27 +85,21 @@ impl HistoryManager {
             .map(|entry| entry.path.clone())
             .collect::<Vec<_>>();
         let user_removed = cx.update_jump_list(menus, entries);
-        let db = WorkspaceDb::global(cx);
+
         cx.spawn(async move |this, cx| {
             let user_removed = user_removed.await;
             if user_removed.is_empty() {
                 return;
             }
-            let mut deleted_ids = Vec::new();
-            if let Ok(()) = this.update(cx, |this, _| {
+            let _ = this.update(cx, |this, _| {
                 for idx in (0..this.history.len()).rev() {
                     if let Some(entry) = this.history.get(idx)
                         && user_removed.contains(&entry.path)
                     {
-                        deleted_ids.push(entry.id);
                         this.history.remove(idx);
                     }
                 }
-            }) {
-                for id in deleted_ids.iter() {
-                    db.delete_workspace_by_id(*id).await.log_err();
-                }
-            }
+            });
         })
         .detach();
     }

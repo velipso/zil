@@ -144,10 +144,6 @@ impl ActiveToolchain {
         cx: &mut AsyncWindowContext,
     ) -> Task<Option<Toolchain>> {
         cx.spawn(async move |cx| {
-            let workspace_id = workspace
-                .read_with(cx, |this, _| this.database_id())
-                .ok()
-                .flatten()?;
             let selected_toolchain = workspace
                 .update(cx, |this, cx| {
                     this.project().read(cx).active_toolchain(
@@ -198,19 +194,6 @@ impl ActiveToolchain {
                     .or_else(|| toolchains.toolchains.first())
                     .cloned();
                 if let Some(toolchain) = &default_choice {
-                    let worktree_root_path = project.read_with(cx, |this, cx| {
-                        this.worktree_for_id(worktree_id, cx)
-                            .map(|worktree| worktree.read(cx).abs_path())
-                    })?;
-                    let db = cx.update(|_, cx| workspace::WorkspaceDb::global(cx)).ok()?;
-                    db.set_toolchain(
-                        workspace_id,
-                        worktree_root_path,
-                        relative_path.clone(),
-                        toolchain.clone(),
-                    )
-                    .await
-                    .ok()?;
                     project
                         .update(cx, |this, cx| {
                             this.activate_toolchain(

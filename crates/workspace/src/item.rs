@@ -1,9 +1,8 @@
 use crate::{
-    CollaboratorId, DelayedDebouncedEditAction, FollowableViewRegistry, ItemNavHistory,
+    CollaboratorId, DelayedDebouncedEditAction, FollowableViewRegistry, ItemId, ItemNavHistory,
     SerializableItemRegistry, ToolbarItemLocation, ViewId, Workspace, WorkspaceId,
     invalid_item_view::InvalidItemView,
     pane::{self, Pane},
-    persistence::model::ItemId,
     searchable::SearchableItemHandle,
     workspace_settings::{AutosaveSetting, WorkspaceSettings},
 };
@@ -957,10 +956,6 @@ impl<T: Item> ItemHandle for Entity<T> {
             })
             .detach();
         }
-
-        cx.defer_in(window, |workspace, window, cx| {
-            workspace.serialize_workspace(window, cx);
-        });
     }
 
     fn deactivated(&self, window: &mut Window, cx: &mut App) {

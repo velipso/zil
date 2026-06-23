@@ -72,8 +72,6 @@ impl Editor {
             return;
         }
 
-        self.unfold_buffers_with_selections(cx);
-
         let selections = self.selections.all_adjusted(&self.display_snapshot(cx));
         let mut edits = Vec::new();
         let mut new_selections: Vec<(Selection<Anchor>, usize)> = Vec::with_capacity(selections.len());

@@ -23,7 +23,7 @@ use util::debug_panic;
 use util::paths::PathWithPosition;
 use workspace::PathList;
 use workspace::item::ItemHandle;
-use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWorkspaceLocation};
+use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult};
 
 #[derive(Default, Debug)]
 pub struct OpenRequest {
@@ -491,22 +491,20 @@ async fn resolve_open_behavior(
 
 pub(crate) fn open_options_for_request(
     open_behavior: Option<cli::OpenBehavior>,
-    location: &SerializedWorkspaceLocation,
     cx: &App,
 ) -> workspace::OpenOptions {
     open_behavior.map_or_else(workspace::OpenOptions::default, |open_behavior| {
-        open_options_for_behavior(open_behavior, location, cx)
+        open_options_for_behavior(open_behavior, cx)
     })
 }
 
 pub(crate) fn open_options_for_behavior(
     open_behavior: cli::OpenBehavior,
-    location: &SerializedWorkspaceLocation,
     cx: &App,
 ) -> workspace::OpenOptions {
     // If reuse flag is passed, open a new workspace in an existing window.
     let requesting_window = if open_behavior == cli::OpenBehavior::Reuse {
-        workspace::workspace_windows_for_location(location, cx)
+        workspace::workspace_windows_for_location(cx)
             .into_iter()
             .next()
     } else {
@@ -548,14 +546,13 @@ async fn open_workspaces(
         return restore_or_create_workspace(app_state, cx).await;
     }
 
-    let grouped_locations: Vec<(SerializedWorkspaceLocation, PathList)> =
+    let grouped_locations: Vec<PathList> =
         if paths.is_empty() {
             Vec::new()
         } else {
-            vec![(
-                SerializedWorkspaceLocation::Local,
+            vec![
                 PathList::new(&paths.into_iter().map(PathBuf::from).collect::<Vec<_>>()),
-            )]
+            ]
         };
 
     if grouped_locations.is_empty() {
@@ -574,36 +571,32 @@ async fn open_workspaces(
     // If there are paths to open, open a workspace for each grouping of paths
     let mut errored = false;
 
-    for (location, workspace_paths) in grouped_locations {
+    for workspace_paths in grouped_locations {
         let base_open_options =
-            cx.update(|cx| open_options_for_behavior(open_behavior, &location, cx));
+            cx.update(|cx| open_options_for_behavior(open_behavior, cx));
         let open_options = workspace::OpenOptions {
             wait,
             env: env.clone(),
             ..base_open_options
         };
 
-        match location {
-            SerializedWorkspaceLocation::Local => {
-                let workspace_paths = workspace_paths
-                    .paths()
-                    .iter()
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .collect();
+        let workspace_paths = workspace_paths
+            .paths()
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
 
-                let workspace_failed_to_open = open_local_workspace(
-                    workspace_paths,
-                    open_options,
-                    responses,
-                    &app_state,
-                    cx,
-                )
-                .await;
+        let workspace_failed_to_open = open_local_workspace(
+            workspace_paths,
+            open_options,
+            responses,
+            &app_state,
+            cx,
+        )
+        .await;
 
-                if workspace_failed_to_open {
-                    errored = true
-                }
-            }
+        if workspace_failed_to_open {
+            errored = true;
         }
     }
 
@@ -619,6 +612,7 @@ async fn open_local_workspace(
     app_state: &Arc<AppState>,
     cx: &mut AsyncApp,
 ) -> bool {
+    println!("open_local_workspace");
     let user_provided_paths = !workspace_paths.is_empty();
 
     let paths_with_position =

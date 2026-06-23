@@ -3,7 +3,6 @@ mod image_viewer_settings;
 
 use std::path::Path;
 
-use anyhow::Context as _;
 use editor::{EditorSettings, items::entry_git_aware_label_color};
 use file_icons::FileIcons;
 use gpui::{
@@ -14,17 +13,16 @@ use gpui::{
     Task, WeakEntity, Window, actions, checkerboard, div, img, point, px, size,
 };
 use language::File as _;
-use persistence::ImageViewerDb;
-use project::{ImageItem, Project, ProjectPath, image_store::ImageItemEvent};
+use project::{ImageItem, Project, image_store::ImageItemEvent};
 use settings::Settings;
 use theme_settings::ThemeSettings;
 use ui::{Tooltip, prelude::*};
 use util::paths::PathExt;
 use workspace::{
-    ItemId, ItemSettings, Pane, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace,
-    WorkspaceId, delete_unloaded_items,
+    ItemSettings, Pane, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
+    WorkspaceId,
     invalid_item_view::InvalidItemView,
-    item::{HighlightedText, Item, ItemHandle, ProjectItem, SerializableItem, TabContentParams},
+    item::{HighlightedText, Item, ItemHandle, ProjectItem, TabContentParams},
 };
 
 pub use crate::image_info::*;
@@ -583,83 +581,6 @@ fn breadcrumbs_text_for_image(project: &Project, image: &ImageItem, cx: &App) ->
     path.display(project.path_style(cx)).to_string()
 }
 
-impl SerializableItem for ImageView {
-    fn serialized_item_kind() -> &'static str {
-        "ImageView"
-    }
-
-    fn deserialize(
-        project: Entity<Project>,
-        _workspace: WeakEntity<Workspace>,
-        workspace_id: WorkspaceId,
-        item_id: ItemId,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Task<anyhow::Result<Entity<Self>>> {
-        let db = ImageViewerDb::global(cx);
-        window.spawn(cx, async move |cx| {
-            let image_path = db
-                .get_image_path(item_id, workspace_id)?
-                .context("No image path found")?;
-
-            let (worktree, relative_path) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(image_path.clone(), false, cx)
-                })
-                .await
-                .context("Path not found")?;
-            let worktree_id = worktree.update(cx, |worktree, _cx| worktree.id());
-
-            let project_path = ProjectPath {
-                worktree_id,
-                path: relative_path,
-            };
-
-            let image_item = project
-                .update(cx, |project, cx| project.open_image(project_path, cx))
-                .await?;
-
-            cx.update(
-                |window, cx| Ok(cx.new(|cx| ImageView::new(image_item, project, window, cx))),
-            )?
-        })
-    }
-
-    fn cleanup(
-        workspace_id: WorkspaceId,
-        alive_items: Vec<ItemId>,
-        _window: &mut Window,
-        cx: &mut App,
-    ) -> Task<anyhow::Result<()>> {
-        let db = ImageViewerDb::global(cx);
-        delete_unloaded_items(alive_items, workspace_id, "image_viewers", &db, cx)
-    }
-
-    fn serialize(
-        &mut self,
-        workspace: &mut Workspace,
-        item_id: ItemId,
-        _closing: bool,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Task<anyhow::Result<()>>> {
-        let workspace_id = workspace.database_id()?;
-        let image_path = self.image_item.read(cx).abs_path(cx)?;
-
-        let db = ImageViewerDb::global(cx);
-        Some(cx.background_spawn({
-            async move {
-                log::debug!("Saving image at path {image_path:?}");
-                db.save_image_path(item_id, workspace_id, image_path).await
-            }
-        }))
-    }
-
-    fn should_serialize(&self, _event: &Self::Event) -> bool {
-        false
-    }
-}
-
 impl EventEmitter<()> for ImageView {}
 impl Focusable for ImageView {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
@@ -850,58 +771,4 @@ impl ToolbarItemView for ImageViewToolbarControls {
 
 pub fn init(cx: &mut App) {
     workspace::register_project_item::<ImageView>(cx);
-    workspace::register_serializable_item::<ImageView>(cx);
-}
-
-mod persistence {
-    use std::path::PathBuf;
-
-    use db::{
-        query,
-        sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-        sqlez_macros::sql,
-    };
-    use workspace::{ItemId, WorkspaceDb, WorkspaceId};
-
-    pub struct ImageViewerDb(ThreadSafeConnection);
-
-    impl Domain for ImageViewerDb {
-        const NAME: &str = stringify!(ImageViewerDb);
-
-        const MIGRATIONS: &[&str] = &[sql!(
-                CREATE TABLE image_viewers (
-                    workspace_id INTEGER,
-                    item_id INTEGER UNIQUE,
-
-                    image_path BLOB,
-
-                    PRIMARY KEY(workspace_id, item_id),
-                    FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                    ON DELETE CASCADE
-                ) STRICT;
-        )];
-    }
-
-    db::static_connection!(ImageViewerDb, [WorkspaceDb]);
-
-    impl ImageViewerDb {
-        query! {
-            pub async fn save_image_path(
-                item_id: ItemId,
-                workspace_id: WorkspaceId,
-                image_path: PathBuf
-            ) -> Result<()> {
-                INSERT OR REPLACE INTO image_viewers(item_id, workspace_id, image_path)
-                VALUES (?, ?, ?)
-            }
-        }
-
-        query! {
-            pub fn get_image_path(item_id: ItemId, workspace_id: WorkspaceId) -> Result<Option<PathBuf>> {
-                SELECT image_path
-                FROM image_viewers
-                WHERE item_id = ? AND workspace_id = ?
-            }
-        }
-    }
 }

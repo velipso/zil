@@ -36,7 +36,6 @@ visual-tests = [
     "editor/test-support",
     "image_viewer/test-support",
     "clock/test-support",
-    "db/test-support",
     "language_model/test-support",
     "fs/test-support",
     "title_bar/test-support",
@@ -63,7 +62,6 @@ client.workspace = true
 collections.workspace = true
 command_palette.workspace = true
 component.workspace = true
-db.workspace = true
 editor.workspace = true
 encoding_selector.workspace = true
 env_logger.workspace = true
@@ -90,7 +88,6 @@ json_schema_store.workspace = true
 keymap_editor.workspace = true
 language.workspace = true
 language_model.workspace = true
-language_onboarding.workspace = true
 language_selector.workspace = true
 language_tools.workspace = true
 languages = { workspace = true, features = ["load-grammars"] }
@@ -98,7 +95,6 @@ line_ending_selector.workspace = true
 log.workspace = true
 markdown.workspace = true
 menu.workspace = true
-migrator.workspace = true
 mimalloc = { version = "0.1", optional = true }
 notifications.workspace = true
 open_path_prompt.workspace = true

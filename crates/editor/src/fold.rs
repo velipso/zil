@@ -711,13 +711,7 @@ impl Editor {
         self.fold_creases(to_fold, true, window, cx);
     }
 
-    pub(super) fn unfold_buffers_with_selections(&mut self, _cx: &mut Context<Self>) {
-        // VELIPSO: nothing
-    }
-
     pub(super) fn folds_did_change(&mut self, cx: &mut Context<Self>) {
-        use text::ToOffset as _;
-
         if self.mode.is_minimap()
             || WorkspaceSettings::get(None, cx).restore_on_startup
                 == RestoreOnStartupBehavior::EmptyTab
@@ -741,73 +735,6 @@ impl Editor {
             .collect();
         self.update_restoration_data(cx, |data| {
             data.folds = inmemory_folds;
-        });
-
-        let Some(workspace_id) = self.workspace_serialization_id(cx) else {
-            return;
-        };
-
-        // Get file path for path-based fold storage (survives tab close)
-        let buffer = self.buffer().read(cx).as_singleton();
-        let Some(file_path) =
-            project::File::from_dyn(buffer.read(cx).file())
-                .map(|file| Arc::<Path>::from(file.abs_path(cx)))
-        else {
-            return;
-        };
-
-        let background_executor = cx.background_executor().clone();
-        const FINGERPRINT_LEN: usize = 32;
-        let db_folds = display_snapshot
-            .folds_in_range(MultiBufferOffset(0)..display_snapshot.buffer_snapshot().len())
-            .map(|fold| {
-                let start = fold
-                    .range
-                    .start
-                    .text_anchor_in(buffer_snapshot)
-                    .to_offset(buffer_snapshot);
-                let end = fold
-                    .range
-                    .end
-                    .text_anchor_in(buffer_snapshot)
-                    .to_offset(buffer_snapshot);
-
-                // Extract fingerprints - content at fold boundaries for validation on restore
-                // Both fingerprints must be INSIDE the fold to avoid capturing surrounding
-                // content that might change independently.
-                // start_fp: first min(32, fold_len) bytes of fold content
-                // end_fp: last min(32, fold_len) bytes of fold content
-                // Clip to character boundaries to handle multibyte UTF-8 characters.
-                let fold_len = end - start;
-                let start_fp_end = buffer_snapshot
-                    .clip_offset(start + std::cmp::min(FINGERPRINT_LEN, fold_len), Bias::Left);
-                let start_fp: String = buffer_snapshot
-                    .text_for_range(start..start_fp_end)
-                    .collect();
-                let end_fp_start = buffer_snapshot
-                    .clip_offset(end.saturating_sub(FINGERPRINT_LEN).max(start), Bias::Right);
-                let end_fp: String = buffer_snapshot.text_for_range(end_fp_start..end).collect();
-
-                (start, end, start_fp, end_fp)
-            })
-            .collect::<Vec<_>>();
-        let db = EditorDb::global(cx);
-        self.serialize_folds = cx.background_spawn(async move {
-            background_executor.timer(SERIALIZATION_THROTTLE_TIME).await;
-            if db_folds.is_empty() {
-                // No folds - delete any persisted folds for this file
-                db.delete_file_folds(workspace_id, file_path)
-                    .await
-                    .with_context(|| format!("deleting file folds for workspace {workspace_id:?}"))
-                    .log_err();
-            } else {
-                db.save_file_folds(workspace_id, file_path, db_folds)
-                    .await
-                    .with_context(|| {
-                        format!("persisting file folds for workspace {workspace_id:?}")
-                    })
-                    .log_err();
-            }
         });
     }
 
@@ -885,103 +812,6 @@ impl Editor {
             })
             .ok();
         });
-    }
-
-    /// Load folds from the file_folds database table by file path.
-    /// Used when manually opening a file that was previously closed.
-    pub(super) fn load_folds_from_db(
-        &mut self,
-        workspace_id: WorkspaceId,
-        file_path: PathBuf,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        if self.mode.is_minimap()
-            || WorkspaceSettings::get(None, cx).restore_on_startup
-                == RestoreOnStartupBehavior::EmptyTab
-        {
-            return;
-        }
-
-        let Some(folds) = EditorDb::global(cx)
-            .get_file_folds(workspace_id, &file_path)
-            .log_err()
-        else {
-            return;
-        };
-        if folds.is_empty() {
-            return;
-        }
-
-        let snapshot = self.buffer.read(cx).snapshot(cx);
-        let snapshot_len = snapshot.len().0;
-
-        // Helper: search for fingerprint in buffer, return offset if found
-        let find_fingerprint = |fingerprint: &str, search_start: usize| -> Option<usize> {
-            let search_start = snapshot
-                .clip_offset(MultiBufferOffset(search_start), Bias::Left)
-                .0;
-            let search_end = snapshot_len.saturating_sub(fingerprint.len());
-
-            let mut byte_offset = search_start;
-            for ch in snapshot.chars_at(MultiBufferOffset(search_start)) {
-                if byte_offset > search_end {
-                    break;
-                }
-                if snapshot.contains_str_at(MultiBufferOffset(byte_offset), fingerprint) {
-                    return Some(byte_offset);
-                }
-                byte_offset += ch.len_utf8();
-            }
-            None
-        };
-
-        let mut search_start = 0usize;
-
-        let valid_folds: Vec<_> = folds
-            .into_iter()
-            .filter_map(|(stored_start, stored_end, start_fp, end_fp)| {
-                let sfp = start_fp?;
-                let efp = end_fp?;
-                let efp_len = efp.len();
-
-                let start_matches = stored_start < snapshot_len
-                    && snapshot.contains_str_at(MultiBufferOffset(stored_start), &sfp);
-                let efp_check_pos = stored_end.saturating_sub(efp_len);
-                let end_matches = efp_check_pos >= stored_start
-                    && stored_end <= snapshot_len
-                    && snapshot.contains_str_at(MultiBufferOffset(efp_check_pos), &efp);
-
-                let (new_start, new_end) = if start_matches && end_matches {
-                    (stored_start, stored_end)
-                } else if sfp == efp {
-                    let new_start = find_fingerprint(&sfp, search_start)?;
-                    let fold_len = stored_end - stored_start;
-                    let new_end = new_start + fold_len;
-                    (new_start, new_end)
-                } else {
-                    let new_start = find_fingerprint(&sfp, search_start)?;
-                    let efp_pos = find_fingerprint(&efp, new_start + sfp.len())?;
-                    let new_end = efp_pos + efp_len;
-                    (new_start, new_end)
-                };
-
-                search_start = new_end;
-
-                if new_end <= new_start {
-                    return None;
-                }
-
-                Some(
-                    snapshot.clip_offset(MultiBufferOffset(new_start), Bias::Left)
-                        ..snapshot.clip_offset(MultiBufferOffset(new_end), Bias::Right),
-                )
-            })
-            .collect();
-
-        if !valid_folds.is_empty() {
-            self.fold_ranges(valid_folds, false, window, cx);
-        }
     }
 
     fn remove_folds_with<T: ToOffset + Clone>(

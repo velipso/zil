@@ -16,7 +16,6 @@ members = [
     "crates/command_palette_hooks",
     "crates/component",
     "crates/credentials_provider",
-    "crates/db",
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
@@ -51,7 +50,6 @@ members = [
     "crates/language_core",
     "crates/language_model",
     "crates/language_model_core",
-    "crates/language_onboarding",
     "crates/language_selector",
     "crates/language_tools",
     "crates/languages",
@@ -61,7 +59,6 @@ members = [
     "crates/media",
     "crates/menu",
     "crates/mermaid_render",
-    "crates/migrator",
     "crates/multi_buffer",
     "crates/net",
     "crates/notifications",
@@ -87,8 +84,6 @@ members = [
     "crates/settings_macros",
     "crates/settings_profile_selector",
     "crates/settings_ui",
-    "crates/sqlez",
-    "crates/sqlez_macros",
     "crates/sum_tree",
     "crates/syntax_theme",
     "crates/tab_switcher",
@@ -154,7 +149,6 @@ component = { path = "crates/component" }
 console = "0.16"
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
-db = { path = "crates/db" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
 dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
@@ -190,7 +184,6 @@ language = { path = "crates/language" }
 language_core = { path = "crates/language_core" }
 language_model = { path = "crates/language_model" }
 language_model_core = { path = "crates/language_model_core" }
-language_onboarding = { path = "crates/language_onboarding" }
 language_selector = { path = "crates/language_selector" }
 language_tools = { path = "crates/language_tools" }
 languages = { path = "crates/languages" }
@@ -200,7 +193,6 @@ markdown = { path = "crates/markdown" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
 mermaid_render = { path = "crates/mermaid_render" }
-migrator = { path = "crates/migrator" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
 notifications = { path = "crates/notifications" }
@@ -228,8 +220,6 @@ settings_json = { path = "crates/settings_json" }
 settings_macros = { path = "crates/settings_macros" }
 settings_profile_selector = { path = "crates/settings_profile_selector" }
 settings_ui = { path = "crates/settings_ui" }
-sqlez = { path = "crates/sqlez" }
-sqlez_macros = { path = "crates/sqlez_macros" }
 sum_tree = { path = "crates/sum_tree" }
 syntax_theme = { path = "crates/syntax_theme" }
 tab_switcher = { path = "crates/tab_switcher" }
@@ -351,7 +341,6 @@ inventory = "0.3.19"
 itertools = "0.14.0"
 json_dotpath = "1.1"
 libc = "0.2"
-libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 linkify = "0.10.0"
 log = { version = "0.4.16", features = ["kv_unstable_serde", "serde"] }
 lsp-types = { path = "crates/lsp-types" }
@@ -620,7 +609,6 @@ debug = "full"
 gpui_macros = { opt-level = 3 }
 derive_refineable = { opt-level = 3 }
 settings_macros = { opt-level = 3 }
-sqlez_macros = { opt-level = 3, codegen-units = 1 }
 ui_macros = { opt-level = 3 }
 util_macros = { opt-level = 3 }
 quote = { opt-level = 3 }

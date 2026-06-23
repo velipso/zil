@@ -1,11 +1,9 @@
 use crate::focus_follows_mouse::FocusFollowsMouse as _;
-use crate::persistence::model::DockData;
 use crate::status_bar::HideStatusItem;
-use crate::{DraggedDock, Event, FocusFollowsMouse, ModalLayer, Pane, WorkspaceSettings};
+use crate::{DraggedDock, DockData, Event, FocusFollowsMouse, ModalLayer, Pane, WorkspaceSettings};
 use crate::{Workspace, status_bar::StatusItemView};
 use anyhow::Context as _;
 use client::proto;
-use db::kvp::KeyValueStore;
 
 use gpui::{
     Action, Anchor, AnyView, App, Axis, Context, Entity, EntityId, EventEmitter, FocusHandle,
@@ -348,8 +346,6 @@ pub struct PanelButtons {
     _settings_subscription: Subscription,
 }
 
-pub(crate) const PANEL_SIZE_STATE_KEY: &str = "dock_panel_size";
-
 fn panel_uses_flexible_width(
     position: DockPosition,
     panel: &dyn PanelHandle,
@@ -550,12 +546,6 @@ impl Dock {
                 entry.panel.set_zoomed(false, window, cx);
             }
         }
-
-        self.workspace
-            .update(cx, |workspace, cx| {
-                workspace.serialize_workspace(window, cx);
-            })
-            .ok();
         cx.notify();
     }
 
@@ -636,12 +626,6 @@ impl Dock {
                             new_dock.activate_panel(index, window, cx);
                         }
                     });
-
-                    workspace
-                        .update(cx, |workspace, cx| {
-                            workspace.serialize_workspace(window, cx);
-                        })
-                        .ok();
                 }
             }),
             cx.subscribe_in(
@@ -932,20 +916,10 @@ impl Dock {
         } else {
             entry.size_state.flex = current_flex;
         }
-        let panel_key = entry.panel.panel_key();
-        let size_state = entry.size_state;
-        let workspace = self.workspace.clone();
         entry
             .panel
             .set_flexible_size(!currently_flexible, window, cx);
         entry.panel.size_state_changed(window, cx);
-        cx.defer(move |cx| {
-            if let Some(workspace) = workspace.upgrade() {
-                workspace.update(cx, |workspace, cx| {
-                    workspace.persist_panel_size_state(panel_key, size_state, cx);
-                });
-            }
-        });
         cx.notify();
     }
 
@@ -959,17 +933,7 @@ impl Dock {
         if let Some(index) = self.active_panel_index
             && let Some(entry) = self.panel_entries.get_mut(index)
         {
-            let (panel_key, size_state) =
-                resize_panel_entry(self.position, entry, size, flex, window, cx);
-
-            let workspace = self.workspace.clone();
-            cx.defer(move |cx| {
-                if let Some(workspace) = workspace.upgrade() {
-                    workspace.update(cx, |workspace, cx| {
-                        workspace.persist_panel_size_state(panel_key, size_state, cx);
-                    });
-                }
-            });
+            let _ = resize_panel_entry(self.position, entry, size, flex, window, cx);
             cx.notify();
         }
     }
@@ -1006,17 +970,6 @@ impl Dock {
                 ));
             }
         }
-
-        let workspace = self.workspace.clone();
-        cx.defer(move |cx| {
-            if let Some(workspace) = workspace.upgrade() {
-                workspace.update(cx, |workspace, cx| {
-                    for (panel_key, size_state) in size_states_to_persist {
-                        workspace.persist_panel_size_state(panel_key, size_state, cx);
-                    }
-                });
-            }
-        });
 
         cx.notify();
     }
@@ -1058,24 +1011,6 @@ impl Dock {
             cx.notify();
         }
     }
-
-    pub(crate) fn load_persisted_size_state(
-        workspace: &Workspace,
-        panel_key: &'static str,
-        cx: &App,
-    ) -> Option<PanelSizeState> {
-        let workspace_id = workspace
-            .database_id()
-            .map(|id| i64::from(id).to_string())
-            .or(workspace.session_id())?;
-        let kvp = KeyValueStore::global(cx);
-        let scope = kvp.scoped(PANEL_SIZE_STATE_KEY);
-        scope
-            .read(&format!("{workspace_id}:{panel_key}"))
-            .log_err()
-            .flatten()
-            .and_then(|json| serde_json::from_str::<PanelSizeState>(&json).log_err())
-    }
 }
 
 impl Render for Dock {
@@ -1101,11 +1036,6 @@ impl Render for Dock {
                         cx.listener(|dock, e: &MouseUpEvent, window, cx| {
                             if e.click_count == 2 {
                                 dock.resize_active_panel(None, None, window, cx);
-                                dock.workspace
-                                    .update(cx, |workspace, cx| {
-                                        workspace.serialize_workspace(window, cx);
-                                    })
-                                    .ok();
                                 cx.stop_propagation();
                             }
                         }),

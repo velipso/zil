@@ -1010,7 +1010,6 @@ mod element {
     use settings::Settings;
     use smallvec::SmallVec;
     use ui::prelude::*;
-    use util::ResultExt;
 
     use crate::Workspace;
 
@@ -1088,7 +1087,7 @@ mod element {
             axis: Axis,
             child_start: Point<Pixels>,
             container_size: Size<Pixels>,
-            workspace: WeakEntity<Workspace>,
+            _workspace: WeakEntity<Workspace>,
             window: &mut Window,
             cx: &mut App,
         ) {
@@ -1172,9 +1171,6 @@ mod element {
                 proposed_current_pixel_change -= current_pixel_change;
             }
 
-            workspace
-                .update(cx, |this, cx| this.serialize_workspace(window, cx))
-                .log_err();
             cx.stop_propagation();
             window.refresh();
         }
@@ -1411,7 +1407,6 @@ mod element {
                     window.on_mouse_event({
                         let dragged_handle = layout.dragged_handle.clone();
                         let flexes = self.flexes.clone();
-                        let workspace = self.workspace.clone();
                         let handle_hitbox = handle.hitbox.clone();
                         move |e: &MouseDownEvent, phase, window, cx| {
                             if phase.bubble() && handle_hitbox.is_hovered(window) {
@@ -1419,10 +1414,6 @@ mod element {
                                 if e.click_count >= 2 {
                                     let mut borrow = flexes.lock();
                                     *borrow = vec![1.; borrow.len()];
-                                    workspace
-                                        .update(cx, |this, cx| this.serialize_workspace(window, cx))
-                                        .log_err();
-
                                     window.refresh();
                                 }
                                 cx.stop_propagation();

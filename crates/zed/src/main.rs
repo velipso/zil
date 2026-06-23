@@ -18,7 +18,6 @@ use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore, parse_zed_link};
 use collections::HashMap;
-use db::kvp::{GlobalKeyValueStore, KeyValueStore};
 use editor::Editor;
 use fs::{Fs, RealFs};
 use futures::StreamExt;
@@ -50,10 +49,7 @@ use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
 use theme_settings::load_user_theme;
 use util::ResultExt;
 use uuid::Uuid;
-use workspace::{
-    AppState, MultiWorkspace, SerializedWorkspaceLocation, SessionWorkspace, Toast,
-    WorkspaceSettings, WorkspaceStore, notifications::NotificationId, restore_multiworkspace,
-};
+use workspace::{AppState, WorkspaceSettings, WorkspaceStore};
 use zed::{
     OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
     derive_paths_with_position, handle_cli_connection, handle_keymap_file_changes,
@@ -264,15 +260,9 @@ fn main() {
 
     let app = build_application().with_assets(Assets);
 
-    let app_db = db::AppDatabase::new();
-    let system_id = app.background_executor().spawn(system_id());
-    let installation_id = app
-        .background_executor()
-        .spawn(installation_id(KeyValueStore::from_app_db(&app_db)));
     let session_id = Uuid::new_v4().to_string();
     let session = app.background_executor().spawn(Session::new(
         session_id.clone(),
-        KeyValueStore::from_app_db(&app_db),
     ));
 
     let (open_listener, mut open_rx) = OpenListener::new();
@@ -346,15 +336,7 @@ fn main() {
     });
 
     app.run(move |cx| {
-        cx.set_global(app_db);
-        let db_trusted_paths = match workspace::WorkspaceDb::global(cx).fetch_trusted_worktrees() {
-            Ok(trusted_paths) => trusted_paths,
-            Err(e) => {
-                log::error!("Failed to do initial trusted worktrees fetch: {e:#}");
-                HashMap::default()
-            }
-        };
-        trusted_worktrees::init(db_trusted_paths, cx);
+        trusted_worktrees::init(HashMap::default(), cx);
         menu::init();
         zed_actions::init();
 
@@ -407,14 +389,12 @@ fn main() {
         project::Project::init(&client, cx);
         client::init(&client, cx);
 
-        let system_id = cx.foreground_executor().block_on(system_id).ok();
-        let installation_id = cx.foreground_executor().block_on(installation_id).ok();
         let session = cx.foreground_executor().block_on(session);
 
         let telemetry = client.telemetry();
         telemetry.start(
-            system_id.as_ref().map(|id| id.to_string()),
-            installation_id.as_ref().map(|id| id.to_string()),
+            Some("asdf".to_string()),
+            Some("asdf".to_string()),
             session.id().to_owned(),
             cx,
         );
@@ -562,14 +542,6 @@ fn main() {
             })
         }
 
-        let (current_session_id, last_session_id) = {
-            let session = app_state.session.read(cx);
-            (
-                session.id().to_owned(),
-                session.last_session_id().map(|id| id.to_owned()),
-            )
-        };
-
         let restore_task = match open_rx
             .try_recv()
             .ok()
@@ -597,20 +569,10 @@ fn main() {
             }),
         };
 
-        cx.spawn({
-            let db = workspace::WorkspaceDb::global(cx);
-            let fs = app_state.fs.clone();
-            async move |_cx| {
-                restore_task.await;
-                db.garbage_collect_workspaces(
-                    fs.as_ref(),
-                    &current_session_id,
-                    last_session_id.as_deref(),
-                )
-                .await
-            }
+        cx.spawn(async move |_cx| {
+            restore_task.await;
         })
-        .detach_and_log_err(cx);
+        .detach();
 
         let app_state = app_state.clone();
 
@@ -733,7 +695,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
         let app_state = app_state.clone();
         let base_open_options = zed::open_options_for_request(
             request.open_behavior,
-            &workspace::SerializedWorkspaceLocation::Local,
             cx,
         );
         task = Some(cx.spawn(async move |cx| {
@@ -781,239 +742,23 @@ async fn authenticate(client: Arc<Client>, cx: &AsyncApp) -> Result<()> {
     Ok(())
 }
 
-async fn system_id() -> Result<IdType> {
-    let key_name = "system_id".to_string();
-    let db = GlobalKeyValueStore::global();
-
-    if let Ok(Some(system_id)) = db.read_kvp(&key_name) {
-        return Ok(IdType::Existing(system_id));
-    }
-
-    let system_id = Uuid::new_v4().to_string();
-
-    db.write_kvp(key_name, system_id.clone()).await?;
-
-    Ok(IdType::New(system_id))
-}
-
-async fn installation_id(db: KeyValueStore) -> Result<IdType> {
-    let legacy_key_name = "device_id".to_string();
-    let key_name = "installation_id".to_string();
-
-    // Migrate legacy key to new key
-    if let Ok(Some(installation_id)) = db.read_kvp(&legacy_key_name) {
-        db.write_kvp(key_name, installation_id.clone()).await?;
-        db.delete_kvp(legacy_key_name).await?;
-        return Ok(IdType::Existing(installation_id));
-    }
-
-    if let Ok(Some(installation_id)) = db.read_kvp(&key_name) {
-        return Ok(IdType::Existing(installation_id));
-    }
-
-    let installation_id = Uuid::new_v4().to_string();
-
-    db.write_kvp(key_name, installation_id.clone()).await?;
-
-    Ok(IdType::New(installation_id))
-}
-
 pub(crate) async fn restore_or_create_workspace(
     app_state: Arc<AppState>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
-    if let Some(multi_workspaces) = restorable_workspaces(cx, &app_state).await {
-        let mut error_count = 0;
-        for multi_workspace in multi_workspaces {
-            let result = match &multi_workspace.active_workspace.location {
-                SerializedWorkspaceLocation::Local => {
-                    restore_multiworkspace(multi_workspace, app_state.clone(), cx)
-                        .await
-                        .map(|_| ())
-                }
-            };
-
-            if let Err(error) = result {
-                log::error!("Failed to restore workspace: {error:#}");
-                error_count += 1;
-            }
-        }
-
-        if error_count > 0 {
-            let message = if error_count == 1 {
-                "Failed to restore 1 workspace. Check logs for details.".to_string()
-            } else {
-                format!(
-                    "Failed to restore {} workspaces. Check logs for details.",
-                    error_count
-                )
-            };
-
-            // Try to find an active workspace to show the toast
-            let toast_shown = cx.update(|cx| {
-                if let Some(window) = cx.active_window()
-                    && let Some(multi_workspace) = window.downcast::<MultiWorkspace>()
-                {
-                    multi_workspace
-                        .update(cx, |multi_workspace, _, cx| {
-                            multi_workspace.workspace().update(cx, |workspace, cx| {
-                                workspace.show_toast(
-                                    Toast::new(NotificationId::unique::<()>(), message.clone()),
-                                    cx,
-                                )
-                            });
-                        })
-                        .ok();
-                    return true;
-                }
-                false
-            });
-
-            // If we couldn't show a toast (no windows opened successfully),
-            // open a fallback empty workspace and show the error there
-            if !toast_shown {
-                log::error!("All workspace restorations failed. Opening fallback empty workspace.");
-                cx.update(|cx| {
-                    workspace::open_new(
-                        Default::default(),
-                        app_state.clone(),
-                        cx,
-                        |workspace, _window, cx| {
-                            workspace.show_toast(
-                                Toast::new(NotificationId::unique::<()>(), message),
-                                cx,
-                            );
-                        },
-                    )
-                })
-                .await?;
-            }
-        }
-
-        // If the user cancelled a failed remote connection at startup,
-        // open_remote_project returns Ok but removes the window, so error_count
-        // stays 0 and the toast fallback above does not trigger. Without this
-        // check, Zed would exit silently.
-        if cx.update(|cx| cx.windows().is_empty()) {
-            cx.update(|cx| {
-                workspace::open_new(
-                    Default::default(),
-                    app_state.clone(),
-                    cx,
-                    |workspace, window, cx| {
-                        let restore_on_startup =
-                            WorkspaceSettings::get_global(cx).restore_on_startup;
-                        match restore_on_startup {
-                            workspace::RestoreOnStartupBehavior::Launchpad => {}
-                            _ => {
-                                Editor::new_file(workspace, &Default::default(), window, cx);
-                            }
-                        }
-                    },
-                )
-            })
-            .await?;
-        }
-    } else {
-        cx.update(|cx| {
-            workspace::open_new(
-                Default::default(),
-                app_state,
-                cx,
-                |workspace, window, cx| {
-                    let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
-                    match restore_on_startup {
-                        workspace::RestoreOnStartupBehavior::Launchpad => {}
-                        _ => {
-                            Editor::new_file(workspace, &Default::default(), window, cx);
-                        }
-                    }
-                },
-            )
-        })
-        .await?;
-    }
+    cx.update(|cx| {
+        workspace::open_new(
+            Default::default(),
+            app_state,
+            cx,
+            |workspace, window, cx| {
+                Editor::new_file(workspace, &Default::default(), window, cx);
+            },
+        )
+    })
+    .await?;
 
     Ok(())
-}
-
-async fn restorable_workspaces(
-    cx: &mut AsyncApp,
-    app_state: &Arc<AppState>,
-) -> Option<Vec<workspace::SerializedMultiWorkspace>> {
-    let locations = restorable_workspace_locations(cx, app_state).await?;
-    Some(cx.update(|cx| workspace::read_serialized_multi_workspaces(locations, cx)))
-}
-
-pub(crate) async fn restorable_workspace_locations(
-    cx: &mut AsyncApp,
-    app_state: &Arc<AppState>,
-) -> Option<Vec<SessionWorkspace>> {
-    let (mut restore_behavior, db) = cx.update(|cx| {
-        (
-            WorkspaceSettings::get(None, cx).restore_on_startup,
-            workspace::WorkspaceDb::global(cx),
-        )
-    });
-
-    let session_handle = app_state.session.clone();
-    let (last_session_id, last_session_window_stack) = cx.update(|cx| {
-        let session = session_handle.read(cx);
-
-        (
-            session.last_session_id().map(|id| id.to_string()),
-            session.last_session_window_stack(),
-        )
-    });
-
-    if last_session_id.is_none()
-        && matches!(
-            restore_behavior,
-            workspace::RestoreOnStartupBehavior::LastSession
-        )
-    {
-        restore_behavior = workspace::RestoreOnStartupBehavior::LastWorkspace;
-    }
-
-    match restore_behavior {
-        workspace::RestoreOnStartupBehavior::LastWorkspace => {
-            workspace::last_opened_workspace_location(&db, app_state.fs.as_ref())
-                .await
-                .map(|(workspace_id, location, paths)| {
-                    vec![SessionWorkspace {
-                        workspace_id,
-                        location,
-                        paths,
-                        window_id: None,
-                    }]
-                })
-        }
-        workspace::RestoreOnStartupBehavior::LastSession => {
-            if let Some(last_session_id) = last_session_id {
-                let ordered = last_session_window_stack.is_some();
-
-                let mut locations = workspace::last_session_workspace_locations(
-                    &db,
-                    &last_session_id,
-                    last_session_window_stack,
-                    app_state.fs.as_ref(),
-                )
-                .await
-                .filter(|locations| !locations.is_empty());
-
-                // Since last_session_window_order returns the windows ordered front-to-back
-                // we need to open the window that was frontmost last.
-                if ordered && let Some(locations) = locations.as_mut() {
-                    locations.reverse();
-                }
-
-                locations
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
 }
 
 fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
@@ -1022,7 +767,6 @@ fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
         paths::extensions_dir(),
         paths::languages_dir(),
         paths::debug_adapters_dir(),
-        paths::database_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
         paths::hang_traces_dir(),
@@ -1093,20 +837,6 @@ struct Args {
 
     #[arg(long, hide = true)]
     dump_all_actions: bool,
-}
-
-#[derive(Clone, Debug)]
-enum IdType {
-    New(String),
-    Existing(String),
-}
-
-impl ToString for IdType {
-    fn to_string(&self) -> String {
-        match self {
-            IdType::New(id) | IdType::Existing(id) => id.clone(),
-        }
-    }
 }
 
 fn parse_url_arg(arg: &str, cx: &App) -> String {

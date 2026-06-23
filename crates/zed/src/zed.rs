@@ -1,7 +1,6 @@
 mod app_menus;
 #[cfg(target_os = "macos")]
 pub(crate) mod mac_only_instance;
-mod migrate;
 mod open_listener;
 mod open_url_modal;
 mod quick_action_bar;
@@ -28,12 +27,9 @@ use gpui::{
 };
 use image_viewer::ImageInfo;
 use language::Capability;
-use language_onboarding::BasedPyrightBanner;
 use language_tools::lsp_button::{self, LspButton};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
-use migrate::{MigrationBanner, MigrationEvent, MigrationNotification, MigrationType};
-use migrator::migrate_keymap;
 pub use open_listener::*;
 use paths::{
     local_settings_file_relative_path,
@@ -45,7 +41,7 @@ use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rope::Rope;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, InvalidSettingsError, KeybindSource, KeymapFile,
-    KeymapFileLoadResult, MigrationStatus, Settings, SettingsFile, SettingsStore,
+    KeymapFileLoadResult, Settings, SettingsFile, SettingsStore,
     initial_project_settings_content, initial_tasks_content,
     update_settings_file,
 };
@@ -466,12 +462,11 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 #[allow(unused)]
 fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     if let Err(e) = fs::fs_watcher::global(|_| {}) {
-        let message = format!(
-            db::indoc! {r#"
+        let message = format!(r#"
             inotify_init returned {}
 
             This may be due to system-wide limits on inotify instances. For troubleshooting see: https://zed.dev/docs/linux
-            "#},
+            "#,
             e
         );
         let prompt = window.prompt(
@@ -498,11 +493,11 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
 fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     if let Err(e) = fs::fs_watcher::global(|_| {}) {
         let message = format!(
-            db::indoc! {r#"
+            r#"
             ReadDirectoryChangesW initialization failed: {}
 
             This may occur on network filesystems and WSL paths. For troubleshooting see: https://zed.dev/docs/windows
-            "#},
+            "#,
             e
         );
         let prompt = window.prompt(
@@ -544,7 +539,7 @@ fn show_software_emulation_warning_if_needed(
             )
         };
         let message = format!(
-            db::indoc! {r#"
+            r#"
             Zed uses {} for rendering and requires a compatible GPU.
 
             Currently you are using a software emulated GPU ({}) which
@@ -552,7 +547,7 @@ fn show_software_emulation_warning_if_needed(
 
             For troubleshooting see: {}
             Set ZED_ALLOW_EMULATED_GPU=1 env var to permanently override.
-            "#},
+            "#,
             graphics_api, specs.device_name, docs_url
         );
         let prompt = window.prompt(
@@ -912,7 +907,6 @@ fn initialize_pane(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let workspace_handle = cx.weak_entity();
     pane.update(cx, |pane, cx| {
         pane.toolbar().update(cx, |toolbar, cx| {
             let breadcrumbs = cx.new(|_| Breadcrumbs::new());
@@ -932,14 +926,9 @@ fn initialize_pane(
             toolbar.add_item(lsp_log_item, window, cx);
             let syntax_tree_item = cx.new(|_| language_tools::SyntaxTreeToolbarItemView::new());
             toolbar.add_item(syntax_tree_item, window, cx);
-            let migration_banner =
-                cx.new(|inner_cx| MigrationBanner::new(workspace_handle.clone(), inner_cx));
-            toolbar.add_item(migration_banner, window, cx);
             let highlights_tree_item =
                 cx.new(|_| language_tools::HighlightsTreeToolbarItemView::new());
             toolbar.add_item(highlights_tree_item, window, cx);
-            let basedpyright_banner = cx.new(|cx| BasedPyrightBanner::new(workspace, cx));
-            toolbar.add_item(basedpyright_banner, window, cx);
             let image_view_toolbar = cx.new(|_| image_viewer::ImageViewToolbarControls::new());
             toolbar.add_item(image_view_toolbar, window, cx);
         })
@@ -1264,23 +1253,6 @@ fn quit(_: &Quit, cx: &mut App) {
                 }
             }
         }
-        // Flush all pending workspace serialization before quitting so that
-        // session_id/window_id are up-to-date in the database.
-        let mut flush_tasks = Vec::new();
-        for window in &workspace_windows {
-            window
-                .update(cx, |multi_workspace, window, cx| {
-                    for workspace in multi_workspace.workspaces() {
-                        flush_tasks.push(workspace.update(cx, |workspace, cx| {
-                            workspace.flush_serialization(window, cx)
-                        }));
-                    }
-                    flush_tasks.append(&mut multi_workspace.take_pending_removal_tasks());
-                    flush_tasks.push(multi_workspace.flush_serialization());
-                })
-                .log_err();
-        }
-        futures::future::join_all(flush_tasks).await;
 
         cx.update(|cx| cx.quit());
         anyhow::Ok(())
@@ -1301,12 +1273,11 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
     };
     let id = NotificationId::Named(format!("failed-to-parse-settings-{is_user}").into());
 
-    let showed_parse_error = match error {
+    match error {
         Some(error) => {
             if let Some(InvalidSettingsError::LocalSettings { .. }) =
                 error.downcast_ref::<InvalidSettingsError>()
             {
-                false
                 // Local settings errors are displayed by the projects
             } else {
                 show_app_notification(id, cx, move |cx| {
@@ -1323,40 +1294,10 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
                             })
                     })
                 });
-                true
             }
         }
         None => {
             dismiss_app_notification(&id, cx);
-            false
-        }
-    };
-    let id = NotificationId::Named(format!("failed-to-migrate-settings-{is_user}").into());
-
-    match result.migration_status {
-        settings::MigrationStatus::Succeeded | settings::MigrationStatus::NotNeeded => {
-            dismiss_app_notification(&id, cx);
-        }
-        settings::MigrationStatus::Failed { error: err } => {
-            if !showed_parse_error {
-                show_app_notification(id, cx, move |cx| {
-                    cx.new(|cx| {
-                        MessageNotification::new(
-                            format!(
-                                "Failed to migrate settings\n\
-                                {err}"
-                            ),
-                            cx,
-                        )
-                        .primary_message("Open Settings File")
-                        .primary_icon(IconName::Settings)
-                        .primary_on_click(|window, cx| {
-                            window.dispatch_action(zed_actions::OpenSettingsFile.boxed_clone(), cx);
-                            cx.emit(DismissEvent);
-                        })
-                    })
-                });
-            }
         }
     };
 }
@@ -1381,22 +1322,10 @@ fn init_cursor_hide_mode(cx: &mut App) {
 }
 
 pub fn watch_settings_files(fs: Arc<dyn fs::Fs>, cx: &mut App) {
-    MigrationNotification::set_global(cx.new(|_| MigrationNotification), cx);
-
     SettingsStore::update_global(cx, move |store, cx| {
         store.watch_settings_files(fs, cx, |settings_file, result, cx| {
             let is_user = matches!(settings_file, SettingsFile::User);
-            let migrating_in_memory =
-                matches!(&result.migration_status, MigrationStatus::Succeeded);
             notify_settings_errors(result, is_user, cx);
-            if let Some(notifier) = MigrationNotification::try_global(cx) {
-                notifier.update(cx, |_, cx| {
-                    cx.emit(MigrationEvent::ContentChanged {
-                        migration_type: MigrationType::Settings,
-                        migrating_in_memory,
-                    });
-                });
-            }
         });
     });
 }
@@ -1454,37 +1383,21 @@ pub fn handle_keymap_file_changes(
     cx.spawn(async move |cx| {
         let _user_keymap_watcher = user_keymap_watcher;
         let mut user_keymap_content = String::new();
-        let mut migrating_in_memory = false;
         loop {
             select_biased! {
                 _ = base_keymap_rx.next() => {},
                 _ = keyboard_layout_rx.next() => {},
                 content = user_keymap_file_rx.next() => {
                     if let Some(content) = content {
-                        if let Ok(Some(migrated_content)) = migrate_keymap(&content) {
-                            user_keymap_content = migrated_content;
-                            migrating_in_memory = true;
-                        } else {
-                            user_keymap_content = content;
-                            migrating_in_memory = false;
-                        }
+                        user_keymap_content = content;
                     }
                 }
             };
             cx.update(|cx| {
-                if let Some(notifier) = MigrationNotification::try_global(cx) {
-                    notifier.update(cx, |_, cx| {
-                        cx.emit(MigrationEvent::ContentChanged {
-                            migration_type: MigrationType::Keymap,
-                            migrating_in_memory,
-                        });
-                    });
-                }
                 let load_result = KeymapFile::load(&user_keymap_content, cx);
                 match load_result {
                     KeymapFileLoadResult::Success { key_bindings } => {
                         reload_keymaps(cx, key_bindings);
-                        dismiss_app_notification(&notification_id.clone(), cx);
                     }
                     KeymapFileLoadResult::SomeFailedToLoad {
                         key_bindings,

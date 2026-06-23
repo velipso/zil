@@ -7,7 +7,6 @@ use crate::{
     Anchor, DisplayPoint, DisplayRow, Editor, EditorEvent, EditorMode, EditorSettings,
     MultiBufferSnapshot, RowExt, SizingBehavior, ToPoint,
     display_map::{DisplaySnapshot, ToDisplayPoint},
-    persistence::EditorDb,
 };
 pub use autoscroll::{Autoscroll, AutoscrollStrategy};
 use core::fmt::Debug;
@@ -15,7 +14,7 @@ use gpui::{
     Along, App, AppContext as _, Axis, Context, Entity, EntityId, Pixels, Task, Window, point, px,
 };
 use language::language_settings::{AllLanguageSettings, SoftWrap};
-use language::{Bias, Point};
+use language::Bias;
 pub use scroll_amount::ScrollAmount;
 use settings::Settings;
 use std::{
@@ -24,7 +23,7 @@ use std::{
 };
 use ui::scrollbars::ScrollbarAutoHide;
 use util::ResultExt;
-use workspace::{ItemId, WorkspaceId};
+use workspace::WorkspaceId;
 
 pub const SCROLL_EVENT_SEPARATION: Duration = Duration::from_millis(28);
 const SCROLLBAR_SHOW_INTERVAL: Duration = Duration::from_secs(1);
@@ -460,11 +459,11 @@ impl ScrollManager {
         &mut self,
         anchor: ScrollAnchor,
         display_map: &DisplaySnapshot,
-        top_row: u32,
+        _top_row: u32,
         local: bool,
         autoscroll: bool,
-        workspace_id: Option<WorkspaceId>,
-        window: &mut Window,
+        _workspace_id: Option<WorkspaceId>,
+        _window: &mut Window,
         cx: &mut Context<Editor>,
     ) -> WasScrolled {
         let adjusted_anchor = if self.forbid_vertical_scroll {
@@ -491,28 +490,6 @@ impl ScrollManager {
             shared.display_map_id = Some(display_map.display_map_id);
         });
         cx.emit(EditorEvent::ScrollPositionChanged { local, autoscroll });
-        self.show_scrollbars(window, cx);
-        if let Some(workspace_id) = workspace_id {
-            let item_id = cx.entity().entity_id().as_u64() as ItemId;
-            let executor = cx.background_executor().clone();
-
-            let db = EditorDb::global(cx);
-            self._save_scroll_position_task = cx.background_executor().spawn(async move {
-                executor.timer(Duration::from_millis(10)).await;
-                log::debug!(
-                    "Saving scroll position for item {item_id:?} in workspace {workspace_id:?}"
-                );
-                db.save_scroll_position(
-                    item_id,
-                    workspace_id,
-                    top_row,
-                    anchor.offset.x,
-                    anchor.offset.y,
-                )
-                .await
-                .log_err();
-            });
-        }
         cx.notify();
 
         WasScrolled(true)
@@ -964,27 +941,5 @@ impl Editor {
         }
 
         Ordering::Greater
-    }
-
-    pub fn read_scroll_position_from_db(
-        &mut self,
-        item_id: u64,
-        workspace_id: WorkspaceId,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        let scroll_position = EditorDb::global(cx).get_scroll_position(item_id, workspace_id);
-        if let Ok(Some((top_row, x, y))) = scroll_position {
-            let top_anchor = self
-                .buffer()
-                .read(cx)
-                .snapshot(cx)
-                .anchor_before(Point::new(top_row, 0));
-            let scroll_anchor = ScrollAnchor {
-                offset: gpui::Point::new(x, y),
-                anchor: top_anchor,
-            };
-            self.set_scroll_anchor(scroll_anchor, window, cx);
-        }
     }
 }

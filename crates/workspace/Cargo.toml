@@ -16,7 +16,6 @@ doctest = false
 test-support = [
     "client/test-support",
     "http_client/test-support",
-    "db/test-support",
     "project/test-support",
     "remote/test-support",
     "session/test-support",
@@ -28,12 +27,9 @@ test-support = [
 [dependencies]
 any_vec.workspace = true
 anyhow.workspace = true
-async-recursion.workspace = true
 client.workspace = true
-chrono.workspace = true
 collections.workspace = true
 component.workspace = true
-db.workspace = true
 dirs.workspace = true
 futures-lite.workspace = true
 fs.workspace = true
@@ -55,7 +51,6 @@ serde_json.workspace = true
 session.workspace = true
 settings.workspace = true
 smallvec.workspace = true
-sqlez.workspace = true
 strum.workspace = true
 task.workspace = true
 theme.workspace = true
@@ -70,7 +65,6 @@ windows.workspace = true
 
 [dev-dependencies]
 client = { workspace = true, features = ["test-support"] }
-db = { workspace = true, features = ["test-support"] }
 fs = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 project = { workspace = true, features = ["test-support"] }

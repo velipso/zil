@@ -1,5 +1,3 @@
-mod persistence;
-
 use std::{
     cmp::{self, Reverse},
     collections::{HashMap, VecDeque},
@@ -16,9 +14,8 @@ use command_palette_hooks::{
 use fuzzy_nucleo::{StringMatch, StringMatchCandidate};
 use gpui::{
     Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    ParentElement, Render, Styled, Task, TaskExt, WeakEntity, Window,
+    ParentElement, Render, Styled, Task, WeakEntity, Window,
 };
-use persistence::CommandPaletteDB;
 use picker::Direction;
 use picker::{Picker, PickerDelegate};
 use postage::{sink::Sink, stream::Stream};
@@ -184,13 +181,9 @@ struct QueryHistory {
 }
 
 impl QueryHistory {
-    fn history(&mut self, cx: &App) -> &mut VecDeque<String> {
+    fn history(&mut self, _cx: &App) -> &mut VecDeque<String> {
         self.history.get_or_insert_with(|| {
-            CommandPaletteDB::global(cx)
-                .list_recent_queries()
-                .unwrap_or_default()
-                .into_iter()
-                .collect()
+            VecDeque::<String>::new()
         })
     }
 
@@ -342,15 +335,8 @@ impl CommandPaletteDelegate {
     /// Hit count for each command in the palette.
     /// We only account for commands triggered directly via command palette and not by e.g. keystrokes because
     /// if a user already knows a keystroke for a command, they are unlikely to use a command palette to look for it.
-    fn hit_counts(&self, cx: &App) -> HashMap<String, u16> {
-        if let Ok(commands) = CommandPaletteDB::global(cx).list_commands_used() {
-            commands
-                .into_iter()
-                .map(|command| (command.command_name, command.invocations))
-                .collect()
-        } else {
-            HashMap::new()
-        }
+    fn hit_counts(&self, _cx: &App) -> HashMap<String, u16> {
+        HashMap::new()
     }
 
     fn selected_command(&self) -> Option<&Command> {
@@ -588,14 +574,6 @@ impl PickerDelegate for CommandPaletteDelegate {
         let command = self.commands.swap_remove(action_ix);
         self.matches.clear();
         self.commands.clear();
-        let command_name = command.name.clone();
-        let latest_query = self.latest_query.clone();
-        let db = CommandPaletteDB::global(cx);
-        cx.background_spawn(async move {
-            db.write_command_invocation(command_name, latest_query)
-                .await
-        })
-        .detach_and_log_err(cx);
         let action = command.action;
         window.focus(&self.previous_focus_handle, cx);
         self.dismissed(window, cx);
@@ -845,8 +823,6 @@ mod tests {
     #[gpui::test]
     async fn test_command_palette(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
-        let db = cx.update(|cx| persistence::CommandPaletteDB::global(cx));
-        db.clear_all().await.unwrap();
         let project = Project::test(app_state.fs.clone(), [], cx).await;
         let (multi_workspace, cx) =
             cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));

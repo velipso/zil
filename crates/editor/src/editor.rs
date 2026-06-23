@@ -27,7 +27,6 @@ mod inlays;
 pub mod items;
 mod mouse_context_menu;
 pub mod movement;
-mod persistence;
 pub mod scroll;
 mod selections_collection;
 pub mod semantic_tokens;
@@ -104,7 +103,7 @@ use language::{
     AutoindentMode, BlockCommentConfig, Buffer, BufferRow,
     BufferSnapshot, Capability, CharKind, CodeLabel, CursorShape,
     DiffOptions, HighlightedText, IndentKind, IndentSize, Language,
-    LanguageAwareStyling, LanguageName, LanguageScope, LocalFile, OffsetRangeExt,
+    LanguageAwareStyling, LanguageName, LanguageScope, OffsetRangeExt,
     OutlineItem, Point, Selection, SelectionGoal, TextObject, TransactionId, TreeSitterOptions,
     language_settings::{
         self, LanguageSettings, RewrapBehavior,
@@ -114,7 +113,6 @@ use language::{
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
 use multi_buffer::{ExcerptBoundaryInfo, MultiBufferPoint, MultiBufferRow};
-use persistence::EditorDb;
 use project::{
     DocumentHighlight,
     PrepareRenameResponse, Project, ProjectItem, ProjectPath,
@@ -139,14 +137,14 @@ use smallvec::{SmallVec, smallvec};
 use std::{
     any::{Any, TypeId},
     borrow::Cow,
-    cell::{OnceCell, RefCell},
+    cell::RefCell,
     cmp::{self, Ordering},
     collections::hash_map,
     iter::Peekable,
     mem,
     num::NonZeroU32,
     ops::{Deref, Not, Range, RangeInclusive},
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -163,8 +161,8 @@ use ui::{
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, maybe, post_inc};
 use workspace::{
-    CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory,
-    RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
+    CollaboratorId, Item as WorkspaceItem, ItemNavHistory,
+    RestoreOnStartupBehavior, SplitDirection,
     TabBarSettings, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
     item::{ItemBufferKind, ItemHandle},
     notifications::{DetachAndPromptErr, NotifyTaskExt},
@@ -224,7 +222,6 @@ pub fn init(cx: &mut App) {
 
     workspace::register_project_item::<Editor>(cx);
     workspace::FollowableViewRegistry::register::<Editor>(cx);
-    workspace::register_serializable_item::<Editor>(cx);
 
     cx.observe_new(
         |workspace: &mut Workspace, _: Option<&mut Window>, _cx: &mut Context<Workspace>| {
@@ -863,8 +860,6 @@ pub struct Editor {
     registered_buffers: HashMap<BufferId, OpenLspBufferHandle>,
     selection_mark_mode: bool,
     _scroll_cursor_center_top_bottom_task: Task<()>,
-    serialize_selections: Task<()>,
-    serialize_folds: Task<()>,
     minimap: Option<Entity<Self>>,
     pub change_list: ChangeList,
 
@@ -1880,8 +1875,6 @@ impl Editor {
             registered_buffers: HashMap::default(),
             _scroll_cursor_center_top_bottom_task: Task::ready(()),
             selection_mark_mode: false,
-            serialize_selections: Task::ready(()),
-            serialize_folds: Task::ready(()),
             text_style_refinement: None,
             minimap: None,
             change_list: ChangeList::new(),
@@ -2245,14 +2238,6 @@ impl Editor {
         } else {
             task.detach_and_log_err(cx);
         }
-    }
-
-    /// Returns the workspace serialization ID if this editor should be serialized.
-    fn workspace_serialization_id(&self, _cx: &App) -> Option<WorkspaceId> {
-        self.workspace
-            .as_ref()
-            .filter(|_| self.should_serialize_buffer())
-            .and_then(|workspace| workspace.1)
     }
 
     pub fn title<'a>(&self, cx: &'a App) -> Cow<'a, str> {
@@ -7274,174 +7259,6 @@ impl Editor {
             em_advance,
             line_height,
         }
-    }
-
-    fn read_metadata_from_db(
-        &mut self,
-        item_id: u64,
-        workspace_id: WorkspaceId,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        if self.buffer_kind(cx) == ItemBufferKind::Singleton
-            && !self.mode.is_minimap()
-            && WorkspaceSettings::get(None, cx).restore_on_startup
-                != RestoreOnStartupBehavior::EmptyTab
-        {
-            let buffer_snapshot = OnceCell::new();
-
-            // Get file path for path-based fold lookup
-            let file_path: Option<Arc<Path>> = {
-                let buffer = self.buffer().read(cx).as_singleton();
-                project::File::from_dyn(buffer.read(cx).file())
-                    .map(|file| Arc::from(file.abs_path(cx)))
-            };
-
-            // Try file_folds (path-based) first, fallback to editor_folds (migration)
-            let db = EditorDb::global(cx);
-            let (folds, needs_migration) = if let Some(ref path) = file_path {
-                if let Some(folds) = db.get_file_folds(workspace_id, path).log_err()
-                    && !folds.is_empty()
-                {
-                    (Some(folds), false)
-                } else if let Some(folds) = db.get_editor_folds(item_id, workspace_id).log_err()
-                    && !folds.is_empty()
-                {
-                    // Found old editor_folds data, will migrate to file_folds
-                    (Some(folds), true)
-                } else {
-                    (None, false)
-                }
-            } else {
-                // No file path, try editor_folds as fallback
-                let folds = db.get_editor_folds(item_id, workspace_id).log_err();
-                (folds.filter(|f| !f.is_empty()), false)
-            };
-
-            if let Some(folds) = folds {
-                let snapshot = buffer_snapshot.get_or_init(|| self.buffer.read(cx).snapshot(cx));
-                let snapshot_len = snapshot.len().0;
-
-                // Helper: search for fingerprint in buffer, return offset if found
-                let find_fingerprint = |fingerprint: &str, search_start: usize| -> Option<usize> {
-                    // Ensure we start at a character boundary (defensive)
-                    let search_start = snapshot
-                        .clip_offset(MultiBufferOffset(search_start), Bias::Left)
-                        .0;
-                    let search_end = snapshot_len.saturating_sub(fingerprint.len());
-
-                    let mut byte_offset = search_start;
-                    for ch in snapshot.chars_at(MultiBufferOffset(search_start)) {
-                        if byte_offset > search_end {
-                            break;
-                        }
-                        if snapshot.contains_str_at(MultiBufferOffset(byte_offset), fingerprint) {
-                            return Some(byte_offset);
-                        }
-                        byte_offset += ch.len_utf8();
-                    }
-                    None
-                };
-
-                // Track search position to handle duplicate fingerprints correctly.
-                // Folds are stored in document order, so we advance after each match.
-                let mut search_start = 0usize;
-
-                // Collect db_folds for migration (only folds with valid fingerprints)
-                let mut db_folds_for_migration: Vec<(usize, usize, String, String)> = Vec::new();
-
-                let valid_folds: Vec<_> = folds
-                    .into_iter()
-                    .filter_map(|(stored_start, stored_end, start_fp, end_fp)| {
-                        // Skip folds without fingerprints (old data before migration)
-                        let sfp = start_fp?;
-                        let efp = end_fp?;
-                        let efp_len = efp.len();
-
-                        // Fast path: check if fingerprints match at stored offsets
-                        // Note: end_fp is content BEFORE fold end, so check at (stored_end - efp_len)
-                        let start_matches = stored_start < snapshot_len
-                            && snapshot.contains_str_at(MultiBufferOffset(stored_start), &sfp);
-                        let efp_check_pos = stored_end.saturating_sub(efp_len);
-                        let end_matches = efp_check_pos >= stored_start
-                            && stored_end <= snapshot_len
-                            && snapshot.contains_str_at(MultiBufferOffset(efp_check_pos), &efp);
-
-                        let (new_start, new_end) = if start_matches && end_matches {
-                            // Offsets unchanged, use stored values
-                            (stored_start, stored_end)
-                        } else if sfp == efp {
-                            // Short fold: identical fingerprints can only match once per search
-                            // Use stored fold length to compute new_end
-                            let new_start = find_fingerprint(&sfp, search_start)?;
-                            let fold_len = stored_end - stored_start;
-                            let new_end = new_start + fold_len;
-                            (new_start, new_end)
-                        } else {
-                            // Slow path: search for fingerprints in buffer
-                            let new_start = find_fingerprint(&sfp, search_start)?;
-                            // Search for end_fp after start, then add efp_len to get actual fold end
-                            let efp_pos = find_fingerprint(&efp, new_start + sfp.len())?;
-                            let new_end = efp_pos + efp_len;
-                            (new_start, new_end)
-                        };
-
-                        // Advance search position for next fold
-                        search_start = new_end;
-
-                        // Validate fold makes sense (end must be after start)
-                        if new_end <= new_start {
-                            return None;
-                        }
-
-                        // Collect for migration if needed
-                        if needs_migration {
-                            db_folds_for_migration.push((new_start, new_end, sfp, efp));
-                        }
-
-                        Some(
-                            snapshot.clip_offset(MultiBufferOffset(new_start), Bias::Left)
-                                ..snapshot.clip_offset(MultiBufferOffset(new_end), Bias::Right),
-                        )
-                    })
-                    .collect();
-
-                if !valid_folds.is_empty() {
-                    self.fold_ranges(valid_folds, false, window, cx);
-
-                    // Migrate from editor_folds to file_folds if we loaded from old table
-                    if needs_migration {
-                        if let Some(ref path) = file_path {
-                            let path = path.clone();
-                            let db = EditorDb::global(cx);
-                            cx.spawn(async move |_, _| {
-                                db.save_file_folds(workspace_id, path, db_folds_for_migration)
-                                    .await
-                                    .log_err();
-                            })
-                            .detach();
-                        }
-                    }
-                }
-            }
-
-            if let Some(selections) = db.get_editor_selections(item_id, workspace_id).log_err()
-                && !selections.is_empty()
-            {
-                let snapshot = buffer_snapshot.get_or_init(|| self.buffer.read(cx).snapshot(cx));
-                // skip adding the initial selection to selection history
-                self.selection_history.mode = SelectionHistoryMode::Skipping;
-                self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-                    s.select_ranges(selections.into_iter().map(|(start, end)| {
-                        snapshot.clip_offset(MultiBufferOffset(start), Bias::Left)
-                            ..snapshot.clip_offset(MultiBufferOffset(end), Bias::Right)
-                    }));
-                });
-                self.selection_history.mode = SelectionHistoryMode::Normal;
-            };
-        }
-
-        self.read_scroll_position_from_db(item_id, workspace_id, window, cx);
     }
 
     fn lsp_data_enabled(&self) -> bool {

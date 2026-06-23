@@ -9,7 +9,7 @@ use std::{
 
 mod ui_components;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::{Context as _};
 use collections::{HashMap, HashSet};
 use editor::{Editor, EditorEvent, EditorMode, SizingBehavior};
 use fs::Fs;
@@ -38,18 +38,15 @@ use ui::{
 use ui_input::InputField;
 use util::ResultExt;
 use workspace::{
-    Item, ModalView, SerializableItem, Workspace, notifications::NotifyTaskExt as _,
-    register_serializable_item, with_active_or_new_workspace,
+    Item, ModalView, Workspace, notifications::NotifyTaskExt as _,
+    with_active_or_new_workspace,
 };
 
 pub use ui_components::*;
 use zed_actions::{ChangeKeybinding, OpenKeymap};
 
-use crate::{
-    persistence::KeybindingEditorDb,
-    ui_components::keystroke_input::{
-        ClearKeystrokes, KeystrokeInput, StartRecording, StopRecording,
-    },
+use crate::ui_components::keystroke_input::{
+    ClearKeystrokes, KeystrokeInput, StartRecording, StopRecording,
 };
 
 const NO_ACTION_ARGUMENTS_TEXT: SharedString = SharedString::new_static("<no arguments>");
@@ -139,8 +136,6 @@ pub fn init(cx: &mut App) {
         });
     })
     .detach();
-
-    register_serializable_item::<KeymapEditor>(cx);
 }
 
 fn open_binding_modal_after_loading(cx: &mut Context<KeymapEditor>) {
@@ -3700,106 +3695,6 @@ fn normalized_ctx_eq(
         }
 
         true
-    }
-}
-
-impl SerializableItem for KeymapEditor {
-    fn serialized_item_kind() -> &'static str {
-        "KeymapEditor"
-    }
-
-    fn cleanup(
-        workspace_id: workspace::WorkspaceId,
-        alive_items: Vec<workspace::ItemId>,
-        _window: &mut Window,
-        cx: &mut App,
-    ) -> gpui::Task<gpui::Result<()>> {
-        let db = KeybindingEditorDb::global(cx);
-        workspace::delete_unloaded_items(alive_items, workspace_id, "keybinding_editors", &db, cx)
-    }
-
-    fn deserialize(
-        _project: Entity<project::Project>,
-        workspace: WeakEntity<Workspace>,
-        workspace_id: workspace::WorkspaceId,
-        item_id: workspace::ItemId,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> gpui::Task<gpui::Result<Entity<Self>>> {
-        let db = KeybindingEditorDb::global(cx);
-        window.spawn(cx, async move |cx| {
-            if db.get_keybinding_editor(item_id, workspace_id)?.is_some() {
-                cx.update(|window, cx| cx.new(|cx| KeymapEditor::new(workspace, window, cx)))
-            } else {
-                Err(anyhow!("No keybinding editor to deserialize"))
-            }
-        })
-    }
-
-    fn serialize(
-        &mut self,
-        workspace: &mut Workspace,
-        item_id: workspace::ItemId,
-        _closing: bool,
-        _window: &mut Window,
-        cx: &mut ui::Context<Self>,
-    ) -> Option<gpui::Task<gpui::Result<()>>> {
-        let workspace_id = workspace.database_id()?;
-        let db = KeybindingEditorDb::global(cx);
-        Some(cx.background_spawn(
-            async move { db.save_keybinding_editor(item_id, workspace_id).await },
-        ))
-    }
-
-    fn should_serialize(&self, _event: &Self::Event) -> bool {
-        false
-    }
-}
-
-mod persistence {
-    use db::{query, sqlez::domain::Domain, sqlez_macros::sql};
-    use workspace::WorkspaceDb;
-
-    pub struct KeybindingEditorDb(db::sqlez::thread_safe_connection::ThreadSafeConnection);
-
-    impl Domain for KeybindingEditorDb {
-        const NAME: &str = stringify!(KeybindingEditorDb);
-
-        const MIGRATIONS: &[&str] = &[sql!(
-                CREATE TABLE keybinding_editors (
-                    workspace_id INTEGER,
-                    item_id INTEGER UNIQUE,
-
-                    PRIMARY KEY(workspace_id, item_id),
-                    FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                    ON DELETE CASCADE
-                ) STRICT;
-        )];
-    }
-
-    db::static_connection!(KeybindingEditorDb, [WorkspaceDb]);
-
-    impl KeybindingEditorDb {
-        query! {
-            pub async fn save_keybinding_editor(
-                item_id: workspace::ItemId,
-                workspace_id: workspace::WorkspaceId
-            ) -> Result<()> {
-                INSERT OR REPLACE INTO keybinding_editors(item_id, workspace_id)
-                VALUES (?, ?)
-            }
-        }
-
-        query! {
-            pub fn get_keybinding_editor(
-                item_id: workspace::ItemId,
-                workspace_id: workspace::WorkspaceId
-            ) -> Result<Option<workspace::ItemId>> {
-                SELECT item_id
-                FROM keybinding_editors
-                WHERE item_id = ? AND workspace_id = ?
-            }
-        }
     }
 }
 

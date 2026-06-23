@@ -3,28 +3,24 @@ use fs::Fs;
 
 use gpui::{
     AnyView, App, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, ManagedView,
-    MouseButton, Pixels, Render, Subscription, Task, TaskExt, Tiling, WeakEntity, Window, WindowId,
+    MouseButton, Pixels, Render, Subscription, Task, TaskExt, Tiling, WeakEntity, Window,
     actions, deferred, px,
 };
 use project::Project;
 pub use project::ProjectGroupKey;
 use remote::RemoteConnectionOptions;
 pub use settings::SidebarSide;
-use std::future::Future;
 
 use std::path::PathBuf;
 use ui::prelude::*;
-use util::ResultExt;
 use util::path_list::PathList;
 
 use settings::SidebarDockPosition;
 use ui::{ContextMenu, right_click_menu};
 
-use crate::open_remote_project_with_existing_connection;
 use crate::{
     CloseIntent, CloseWindow, DockPosition, Event as WorkspaceEvent, Item, ModalView, OpenMode,
     Panel, Workspace, WorkspaceId, client_side_decorations,
-    persistence::model::MultiWorkspaceState,
 };
 
 actions!(
@@ -100,11 +96,7 @@ pub enum MultiWorkspaceEvent {
     ProjectGroupsChanged,
 }
 
-pub enum SidebarEvent {
-    SerializeNeeded,
-}
-
-pub trait Sidebar: Focusable + Render + EventEmitter<SidebarEvent> + Sized {
+pub trait Sidebar: Focusable + Render + Sized {
     fn width(&self, cx: &App) -> Pixels;
     fn set_width(&mut self, width: Option<Pixels>, cx: &mut Context<Self>);
     fn has_notifications(&self, cx: &App) -> bool;
@@ -129,20 +121,6 @@ pub trait Sidebar: Focusable + Render + EventEmitter<SidebarEvent> + Sized {
 
     /// Activates the next or previous thread in sidebar order.
     fn cycle_thread(&mut self, _forward: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
-
-    /// Return an opaque JSON blob of sidebar-specific state to persist.
-    fn serialized_state(&self, _cx: &App) -> Option<String> {
-        None
-    }
-
-    /// Restore sidebar state from a previously-serialized blob.
-    fn restore_serialized_state(
-        &mut self,
-        _state: &str,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
 }
 
 pub trait SidebarHandle: 'static + Send + Sync {
@@ -157,12 +135,8 @@ pub trait SidebarHandle: 'static + Send + Sync {
     fn toggle_thread_switcher(&self, select_last: bool, window: &mut Window, cx: &mut App);
     fn cycle_project(&self, forward: bool, window: &mut Window, cx: &mut App);
     fn cycle_thread(&self, forward: bool, window: &mut Window, cx: &mut App);
-
     fn is_threads_list_view_active(&self, cx: &App) -> bool;
-
     fn side(&self, cx: &App) -> SidebarSide;
-    fn serialized_state(&self, cx: &App) -> Option<String>;
-    fn restore_serialized_state(&self, state: &str, window: &mut Window, cx: &mut App);
 }
 
 #[derive(Clone)]
@@ -242,16 +216,6 @@ impl<T: Sidebar> SidebarHandle for Entity<T> {
     fn side(&self, cx: &App) -> SidebarSide {
         self.read(cx).side(cx)
     }
-
-    fn serialized_state(&self, cx: &App) -> Option<String> {
-        self.read(cx).serialized_state(cx)
-    }
-
-    fn restore_serialized_state(&self, state: &str, window: &mut Window, cx: &mut App) {
-        self.update(cx, |this, cx| {
-            this.restore_serialized_state(state, window, cx)
-        })
-    }
 }
 
 #[derive(Clone)]
@@ -274,15 +238,12 @@ pub struct ProjectGroupState {
 }
 
 pub struct MultiWorkspace {
-    window_id: WindowId,
     retained_workspaces: Vec<Entity<Workspace>>,
     project_groups: Vec<ProjectGroupState>,
     active_workspace: Entity<Workspace>,
     sidebar: Option<Box<dyn SidebarHandle>>,
     sidebar_open: bool,
     sidebar_overlay: Option<AnyView>,
-    pending_removal_tasks: Vec<Task<()>>,
-    _serialize_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
     previous_focus_handle: Option<FocusHandle>,
 }
@@ -304,31 +265,19 @@ impl MultiWorkspace {
     }
 
     pub fn new(workspace: Entity<Workspace>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let release_subscription = cx.on_release(|this: &mut MultiWorkspace, _cx| {
-            if let Some(task) = this._serialize_task.take() {
-                task.detach();
-            }
-            for task in std::mem::take(&mut this.pending_removal_tasks) {
-                task.detach();
-            }
-        });
-        let quit_subscription = cx.on_app_quit(Self::app_will_quit);
         Self::subscribe_to_workspace(&workspace, window, cx);
         let weak_self = cx.weak_entity();
         workspace.update(cx, |workspace, cx| {
             workspace.set_multi_workspace(weak_self, cx);
         });
         Self {
-            window_id: window.window_handle().window_id(),
             retained_workspaces: Vec::new(),
             project_groups: Vec::new(),
             active_workspace: workspace,
             sidebar: None,
             sidebar_open: false,
             sidebar_overlay: None,
-            pending_removal_tasks: Vec::new(),
-            _serialize_task: None,
-            _subscriptions: vec![release_subscription, quit_subscription],
+            _subscriptions: Vec::new(),
             previous_focus_handle: None,
         }
     }
@@ -337,12 +286,6 @@ impl MultiWorkspace {
         self._subscriptions
             .push(cx.observe(&sidebar, |_this, _, cx| {
                 cx.notify();
-            }));
-        self._subscriptions
-            .push(cx.subscribe(&sidebar, |this, _, event, cx| match event {
-                SidebarEvent::SerializeNeeded => {
-                    this.serialize(cx);
-                }
             }));
         self.sidebar = Some(Box::new(sidebar));
     }
@@ -382,12 +325,6 @@ impl MultiWorkspace {
         self.apply_open_sidebar(cx);
     }
 
-    /// Restores the sidebar to open state from persisted session data without
-    /// firing a telemetry event, since this is not a user-initiated action.
-    pub(crate) fn restore_open_sidebar(&mut self, cx: &mut Context<Self>) {
-        self.apply_open_sidebar(cx);
-    }
-
     fn apply_open_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = true;
         self.retain_active_workspace(cx);
@@ -397,7 +334,6 @@ impl MultiWorkspace {
                 workspace.set_sidebar_focus_handle(sidebar_focus_handle.clone());
             });
         }
-        self.serialize(cx);
         cx.notify();
     }
 
@@ -417,7 +353,6 @@ impl MultiWorkspace {
         } else {
             self.previous_focus_handle.take();
         }
-        self.serialize(cx);
         cx.notify();
     }
 
@@ -514,7 +449,6 @@ impl MultiWorkspace {
         // The Project already emitted WorktreePathsChanged which the
         // sidebar handles for thread migration.
         self.rekey_project_group(old_key, &new_key, cx);
-        self.serialize(cx);
         cx.notify();
     }
 
@@ -626,26 +560,6 @@ impl MultiWorkspace {
         cx.emit(MultiWorkspaceEvent::WorkspaceAdded(workspace));
     }
 
-    pub(crate) fn activate_provisional_workspace(
-        &mut self,
-        workspace: Entity<Workspace>,
-        provisional_key: ProjectGroupKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if workspace != self.active_workspace {
-            self.register_workspace(&workspace, window, cx);
-        }
-
-        self.ensure_project_group_state(provisional_key);
-        if !self.is_workspace_retained(&workspace) {
-            self.retained_workspaces.push(workspace.clone());
-        }
-
-        self.activate(workspace.clone(), None, window, cx);
-        cx.emit(MultiWorkspaceEvent::WorkspaceAdded(workspace));
-    }
-
     fn register_workspace(
         &mut self,
         workspace: &Entity<Workspace>,
@@ -675,33 +589,6 @@ impl MultiWorkspace {
         cx: &App,
     ) -> ProjectGroupKey {
         workspace.read(cx).project_group_key(cx)
-    }
-
-    pub fn restore_project_groups(
-        &mut self,
-        groups: Vec<SerializedProjectGroupState>,
-        _cx: &mut Context<Self>,
-    ) {
-        let mut restored: Vec<ProjectGroupState> = Vec::new();
-        for SerializedProjectGroupState { key, expanded } in groups {
-            if key.path_list().paths().is_empty() {
-                continue;
-            }
-            if restored.iter().any(|group| group.key == key) {
-                continue;
-            }
-            restored.push(ProjectGroupState {
-                key,
-                expanded,
-                last_active_workspace: None,
-            });
-        }
-        for existing in std::mem::take(&mut self.project_groups) {
-            if !restored.iter().any(|group| group.key == existing.key) {
-                restored.push(existing);
-            }
-        }
-        self.project_groups = restored;
     }
 
     pub fn project_group_keys(&self) -> Vec<ProjectGroupKey> {
@@ -774,7 +661,6 @@ impl MultiWorkspace {
         }
         self.project_groups.swap(index - 1, index);
         cx.emit(MultiWorkspaceEvent::ProjectGroupsChanged);
-        self.serialize(cx);
         cx.notify();
         true
     }
@@ -796,7 +682,6 @@ impl MultiWorkspace {
         }
         self.project_groups.swap(index, index + 1);
         cx.emit(MultiWorkspaceEvent::ProjectGroupsChanged);
-        self.serialize(cx);
         cx.notify();
         true
     }
@@ -995,22 +880,9 @@ impl MultiWorkspace {
         }
 
         let app_state = self.workspace().read(cx).app_state().clone();
-
-        let workspaces: Vec<_> = self
-            .workspaces_for_project_group(key, cx)
-            .unwrap_or_default();
-        let mut serialization_tasks = Vec::new();
-        for workspace in &workspaces {
-            serialization_tasks.push(workspace.update(cx, |workspace, inner_cx| {
-                workspace.flush_serialization(window, inner_cx)
-            }));
-        }
-
         let remove_task = self.remove_project_group(key, window, cx);
 
         cx.spawn(async move |_this, cx| {
-            futures::future::join_all(serialization_tasks).await;
-
             let removed = remove_task.await?;
             if !removed {
                 return Ok(());
@@ -1056,158 +928,6 @@ impl MultiWorkspace {
         }
 
         None
-    }
-
-    /// Finds an existing workspace whose paths match, or creates a new one.
-    ///
-    /// For local projects (`host` is `None`), this delegates to
-    /// [`Self::find_or_create_local_workspace`]. For remote projects, it
-    /// tries an exact path match and, if no existing workspace is found,
-    /// calls `connect_remote` to establish a connection and creates a new
-    /// remote workspace.
-    ///
-    /// The `connect_remote` closure is responsible for any user-facing
-    /// connection UI (e.g. password prompts). It receives the connection
-    /// options and should return a [`Task`] that resolves to the
-    /// [`RemoteClient`] session, or `None` if the connection was
-    /// cancelled.
-    pub fn find_or_create_workspace(
-        &mut self,
-        paths: PathList,
-        host: Option<RemoteConnectionOptions>,
-        provisional_project_group_key: Option<ProjectGroupKey>,
-        connect_remote: impl FnOnce(
-            RemoteConnectionOptions,
-            &mut Window,
-            &mut Context<Self>,
-        ) -> Task<Result<Option<Entity<remote::RemoteClient>>>>
-        + 'static,
-        excluding: &[Entity<Workspace>],
-        init: Option<Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>>,
-        open_mode: OpenMode,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Entity<Workspace>>> {
-        self.find_or_create_workspace_with_source_workspace(
-            paths,
-            host,
-            provisional_project_group_key,
-            connect_remote,
-            excluding,
-            init,
-            open_mode,
-            None,
-            window,
-            cx,
-        )
-    }
-
-    pub fn find_or_create_workspace_with_source_workspace(
-        &mut self,
-        paths: PathList,
-        host: Option<RemoteConnectionOptions>,
-        provisional_project_group_key: Option<ProjectGroupKey>,
-        connect_remote: impl FnOnce(
-            RemoteConnectionOptions,
-            &mut Window,
-            &mut Context<Self>,
-        ) -> Task<Result<Option<Entity<remote::RemoteClient>>>>
-        + 'static,
-        excluding: &[Entity<Workspace>],
-        init: Option<Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>>,
-        open_mode: OpenMode,
-        source_workspace: Option<WeakEntity<Workspace>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Entity<Workspace>>> {
-        if let Some(workspace) = self.workspace_for_paths(&paths, host.as_ref(), cx) {
-            self.activate(workspace.clone(), source_workspace, window, cx);
-            return Task::ready(Ok(workspace));
-        }
-
-        let Some(connection_options) = host else {
-            return self.find_or_create_local_workspace_with_source_workspace(
-                paths,
-                provisional_project_group_key,
-                excluding,
-                init,
-                open_mode,
-                source_workspace,
-                window,
-                cx,
-            );
-        };
-
-        let app_state = self.workspace().read(cx).app_state().clone();
-        let window_handle = window.window_handle().downcast::<MultiWorkspace>();
-        let connect_task = connect_remote(connection_options.clone(), window, cx);
-        let paths_vec = paths.paths().to_vec();
-
-        cx.spawn(async move |_this, cx| {
-            let session = connect_task
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Remote connection was cancelled"))?;
-
-            let new_project = cx.update(|cx| {
-                Project::remote(
-                    session,
-                    app_state.client.clone(),
-                    app_state.user_store.clone(),
-                    app_state.languages.clone(),
-                    app_state.fs.clone(),
-                    true,
-                    cx,
-                )
-            });
-
-            let effective_paths_vec =
-                if let Some(project_group) = provisional_project_group_key.as_ref() {
-                    let resolve_tasks = cx.update(|cx| {
-                        let project = new_project.read(cx);
-                        paths_vec
-                            .iter()
-                            .map(|path| project.resolve_abs_path(&path.to_string_lossy(), cx))
-                            .collect::<Vec<_>>()
-                    });
-                    let resolved = futures::future::join_all(resolve_tasks).await;
-                    // `resolve_abs_path` returns `None` for both "definitely
-                    // absent" and transport errors (it swallows the error via
-                    // `log_err`). This is a weaker guarantee than the local
-                    // `Ok(None)` check, but it matches how the rest of the
-                    // codebase consumes this API.
-                    let all_paths_missing =
-                        !paths_vec.is_empty() && resolved.iter().all(|resolved| resolved.is_none());
-
-                    if all_paths_missing {
-                        project_group.path_list().paths().to_vec()
-                    } else {
-                        paths_vec
-                    }
-                } else {
-                    paths_vec
-                };
-
-            let window_handle =
-                window_handle.ok_or_else(|| anyhow::anyhow!("Window is not a MultiWorkspace"))?;
-
-            open_remote_project_with_existing_connection(
-                connection_options,
-                new_project,
-                effective_paths_vec,
-                app_state,
-                window_handle,
-                provisional_project_group_key,
-                source_workspace,
-                cx,
-            )
-            .await?;
-
-            window_handle.update(cx, |multi_workspace, window, cx| {
-                let workspace = multi_workspace.workspace().clone();
-                multi_workspace.add(workspace.clone(), window, cx);
-                workspace
-            })
-        })
     }
 
     /// Finds an existing workspace in this multi-workspace whose paths match,
@@ -1391,7 +1111,6 @@ impl MultiWorkspace {
         }
 
         cx.emit(MultiWorkspaceEvent::ActiveWorkspaceChanged { source_workspace });
-        self.serialize(cx);
         self.focus_active_workspace(window, cx);
         cx.notify();
     }
@@ -1430,7 +1149,6 @@ impl MultiWorkspace {
 
         let key = workspace.read(cx).project_group_key(cx);
         self.retain_workspace(workspace, key, cx);
-        self.serialize(cx);
         cx.notify();
     }
 
@@ -1454,20 +1172,7 @@ impl MultiWorkspace {
         cx.emit(MultiWorkspaceEvent::WorkspaceRemoved(workspace.entity_id()));
         workspace.update(cx, |workspace, _cx| {
             workspace.session_id.take();
-            workspace._schedule_serialize_workspace.take();
-            workspace._serialize_workspace_task.take();
         });
-
-        if let Some(workspace_id) = workspace.read(cx).database_id() {
-            let db = crate::persistence::WorkspaceDb::global(cx);
-            self.pending_removal_tasks.retain(|task| !task.is_ready());
-            self.pending_removal_tasks
-                .push(cx.background_spawn(async move {
-                    db.set_session_binding(workspace_id, None, None)
-                        .await
-                        .log_err();
-                }));
-        }
     }
 
     fn sync_sidebar_to_workspace(&self, workspace: &Entity<Workspace>, cx: &mut Context<Self>) {
@@ -1476,55 +1181,6 @@ impl MultiWorkspace {
             workspace.update(cx, |workspace, _| {
                 workspace.set_sidebar_focus_handle(sidebar_focus_handle);
             });
-        }
-    }
-
-    pub fn serialize(&mut self, cx: &mut Context<Self>) {
-        self._serialize_task = Some(cx.spawn(async move |this, cx| {
-            let Some((window_id, state)) = this
-                .read_with(cx, |this, cx| {
-                    let state = MultiWorkspaceState {
-                        active_workspace_id: this.workspace().read(cx).database_id(),
-                        project_groups: this
-                            .project_groups
-                            .iter()
-                            .map(|group| {
-                                crate::persistence::model::SerializedProjectGroup::from_group(
-                                    &group.key,
-                                    group.expanded,
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                        sidebar_open: this.sidebar_open,
-                        sidebar_state: this.sidebar.as_ref().and_then(|s| s.serialized_state(cx)),
-                    };
-                    (this.window_id, state)
-                })
-                .ok()
-            else {
-                return;
-            };
-            let kvp = cx.update(|cx| db::kvp::KeyValueStore::global(cx));
-            crate::persistence::write_multi_workspace_state(&kvp, window_id, state).await;
-        }));
-    }
-
-    /// Returns the in-flight serialization task (if any) so the caller can
-    /// await it. Used by the quit handler to ensure pending DB writes
-    /// complete before the process exits.
-    pub fn flush_serialization(&mut self) -> Task<()> {
-        self._serialize_task.take().unwrap_or(Task::ready(()))
-    }
-
-    fn app_will_quit(&mut self, _cx: &mut Context<Self>) -> impl Future<Output = ()> + use<> {
-        let mut tasks: Vec<Task<()>> = Vec::new();
-        if let Some(task) = self._serialize_task.take() {
-            tasks.push(task);
-        }
-        tasks.extend(std::mem::take(&mut self.pending_removal_tasks));
-
-        async move {
-            futures::future::join_all(tasks).await;
         }
     }
 
@@ -1622,14 +1278,6 @@ impl MultiWorkspace {
         self.workspace().read(cx).database_id()
     }
 
-    pub fn take_pending_removal_tasks(&mut self) -> Vec<Task<()>> {
-        let tasks: Vec<Task<()>> = std::mem::take(&mut self.pending_removal_tasks)
-            .into_iter()
-            .filter(|task| !task.is_ready())
-            .collect();
-        tasks
-    }
-
     #[cfg(any(test, feature = "test-support"))]
     pub fn test_expand_all_groups(&mut self) {
         self.set_all_groups_expanded(true);
@@ -1690,89 +1338,6 @@ impl MultiWorkspace {
             expanded: group.expanded,
             last_active_workspace: None,
         });
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn create_test_workspace(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<()> {
-        let app_state = self.workspace().read(cx).app_state().clone();
-        let project = Project::local(
-            app_state.client.clone(),
-            app_state.user_store.clone(),
-            app_state.languages.clone(),
-            app_state.fs.clone(),
-            None,
-            project::LocalProjectFlags::default(),
-            cx,
-        );
-        let new_workspace = cx.new(|cx| Workspace::new(None, project, app_state, window, cx));
-        self.activate(new_workspace.clone(), None, window, cx);
-
-        let weak_workspace = new_workspace.downgrade();
-        let db = crate::persistence::WorkspaceDb::global(cx);
-        cx.spawn_in(window, async move |this, cx| {
-            let workspace_id = db.next_id().await.unwrap();
-            let workspace = weak_workspace.upgrade().unwrap();
-            let task: Task<()> = this
-                .update_in(cx, |this, window, cx| {
-                    let session_id = workspace.read(cx).session_id();
-                    let window_id = window.window_handle().window_id().as_u64();
-                    workspace.update(cx, |workspace, _cx| {
-                        workspace.set_database_id(workspace_id);
-                    });
-                    this.serialize(cx);
-                    let db = db.clone();
-                    cx.background_spawn(async move {
-                        db.set_session_binding(workspace_id, session_id, Some(window_id))
-                            .await
-                            .log_err();
-                    })
-                })
-                .unwrap();
-            task.await
-        })
-    }
-
-    /// Assigns random database IDs to all retained workspaces, flushes
-    /// workspace serialization (SQLite) and multi-workspace state (KVP),
-    /// and writes session bindings so the serialized data can be read
-    /// back by `last_session_workspace_locations` +
-    /// `read_serialized_multi_workspaces`.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn flush_all_serialization(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<Task<()>> {
-        for workspace in self.workspaces() {
-            workspace.update(cx, |ws, _cx| {
-                if ws.database_id().is_none() {
-                    ws.set_random_database_id();
-                }
-            });
-        }
-
-        let session_id = self.workspace().read(cx).session_id();
-        let window_id_u64 = window.window_handle().window_id().as_u64();
-
-        let mut tasks: Vec<Task<()>> = Vec::new();
-        for workspace in self.workspaces() {
-            tasks.push(workspace.update(cx, |ws, cx| ws.flush_serialization(window, cx)));
-            if let Some(db_id) = workspace.read(cx).database_id() {
-                let db = crate::persistence::WorkspaceDb::global(cx);
-                let session_id = session_id.clone();
-                tasks.push(cx.background_spawn(async move {
-                    db.set_session_binding(db_id, session_id, Some(window_id_u64))
-                        .await
-                        .log_err();
-                }));
-            }
-        }
-        self.serialize(cx);
-        tasks
     }
 
     /// Removes one or more workspaces from this multi-workspace.
@@ -1857,7 +1422,6 @@ impl MultiWorkspace {
                 }
 
                 if removed_any {
-                    this.serialize(cx);
                     cx.notify();
                 }
 

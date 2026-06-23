@@ -1517,39 +1517,6 @@ impl Editor {
             self.update_restoration_data(cx, |data| {
                 data.selections = inmemory_selections;
             });
-
-            if WorkspaceSettings::get(None, cx).restore_on_startup
-                != RestoreOnStartupBehavior::EmptyTab
-                && let Some(workspace_id) = self.workspace_serialization_id(cx)
-            {
-                let snapshot = self.buffer().read(cx).snapshot(cx);
-                let selections = selections.clone();
-                let background_executor = cx.background_executor().clone();
-                let editor_id = cx.entity().entity_id().as_u64() as ItemId;
-                let db = EditorDb::global(cx);
-                self.serialize_selections = cx.background_spawn(async move {
-                    background_executor.timer(SERIALIZATION_THROTTLE_TIME).await;
-                    let db_selections = selections
-                        .iter()
-                        .map(|selection| {
-                            (
-                                selection.start.to_offset(&snapshot).0,
-                                selection.end.to_offset(&snapshot).0,
-                            )
-                        })
-                        .collect();
-
-                    db.save_editor_selections(editor_id, workspace_id, db_selections)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "persisting editor selections for editor {editor_id}, \
-                                workspace {workspace_id:?}"
-                            )
-                        })
-                        .log_err();
-                });
-            }
         }
 
         cx.notify();
