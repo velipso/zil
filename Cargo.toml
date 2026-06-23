@@ -15,7 +15,6 @@ members = [
     "crates/command_palette",
     "crates/command_palette_hooks",
     "crates/component",
-    "crates/crashes",
     "crates/credentials_provider",
     "crates/db",
     "crates/editor",
@@ -92,7 +91,6 @@ members = [
     "crates/sqlez_macros",
     "crates/sum_tree",
     "crates/syntax_theme",
-    "crates/system_specs",
     "crates/tab_switcher",
     "crates/task",
     "crates/text",
@@ -154,7 +152,6 @@ command_palette = { path = "crates/command_palette" }
 command_palette_hooks = { path = "crates/command_palette_hooks" }
 component = { path = "crates/component" }
 console = "0.16"
-crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
 db = { path = "crates/db" }
@@ -235,7 +232,6 @@ sqlez = { path = "crates/sqlez" }
 sqlez_macros = { path = "crates/sqlez_macros" }
 sum_tree = { path = "crates/sum_tree" }
 syntax_theme = { path = "crates/syntax_theme" }
-system_specs = { path = "crates/system_specs" }
 tab_switcher = { path = "crates/tab_switcher" }
 task = { path = "crates/task" }
 text = { path = "crates/text" }
@@ -362,7 +358,6 @@ lsp-types = { path = "crates/lsp-types" }
 mach2 = "0.5"
 markup5ever_rcdom = "0.3.0"
 metal = "0.33"
-minidumper = "0.9"
 moka = { version = "0.12.10", features = ["sync"] }
 nix = "0.29"
 nucleo = "0.5"
@@ -640,7 +635,6 @@ wasmtime = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
 wasmtime-environ = { opt-level = 3 }
 wasmtime-internal-cranelift = { opt-level = 3 }
-minidumper = { opt-level = 3 }
 # Build single-source-file crates with cg=1 as it helps make `cargo build` of a whole workspace a bit faster
 assets = { codegen-units = 1 }
 breadcrumbs = { codegen-units = 1 }

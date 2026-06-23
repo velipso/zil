@@ -17,7 +17,6 @@ use rpc::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 pub use settings::BinarySettings;
-pub use settings::DirenvSettings;
 pub use settings::LspSettings;
 use settings::{
     EditorconfigEvent, InvalidSettingsError, LocalSettingsKind,
@@ -59,9 +58,6 @@ pub struct ProjectSettings {
 
     /// Configuration for Node-related features
     pub node: NodeBinarySettings,
-
-    /// Configuration for how direnv configuration should be loaded
-    pub load_direnv: DirenvSettings,
 
     /// Configuration for session-related features
     pub session: SessionSettings,
@@ -508,7 +504,6 @@ impl Settings for ProjectSettings {
             },
             git: git_settings,
             node: content.node.clone().unwrap().into(),
-            load_direnv: project.load_direnv.clone().unwrap(),
             session: SessionSettings {
                 restore_unsaved_buffers: content.session.unwrap().restore_unsaved_buffers.unwrap(),
                 trust_all_worktrees: content.session.unwrap().trust_all_worktrees.unwrap(),

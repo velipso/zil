@@ -118,10 +118,6 @@ pub struct EditorSettingsContent {
     /// Default: always
     pub seed_search_query_from_cursor: Option<SeedQuerySetting>,
     pub use_smartcase_search: Option<bool>,
-    /// Determines the modifier to be used to add multiple cursors with the mouse. The open hover link mouse gestures will adapt such that it do not conflict with the multicursor modifier.
-    ///
-    /// Default: alt
-    pub multi_cursor_modifier: Option<MultiCursorModifier>,
     /// Hide the values of variables in `private` files, as defined by the
     /// private_files setting. This only changes the visual representation,
     /// the values are still present in the file and can be selected / copied / pasted
@@ -487,29 +483,6 @@ pub enum MinimapThumbBorder {
     LeftOnly,
     /// Displays the thumb without any border.
     None,
-}
-
-/// The key to use for adding multiple cursors
-///
-/// Default: alt
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum MultiCursorModifier {
-    Alt,
-    #[serde(alias = "cmd", alias = "ctrl")]
-    CmdOrCtrl,
 }
 
 /// Whether the editor will scroll beyond the last line.

@@ -6,7 +6,7 @@ pub use settings::{
     CurrentLineHighlight, DelayMs,
     DisplayIn, DocumentColorsRenderMode,
     MinimapThumb, MinimapThumbBorder,
-    MultiCursorModifier, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
+    ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
 use ui::scrollbars::ShowScrollbar;
@@ -36,7 +36,6 @@ pub struct EditorSettings {
     pub relative_line_numbers: RelativeLineNumbers,
     pub seed_search_query_from_cursor: SeedQuerySetting,
     pub use_smartcase_search: bool,
-    pub multi_cursor_modifier: MultiCursorModifier,
     pub redact_private_values: bool,
     pub middle_click_paste: bool,
     pub search_wrap: bool,
@@ -219,7 +218,6 @@ impl Settings for EditorSettings {
             relative_line_numbers: editor.relative_line_numbers.unwrap(),
             seed_search_query_from_cursor: editor.seed_search_query_from_cursor.unwrap(),
             use_smartcase_search: editor.use_smartcase_search.unwrap(),
-            multi_cursor_modifier: editor.multi_cursor_modifier.unwrap(),
             redact_private_values: editor.redact_private_values.unwrap(),
             middle_click_paste: editor.middle_click_paste.unwrap(),
             search_wrap: editor.search_wrap.unwrap(),

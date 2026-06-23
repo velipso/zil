@@ -174,7 +174,6 @@ pub use zed_actions::editor::RevealInFileManager;
 use zed_actions::editor::{MoveDown, MoveUp};
 
 use crate::{
-    editor_settings::MultiCursorModifier,
     hover_links::{find_url, find_url_from_range},
     scroll::ScrollOffset,
     selections_collection::resolve_selections_wrapping_blocks,
@@ -3090,28 +3089,14 @@ impl Editor {
         )
     }
 
-    fn is_cmd_or_ctrl_pressed(modifiers: &Modifiers, cx: &mut Context<Self>) -> bool {
-        match EditorSettings::get_global(cx).multi_cursor_modifier {
-            MultiCursorModifier::Alt => modifiers.secondary(),
-            MultiCursorModifier::CmdOrCtrl => modifiers.alt,
-        }
-    }
-
-    fn is_alt_pressed(modifiers: &Modifiers, cx: &mut Context<Self>) -> bool {
-        match EditorSettings::get_global(cx).multi_cursor_modifier {
-            MultiCursorModifier::Alt => modifiers.alt,
-            MultiCursorModifier::CmdOrCtrl => modifiers.secondary(),
-        }
-    }
-
     fn columnar_selection_mode(
         modifiers: &Modifiers,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> Option<ColumnarMode> {
         if modifiers.shift && modifiers.number_of_modifiers() == 2 {
-            if Self::is_cmd_or_ctrl_pressed(modifiers, cx) {
+            if modifiers.secondary() {
                 Some(ColumnarMode::FromMouse)
-            } else if Self::is_alt_pressed(modifiers, cx) {
+            } else if modifiers.alt {
                 Some(ColumnarMode::FromSelection)
             } else {
                 None

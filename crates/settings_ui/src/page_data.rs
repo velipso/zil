@@ -987,22 +987,9 @@ fn appearance_page() -> SettingsPage {
         ]
     }
 
-    fn cursor_section() -> [SettingsPageItem; 5] {
+    fn cursor_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader("Cursor"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Multi Cursor Modifier",
-                description: "Modifier key for adding multiple cursors.",
-                field: Box::new(SettingField {
-                    json_path: Some("multi_cursor_modifier"),
-                    pick: |settings_content| settings_content.editor.multi_cursor_modifier.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.multi_cursor_modifier = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Cursor Blink",
                 description: "Whether the cursor blinks in the editor.",

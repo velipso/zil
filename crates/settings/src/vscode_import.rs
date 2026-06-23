@@ -263,11 +263,6 @@ impl VsCodeSettings {
             middle_click_paste: None,
             minimap: self.minimap_content(),
             minimum_contrast_for_highlights: None,
-            multi_cursor_modifier: self.read_enum("editor.multiCursorModifier", |s| match s {
-                "ctrlCmd" => Some(MultiCursorModifier::CmdOrCtrl),
-                "alt" => Some(MultiCursorModifier::Alt),
-                _ => None,
-            }),
             redact_private_values: None,
             relative_line_numbers: self.read_enum("editor.lineNumbers", |s| match s {
                 "relative" => Some(RelativeLineNumbers::Enabled),
@@ -487,7 +482,6 @@ impl VsCodeSettings {
             dap: Default::default(),
             context_servers: self.context_servers(),
             context_server_timeout: None,
-            load_direnv: None,
             git_hosting_providers: None,
         }
     }

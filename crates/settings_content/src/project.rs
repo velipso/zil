@@ -73,9 +73,6 @@ pub struct ProjectSettingsContent {
     /// Default: 60
     pub context_server_timeout: Option<u64>,
 
-    /// Configuration for how direnv configuration should be loaded
-    pub load_direnv: Option<DirenvSettings>,
-
     /// The list of custom Git hosting providers.
     pub git_hosting_providers: Option<ExtendingVec<GitHostingProviderConfig>>,
 }

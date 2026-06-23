@@ -81,10 +81,6 @@ use zed_actions::{
 
 const DOCS_URL: &str = "https://zed.dev/docs/";
 
-pub struct CrashHandler(pub Arc<crashes::Client>);
-
-impl gpui::Global for CrashHandler {}
-
 actions!(
     zed,
     [
@@ -420,9 +416,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
             show_software_emulation_warning_if_needed(specs.clone(), window, cx);
-            if let Some(crash_client) = cx.try_global::<CrashHandler>() {
-                crashes::set_gpu_info(&crash_client.0, specs);
-            }
         }
 
         let active_file_name = cx.new(|_| workspace::active_file_name::ActiveFileName::new());

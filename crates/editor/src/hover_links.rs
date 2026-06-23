@@ -139,7 +139,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let hovered_link_modifier = Editor::is_cmd_or_ctrl_pressed(&modifiers, cx);
+        let hovered_link_modifier = modifiers.secondary();
         if !hovered_link_modifier || self.has_pending_selection() {
             self.hide_hovered_link(cx);
             return;
