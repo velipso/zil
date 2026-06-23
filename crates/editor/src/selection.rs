@@ -1226,6 +1226,22 @@ impl Editor {
     ) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
 
+        if self.columnar_selection_state.is_none() {
+            let modifiers = window.modifiers();
+            if modifiers.alt && modifiers.number_of_modifiers() == 1 {
+                self.select(
+                    SelectPhase::BeginColumnar {
+                        position,
+                        reset: false,
+                        mode: ColumnarMode::FromMouse,
+                        goal_column,
+                    },
+                    window,
+                    cx,
+                );
+            }
+        }
+
         if self.columnar_selection_state.is_some() {
             self.select_columns(position, goal_column, &display_map, window, cx);
         } else if let Some((mut pending, mode)) = self.pending_selection_and_mode() {

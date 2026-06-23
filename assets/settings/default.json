@@ -346,7 +346,7 @@
   // Whether to allow drag and drop text selection in buffer.
   "drag_and_drop_selection": {
     // When true, enables drag and drop text selection in buffer.
-    "enabled": true,
+    "enabled": false,
     // The delay in milliseconds that must elapse before drag and drop is allowed. Otherwise, a new text selection is created.
     "delay": 300,
   },

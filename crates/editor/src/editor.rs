@@ -3089,23 +3089,6 @@ impl Editor {
         )
     }
 
-    fn columnar_selection_mode(
-        modifiers: &Modifiers,
-        _cx: &mut Context<Self>,
-    ) -> Option<ColumnarMode> {
-        if modifiers.shift && modifiers.number_of_modifiers() == 2 {
-            if modifiers.secondary() {
-                Some(ColumnarMode::FromMouse)
-            } else if modifiers.alt {
-                Some(ColumnarMode::FromSelection)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
     fn update_selection_mode(
         &mut self,
         modifiers: &Modifiers,
@@ -3113,27 +3096,23 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(mode) = Self::columnar_selection_mode(modifiers, cx) else {
-            return;
-        };
-        if self.selections.pending_anchor().is_none() {
-            return;
+        // if the user clicks, drags, *then* presses alt, switch to columnar mode
+        if modifiers.alt && self.selections.pending_anchor().is_some() {
+            let mouse_position = window.mouse_position();
+            let point_for_position = position_map.point_for_position(mouse_position);
+            let position = point_for_position.previous_valid;
+
+            self.select(
+                SelectPhase::BeginColumnar {
+                    position,
+                    reset: false,
+                    mode: ColumnarMode::FromMouse,
+                    goal_column: point_for_position.exact_unclipped.column(),
+                },
+                window,
+                cx,
+            );
         }
-
-        let mouse_position = window.mouse_position();
-        let point_for_position = position_map.point_for_position(mouse_position);
-        let position = point_for_position.previous_valid;
-
-        self.select(
-            SelectPhase::BeginColumnar {
-                position,
-                reset: false,
-                mode,
-                goal_column: point_for_position.exact_unclipped.column(),
-            },
-            window,
-            cx,
-        );
     }
 
     fn current_user_player_color(&self, cx: &mut App) -> PlayerColor {

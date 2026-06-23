@@ -478,30 +478,28 @@ impl EditorElement {
         }
 
         let position = point_for_position.nearest_valid;
-        if let Some(mode) = Editor::columnar_selection_mode(&modifiers, cx) {
-            editor.select(
-                SelectPhase::BeginColumnar {
-                    position,
-                    reset: match mode {
-                        ColumnarMode::FromMouse => true,
-                        ColumnarMode::FromSelection => false,
+        if modifiers.shift {
+            if modifiers.alt {
+                editor.select(
+                    SelectPhase::BeginColumnar {
+                        position,
+                        reset: false,
+                        mode: ColumnarMode::FromMouse,
+                        goal_column: point_for_position.exact_unclipped.column(),
                     },
-                    mode,
-                    goal_column: point_for_position.exact_unclipped.column(),
-                },
-                window,
-                cx,
-            );
-        } else if modifiers.shift && !modifiers.control && !modifiers.alt && !modifiers.secondary()
-        {
-            editor.select(
-                SelectPhase::Extend {
-                    position,
-                    click_count,
-                },
-                window,
-                cx,
-            );
+                    window,
+                    cx,
+                );
+            } else {
+                editor.select(
+                    SelectPhase::Extend {
+                        position,
+                        click_count,
+                    },
+                    window,
+                    cx,
+                );
+            }
         } else {
             editor.select(
                 SelectPhase::Begin {
