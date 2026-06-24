@@ -5070,26 +5070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json_schema_store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collections",
- "gpui",
- "language",
- "parking_lot",
- "paths",
- "project",
- "schemars",
- "serde",
- "serde_json",
- "settings",
- "task",
- "theme",
- "util",
-]
-
-[[package]]
 name = "keymap_editor"
 version = "0.1.0"
 dependencies = [
@@ -5102,7 +5082,6 @@ dependencies = [
  "fuzzy",
  "gpui",
  "itertools 0.14.0",
- "json_schema_store",
  "language",
  "log",
  "menu",
@@ -13327,7 +13306,6 @@ dependencies = [
  "image_viewer",
  "inspector_ui",
  "itertools 0.14.0",
- "json_schema_store",
  "keymap_editor",
  "language",
  "language_model",

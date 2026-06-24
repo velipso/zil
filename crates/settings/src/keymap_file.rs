@@ -595,41 +595,6 @@ impl KeymapFile {
         )
     }
 
-    pub fn generate_json_schema_from_inventory() -> Value {
-        let mut generator = Self::action_schema_generator();
-
-        let mut action_schemas = Vec::new();
-        let mut documentation = HashMap::default();
-        let mut deprecations = HashMap::default();
-        let mut deprecation_messages = HashMap::default();
-
-        for action_data in generate_list_of_all_registered_actions() {
-            let schema = (action_data.json_schema)(&mut generator);
-            action_schemas.push((action_data.name, schema));
-
-            if let Some(doc) = action_data.documentation {
-                documentation.insert(action_data.name, doc);
-            }
-            if let Some(msg) = action_data.deprecation_message {
-                deprecation_messages.insert(action_data.name, msg);
-            }
-            for &alias in action_data.deprecated_aliases {
-                deprecations.insert(alias, action_data.name);
-
-                let alias_schema = (action_data.json_schema)(&mut generator);
-                action_schemas.push((alias, alias_schema));
-            }
-        }
-
-        KeymapFile::generate_json_schema(
-            generator,
-            action_schemas,
-            &documentation,
-            &deprecations,
-            &deprecation_messages,
-        )
-    }
-
     pub fn get_action_schema_by_name(
         action_name: &str,
         generator: &mut schemars::SchemaGenerator,
@@ -1670,46 +1635,6 @@ mod tests {
             }
             other => panic!("expected SomeFailedToLoad, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn keymap_schema_for_unbind_excludes_null_and_unbind_action() {
-        fn schema_allows(schema: &Value, expected: &Value) -> bool {
-            match schema {
-                Value::Object(object) => {
-                    if object.get("const") == Some(expected) {
-                        return true;
-                    }
-                    if object.get("type") == Some(&Value::String("null".to_string()))
-                        && expected == &Value::Null
-                    {
-                        return true;
-                    }
-                    object.values().any(|value| schema_allows(value, expected))
-                }
-                Value::Array(items) => items.iter().any(|value| schema_allows(value, expected)),
-                _ => false,
-            }
-        }
-
-        let schema = KeymapFile::generate_json_schema_from_inventory();
-        let unbind_schema = schema
-            .pointer("/$defs/UnbindTargetAction")
-            .expect("missing UnbindTargetAction schema");
-
-        assert!(!schema_allows(unbind_schema, &Value::Null));
-        assert!(!schema_allows(
-            unbind_schema,
-            &Value::String(Unbind::name_for_type().to_string())
-        ));
-        assert!(schema_allows(
-            unbind_schema,
-            &Value::String("test_keymap_file::StringAction".to_string())
-        ));
-        assert!(schema_allows(
-            unbind_schema,
-            &Value::String("test_keymap_file::InputAction".to_string())
-        ));
     }
 
     #[track_caller]

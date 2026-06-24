@@ -11,7 +11,7 @@ mod ui_components;
 
 use anyhow::{Context as _};
 use collections::{HashMap, HashSet};
-use editor::{Editor, EditorEvent, EditorMode};
+use editor::{Editor, EditorEvent};
 use fs::Fs;
 use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{
@@ -19,15 +19,14 @@ use gpui::{
     FocusHandle, Focusable, Global, IsZero,
     KeyBindingContextPredicate::{And, Descendant, Equal, Identifier, Not, NotEqual, Or},
     KeyContext, KeybindingKeystroke, MouseButton, PlatformKeyboardMapper, Point, ScrollStrategy,
-    ScrollWheelEvent, Stateful, StyledText, Subscription, TextStyleRefinement, WeakEntity,
+    ScrollWheelEvent, Stateful, StyledText, Subscription, WeakEntity,
     actions, anchored, deferred, div,
 };
 use language::{Language, LanguageConfig};
 
 use notifications::status_toast::StatusToast;
-use project::{Project};
 use settings::{
-    BaseKeymap, KeybindSource, KeymapFile, Settings as _, SettingsAssets, infer_json_indent_size,
+    BaseKeymap, KeybindSource, KeymapFile, SettingsAssets, infer_json_indent_size,
 };
 use ui::{
     ActiveTheme as _, App, Banner, BorrowAppContext, ColumnWidthConfig, ContextMenu,
@@ -1284,7 +1283,6 @@ impl KeymapEditor {
         }
         let keybind = keybind.clone();
         let keymap_editor = cx.entity();
-        let temp_dir = self.action_args_temp_dir.as_ref().map(|dir| dir.path());
 
         self.workspace
             .update(cx, |workspace, cx| {
@@ -1296,7 +1294,6 @@ impl KeymapEditor {
                         keybind,
                         keybind_index,
                         keymap_editor,
-                        temp_dir,
                         workspace_weak,
                         fs,
                         window,
@@ -1336,8 +1333,6 @@ impl KeymapEditor {
         let dummy_binding = ProcessedBinding::Unmapped(action_information);
         let dummy_index = self.keybindings.len();
 
-        let temp_dir = self.action_args_temp_dir.as_ref().map(|dir| dir.path());
-
         self.workspace
             .update(cx, |workspace, cx| {
                 let fs = workspace.app_state().fs.clone();
@@ -1348,7 +1343,6 @@ impl KeymapEditor {
                         dummy_binding,
                         dummy_index,
                         keymap_editor,
-                        temp_dir,
                         workspace_weak,
                         fs,
                         window,
@@ -2400,9 +2394,8 @@ struct KeybindingEditorModal {
     keybind_editor: Entity<KeystrokeInput>,
     context_editor: Entity<InputField>,
     action_editor: Option<Entity<InputField>>,
-    action_arguments_editor: Option<Entity<ActionArgumentsEditor>>,
+    action_arguments_editor: Option<Entity<InputField>>,
     action_name_to_static: HashMap<String, &'static str>,
-    selected_action_name: Option<&'static str>,
     fs: Arc<dyn Fs>,
     error: Option<InputError>,
     keymap_editor: Entity<KeymapEditor>,
@@ -2429,7 +2422,6 @@ impl KeybindingEditorModal {
         editing_keybind: ProcessedBinding,
         editing_keybind_idx: usize,
         keymap_editor: Entity<KeymapEditor>,
-        action_args_temp_dir: Option<&std::path::Path>,
         workspace: WeakEntity<Workspace>,
         fs: Arc<dyn Fs>,
         window: &mut Window,
@@ -2497,32 +2489,48 @@ impl KeybindingEditorModal {
         };
 
         let action_has_schema = editing_keybind.action().has_schema;
-        let action_name_for_args = editing_keybind.action().name;
         let action_args = editing_keybind
             .action()
             .arguments
             .as_ref()
             .map(|args| args.text.clone());
 
-        let action_arguments_editor = action_has_schema.then(|| {
+        let action_arguments_editor: Option<Entity<InputField>> = action_has_schema.then(|| {
             cx.new(|cx| {
-                ActionArgumentsEditor::new(
-                    action_name_for_args,
-                    action_args.clone(),
-                    action_args_temp_dir,
-                    workspace.clone(),
-                    window,
-                    cx,
-                )
+                let input = InputField::new(window, cx, "Action Arguments")
+                    .label("Edit Action Arguments")
+                    .label_size(LabelSize::Default);
+
+                if let Some(args) = action_args {
+                    input.set_text(&args, window, cx);
+                }
+
+                let editor_entity = input.editor();
+                let editor_entity = editor_entity
+                    .as_any()
+                    .downcast_ref::<Entity<Editor>>()
+                    .unwrap()
+                    .clone();
+                let workspace = workspace.clone();
+                cx.spawn(async move |_input_handle, cx| {
+                    let language = load_json_language(workspace.clone(), cx).await;
+                    editor_entity.update(cx, |editor, cx| {
+                        let buffer = editor.buffer().read(cx).as_singleton();
+                        buffer.update(cx, |buffer, cx| {
+                            buffer.set_language(Some(language), cx);
+                        });
+                    });
+                })
+                .detach();
+
+                input
             })
         });
 
         let focus_state = KeybindingEditorModalFocusState::new(
             action_editor.as_ref().map(|e| e.focus_handle(cx)),
             keybind_editor.focus_handle(cx),
-            action_arguments_editor
-                .as_ref()
-                .map(|args_editor| args_editor.focus_handle(cx)),
+            action_arguments_editor.as_ref().map(|e| e.focus_handle(cx)),
             context_editor.focus_handle(cx),
         );
 
@@ -2536,82 +2544,11 @@ impl KeybindingEditorModal {
             action_editor,
             action_arguments_editor,
             action_name_to_static,
-            selected_action_name: None,
             error: None,
             keymap_editor,
             workspace,
             focus_state,
         }
-    }
-
-    fn add_action_arguments_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(action_editor) = &self.action_editor else {
-            return;
-        };
-
-        let action_name_str = action_editor.read(cx).text(cx);
-        let current_action = self.action_name_to_static.get(&action_name_str).copied();
-
-        if current_action == self.selected_action_name {
-            return;
-        }
-
-        self.selected_action_name = current_action;
-
-        let Some(action_name) = current_action else {
-            if self.action_arguments_editor.is_some() {
-                self.action_arguments_editor = None;
-                self.rebuild_focus_state(cx);
-                cx.notify();
-            }
-            return;
-        };
-
-        let (action_has_schema, temp_dir) = {
-            let keymap_editor = self.keymap_editor.read(cx);
-            let has_schema = keymap_editor.actions_with_schemas.contains(action_name);
-            let temp_dir = keymap_editor
-                .action_args_temp_dir
-                .as_ref()
-                .map(|dir| dir.path().to_path_buf());
-            (has_schema, temp_dir)
-        };
-
-        let currently_has_editor = self.action_arguments_editor.is_some();
-
-        if action_has_schema && !currently_has_editor {
-            let workspace = self.workspace.clone();
-
-            let new_editor = cx.new(|cx| {
-                ActionArgumentsEditor::new(
-                    action_name,
-                    None,
-                    temp_dir.as_deref(),
-                    workspace,
-                    window,
-                    cx,
-                )
-            });
-
-            self.action_arguments_editor = Some(new_editor);
-            self.rebuild_focus_state(cx);
-            cx.notify();
-        } else if !action_has_schema && currently_has_editor {
-            self.action_arguments_editor = None;
-            self.rebuild_focus_state(cx);
-            cx.notify();
-        }
-    }
-
-    fn rebuild_focus_state(&mut self, cx: &App) {
-        self.focus_state = KeybindingEditorModalFocusState::new(
-            self.action_editor.as_ref().map(|e| e.focus_handle(cx)),
-            self.keybind_editor.focus_handle(cx),
-            self.action_arguments_editor
-                .as_ref()
-                .map(|args_editor| args_editor.focus_handle(cx)),
-            self.context_editor.focus_handle(cx),
-        );
     }
 
     fn set_error(&mut self, error: InputError, cx: &mut Context<Self>) -> bool {
@@ -2650,9 +2587,9 @@ impl KeybindingEditorModal {
         let action_arguments = self
             .action_arguments_editor
             .as_ref()
-            .map(|arguments_editor| arguments_editor.read(cx).editor.read(cx).text(cx))
+            .map(|arguments_editor| arguments_editor.read_with(cx, |input, cx| input.text(cx)))
             .filter(|args| !args.is_empty());
-
+ 
         let value = action_arguments
             .as_ref()
             .map(|args| {
@@ -2911,9 +2848,7 @@ impl KeybindingEditorModal {
 }
 
 impl Render for KeybindingEditorModal {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.add_action_arguments_input(window, cx);
-
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().colors();
         let matching_bindings_count = self.get_matching_bindings_count(cx);
         let key_context = self.key_context();
@@ -3018,12 +2953,7 @@ impl Render for KeybindingEditorModal {
                                         )),
                                 )
                                 .when_some(self.action_arguments_editor.clone(), |this, editor| {
-                                    this.child(
-                                        v_flex()
-                                            .gap_1()
-                                            .child(Label::new("Edit Arguments"))
-                                            .child(editor),
-                                    )
+                                    this.child(editor)
                                 })
                                 .child(self.context_editor.clone())
                                 .when_some(self.error.as_ref(), |this, error| {
@@ -3112,222 +3042,6 @@ impl KeybindingEditorModalFocusState {
             self.handles.len() as i32 - 1
         };
         self.focus_index(index_to_focus, window, cx);
-    }
-}
-
-struct ActionArgumentsEditor {
-    editor: Entity<Editor>,
-    focus_handle: FocusHandle,
-    is_loading: bool,
-    /// See documentation in `KeymapEditor` for why a temp dir is needed.
-    /// This field exists because the keymap editor temp dir creation may fail,
-    /// and rather than implement a complicated retry mechanism, we simply
-    /// fallback to trying to create a temporary directory in this editor on
-    /// demand. Of note is that the TempDir struct will remove the directory
-    /// when dropped.
-    backup_temp_dir: Option<tempfile::TempDir>,
-}
-
-impl Focusable for ActionArgumentsEditor {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
-    }
-}
-
-impl ActionArgumentsEditor {
-    fn new(
-        action_name: &'static str,
-        arguments: Option<SharedString>,
-        temp_dir: Option<&std::path::Path>,
-        workspace: WeakEntity<Workspace>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let focus_handle = cx.focus_handle();
-        cx.on_focus_in(&focus_handle, window, |this, window, cx| {
-            this.editor.focus_handle(cx).focus(window, cx);
-        })
-        .detach();
-        let editor = cx.new(|cx| {
-            let mut editor = Editor::auto_height_unbounded(1, window, cx);
-            Self::set_editor_text(&mut editor, arguments.clone(), window, cx);
-            editor.set_read_only(true);
-            editor
-        });
-
-        let temp_dir = temp_dir.map(|path| path.to_owned());
-        cx.spawn_in(window, async move |this, cx| {
-            let result = async {
-                let (project, fs) = workspace.read_with(cx, |workspace, _cx| {
-                    (
-                        workspace.project().downgrade(),
-                        workspace.app_state().fs.clone(),
-                    )
-                })?;
-
-                let file_name = json_schema_store::normalized_action_file_name(action_name);
-
-                let (buffer, backup_temp_dir) =
-                    Self::create_temp_buffer(temp_dir, file_name.clone(), project.clone(), fs, cx)
-                        .await
-                        .context(concat!(
-                            "Failed to create temporary buffer for action arguments. ",
-                            "Auto-complete will not work"
-                        ))?;
-
-                let editor = cx.new_window_entity(|window, cx| {
-                    let multi_buffer = cx.new(|cx| editor::MultiBuffer::singleton(buffer, cx));
-                    let mut editor = Editor::new(
-                        EditorMode::SingleLine,
-                        multi_buffer,
-                        project.upgrade(),
-                        window,
-                        cx,
-                    );
-                    Self::set_editor_text(&mut editor, arguments, window, cx);
-                    editor
-                })?;
-
-                this.update_in(cx, |this, window, cx| {
-                    if this.editor.focus_handle(cx).is_focused(window) {
-                        editor.focus_handle(cx).focus(window, cx);
-                    }
-                    this.editor = editor;
-                    this.backup_temp_dir = backup_temp_dir;
-                    this.is_loading = false;
-                })?;
-
-                anyhow::Ok(())
-            }
-            .await;
-            if result.is_err() {
-                let json_language = load_json_language(workspace.clone(), cx).await;
-                this.update(cx, |this, cx| {
-                    this.editor.update(cx, |editor, cx| {
-                        let buffer = editor.buffer().read(cx).as_singleton();
-                        buffer.update(cx, |buffer, cx| {
-                            buffer.set_language(Some(json_language.clone()), cx)
-                        });
-                    })
-                })
-                .ok();
-                this.update(cx, |this, _cx| {
-                    this.is_loading = false;
-                })
-                .ok();
-            }
-            result
-        })
-        .detach_and_log_err(cx);
-        Self {
-            editor,
-            focus_handle,
-            is_loading: true,
-            backup_temp_dir: None,
-        }
-    }
-
-    fn set_editor_text(
-        editor: &mut Editor,
-        arguments: Option<SharedString>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        editor.set_placeholder_text("Action Arguments", window, cx);
-        if let Some(arguments) = arguments {
-            editor.set_text(arguments, window, cx);
-        }
-    }
-
-    async fn create_temp_buffer(
-        temp_dir: Option<std::path::PathBuf>,
-        file_name: String,
-        project: WeakEntity<Project>,
-        fs: Arc<dyn Fs>,
-        cx: &mut AsyncApp,
-    ) -> anyhow::Result<(Entity<language::Buffer>, Option<tempfile::TempDir>)> {
-        let (temp_file_path, temp_dir) = {
-            let file_name = file_name.clone();
-            async move {
-                let temp_dir_backup = match temp_dir.as_ref() {
-                    Some(_) => None,
-                    None => {
-                        let temp_dir = paths::temp_dir();
-                        let sub_temp_dir = tempfile::Builder::new()
-                            .tempdir_in(temp_dir)
-                            .context("Failed to create temporary directory")?;
-                        Some(sub_temp_dir)
-                    }
-                };
-                let dir_path = temp_dir.as_deref().unwrap_or_else(|| {
-                    temp_dir_backup
-                        .as_ref()
-                        .expect("created backup tempdir")
-                        .path()
-                });
-                let path = dir_path.join(file_name);
-                fs.create_file(
-                    &path,
-                    fs::CreateOptions {
-                        ignore_if_exists: true,
-                        overwrite: true,
-                    },
-                )
-                .await
-                .context("Failed to create temporary file")?;
-                anyhow::Ok((path, temp_dir_backup))
-            }
-        }
-        .await
-        .context("Failed to create backing file")?;
-
-        project
-            .update(cx, |project, cx| {
-                project.open_local_buffer(temp_file_path, cx)
-            })?
-            .await
-            .context("Failed to create buffer")
-            .map(|buffer| (buffer, temp_dir))
-    }
-}
-
-impl Render for ActionArgumentsEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let settings = theme_settings::ThemeSettings::get_global(cx);
-        let colors = cx.theme().colors();
-
-        let border_color = if self.is_loading {
-            colors.border_disabled
-        } else if self.focus_handle.contains_focused(window, cx) {
-            colors.border_focused
-        } else {
-            colors.border_variant
-        };
-
-        let text_style = {
-            TextStyleRefinement {
-                font_size: Some(rems(0.875).into()),
-                font_weight: Some(settings.buffer_font.weight),
-                line_height: Some(relative(1.2)),
-                color: self.is_loading.then_some(colors.text_disabled),
-                ..Default::default()
-            }
-        };
-
-        self.editor
-            .update(cx, |editor, _| editor.set_text_style_refinement(text_style));
-
-        h_flex()
-            .min_h_8()
-            .min_w_48()
-            .px_2()
-            .flex_grow_1()
-            .rounded_md()
-            .bg(cx.theme().colors().editor_background)
-            .border_1()
-            .border_color(border_color)
-            .track_focus(&self.focus_handle)
-            .child(self.editor.clone())
     }
 }
 
