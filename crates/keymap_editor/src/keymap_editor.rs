@@ -11,7 +11,7 @@ mod ui_components;
 
 use anyhow::{Context as _};
 use collections::{HashMap, HashSet};
-use editor::{Editor, EditorEvent, EditorMode, SizingBehavior};
+use editor::{Editor, EditorEvent, EditorMode};
 use fs::Fs;
 use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{
@@ -534,9 +534,7 @@ impl KeymapEditor {
         let _keymap_subscription =
             cx.observe_global_in::<KeymapEventChannel>(window, Self::on_keymap_changed);
         let table_interaction_state = cx.new(|cx| {
-            TableInteractionState::new(cx).with_custom_scrollbar(ui::Scrollbars::for_settings::<
-                editor::EditorSettingsScrollbarProxy,
-            >())
+            TableInteractionState::new(cx)
         });
 
         let keystroke_editor = cx.new(|cx| {
@@ -3180,20 +3178,12 @@ impl ActionArgumentsEditor {
                 let editor = cx.new_window_entity(|window, cx| {
                     let multi_buffer = cx.new(|cx| editor::MultiBuffer::singleton(buffer, cx));
                     let mut editor = Editor::new(
-                        EditorMode::Full {
-                            scale_ui_elements_with_buffer_font_size: true,
-                            show_active_line_background: false,
-                            sizing_behavior: SizingBehavior::SizeByContent,
-                        },
+                        EditorMode::SingleLine,
                         multi_buffer,
                         project.upgrade(),
                         window,
                         cx,
                     );
-                    editor.disable_mouse_wheel_zoom();
-                    editor.set_searchable(false);
-                    editor.disable_scrollbars_and_minimap(window, cx);
-                    editor.set_show_gutter(false, cx);
                     Self::set_editor_text(&mut editor, arguments, window, cx);
                     editor
                 })?;
@@ -3219,7 +3209,6 @@ impl ActionArgumentsEditor {
                             buffer.set_language(Some(json_language.clone()), cx)
                         });
                     })
-                    // .context("Failed to load JSON language for editing keybinding action arguments input")
                 })
                 .ok();
                 this.update(cx, |this, _cx| {
@@ -3244,11 +3233,9 @@ impl ActionArgumentsEditor {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
+        editor.set_placeholder_text("Action Arguments", window, cx);
         if let Some(arguments) = arguments {
             editor.set_text(arguments, window, cx);
-        } else {
-            // TODO: default value from schema?
-            editor.set_placeholder_text("Action Arguments", window, cx);
         }
     }
 

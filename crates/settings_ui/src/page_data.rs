@@ -1737,23 +1737,52 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn scrollbar_section() -> [SettingsPageItem; 9] {
+    fn scrollbar_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader("Scrollbar"),
             SettingsPageItem::SettingItem(SettingItem {
-                title: "Show",
-                description: "When to show the scrollbar in the editor.",
+                title: "Show Horizontal Scrollbar",
+                description: "Whether to show the horizontal scrollbar.",
                 field: Box::new(SettingField {
-                    json_path: Some("scrollbar"),
+                    json_path: Some("scrollbar.show_horizontal"),
                     pick: |settings_content| {
-                        settings_content.editor.scrollbar.as_ref()?.show.as_ref()
+                        settings_content
+                            .editor
+                            .scrollbar
+                            .as_ref()?
+                            .show_horizontal
+                            .as_ref()
                     },
                     write: |settings_content, value, _| {
                         settings_content
                             .editor
                             .scrollbar
                             .get_or_insert_default()
-                            .show = value;
+                            .show_horizontal = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Show Vertical Scrollbar",
+                description: "Whether to show the vertical scrollbar.",
+                field: Box::new(SettingField {
+                    json_path: Some("scrollbar.show_vertical"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .scrollbar
+                            .as_ref()?
+                            .show_vertical
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .scrollbar
+                            .get_or_insert_default()
+                            .show_vertical = value;
                     },
                 }),
                 metadata: None,
@@ -1773,30 +1802,6 @@ fn editor_page() -> SettingsPage {
                             .scrollbar
                             .get_or_insert_default()
                             .cursors = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Git Diff",
-                description: "Show Git diff indicators in the scrollbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("scrollbar.git_diff"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .as_ref()?
-                            .git_diff
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .get_or_insert_default()
-                            .git_diff = value;
                     },
                 }),
                 metadata: None,
@@ -1869,62 +1874,6 @@ fn editor_page() -> SettingsPage {
                             .scrollbar
                             .get_or_insert_default()
                             .selected_symbol = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Horizontal Scrollbar",
-                description: "When false, forcefully disables the horizontal scrollbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("scrollbar.axes.horizontal"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .as_ref()?
-                            .axes
-                            .as_ref()?
-                            .horizontal
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .get_or_insert_default()
-                            .axes
-                            .get_or_insert_default()
-                            .horizontal = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Vertical Scrollbar",
-                description: "When false, forcefully disables the vertical scrollbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("scrollbar.axes.vertical"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .as_ref()?
-                            .axes
-                            .as_ref()?
-                            .vertical
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .scrollbar
-                            .get_or_insert_default()
-                            .axes
-                            .get_or_insert_default()
-                            .vertical = value;
                     },
                 }),
                 metadata: None,
@@ -3780,277 +3729,6 @@ fn window_and_layout_page() -> SettingsPage {
 }
 
 fn panels_page() -> SettingsPage {
-    fn git_panel_section() -> [SettingsPageItem; 15] {
-        [
-            SettingsPageItem::SectionHeader("Git Panel"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Git Panel Button",
-                description: "Show the Git panel button in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.button"),
-                    pick: |settings_content| settings_content.git_panel.as_ref()?.button.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.git_panel.get_or_insert_default().button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Git Panel Dock",
-                description: "Where to dock the Git panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.dock"),
-                    pick: |settings_content| settings_content.git_panel.as_ref()?.dock.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.git_panel.get_or_insert_default().dock = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Git Panel Default Width",
-                description: "Default width of the Git panel in pixels.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.default_width"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.default_width.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .default_width = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Git Panel Status Style",
-                description: "How entry statuses are displayed.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.status_style"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.status_style.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .status_style = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Fallback Branch Name",
-                description: "Default branch name will be when init.defaultbranch is not set in Git.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.fallback_branch_name"),
-                    pick: |settings_content| {
-                        settings_content
-                            .git_panel
-                            .as_ref()?
-                            .fallback_branch_name
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .fallback_branch_name = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Sort By Path",
-                description: "Enable to sort entries in the panel by path, disable to sort by status.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.sort_by_path"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.sort_by_path.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .sort_by_path = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Collapse Untracked Diff",
-                description: "Whether to collapse untracked files in the diff panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.collapse_untracked_diff"),
-                    pick: |settings_content| {
-                        settings_content
-                            .git_panel
-                            .as_ref()?
-                            .collapse_untracked_diff
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .collapse_untracked_diff = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Tree View",
-                description: "Enable to show entries in tree view list, disable to show in flat view list.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.tree_view"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.tree_view.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.git_panel.get_or_insert_default().tree_view = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "File Icons",
-                description: "Show file icons next to the Git status icon.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.file_icons"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.file_icons.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .file_icons = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Folder Icons",
-                description: "Whether to show folder icons or chevrons for directories in the git panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.folder_icons"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.folder_icons.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .folder_icons = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Diff Stats",
-                description: "Whether to show the addition/deletion change count next to each file in the Git panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.diff_stats"),
-                    pick: |settings_content| {
-                        settings_content.git_panel.as_ref()?.diff_stats.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .diff_stats = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Count Badge",
-                description: "Whether to show a badge on the git panel icon with the count of uncommitted changes.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.show_count_badge"),
-                    pick: |settings_content| {
-                        settings_content
-                            .git_panel
-                            .as_ref()?
-                            .show_count_badge
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .show_count_badge = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Commit Title Max Length",
-                description: "Maximum length of the commit message title before a warning is shown. Set to 0 to disable.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.commit_title_max_length"),
-                    pick: |settings_content| {
-                        settings_content
-                            .git_panel
-                            .as_ref()?
-                            .commit_title_max_length
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .commit_title_max_length = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Scroll Bar",
-                description: "How and when the scrollbar should be displayed.",
-                field: Box::new(SettingField {
-                    json_path: Some("git_panel.scrollbar.show"),
-                    pick: |settings_content| {
-                        show_scrollbar_or_editor(settings_content, |settings_content| {
-                            settings_content
-                                .git_panel
-                                .as_ref()?
-                                .scrollbar
-                                .as_ref()?
-                                .show
-                                .as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .git_panel
-                            .get_or_insert_default()
-                            .scrollbar
-                            .get_or_insert_default()
-                            .show = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn debugger_panel_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("Debugger Panel"),
@@ -4272,7 +3950,6 @@ fn panels_page() -> SettingsPage {
     SettingsPage {
         title: "Panels",
         items: concat_sections![
-            git_panel_section(),
             debugger_panel_section(),
             collaboration_panel_section(),
             agent_panel_section(),
@@ -5688,17 +5365,6 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
     concat_sections!(
         lsp_section(),
     )
-}
-
-fn show_scrollbar_or_editor(
-    settings_content: &SettingsContent,
-    show: fn(&SettingsContent) -> Option<&settings::ShowScrollbar>,
-) -> Option<&settings::ShowScrollbar> {
-    show(settings_content).or(settings_content
-        .editor
-        .scrollbar
-        .as_ref()
-        .and_then(|scrollbar| scrollbar.show.as_ref()))
 }
 
 fn dynamic_variants<T>() -> &'static [T::Discriminant]

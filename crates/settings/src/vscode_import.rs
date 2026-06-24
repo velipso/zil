@@ -185,7 +185,6 @@ impl VsCodeSettings {
             extension: ExtensionSettingsContent::default(),
             file_finder: None,
             git: self.git_settings_content(),
-            git_panel: self.git_panel_settings_content(),
             global_lsp_settings: skip_default(GlobalLspSettingsContent {
                 semantic_token_rules: self.semantic_token_rules(),
                 ..GlobalLspSettingsContent::default()
@@ -314,21 +313,20 @@ impl VsCodeSettings {
     }
 
     fn scrollbar_content(&self) -> Option<ScrollbarContent> {
-        let scrollbar_axes = skip_default(ScrollbarAxesContent {
-            horizontal: self.read_enum("editor.scrollbar.horizontal", |s| match s {
-                "auto" | "visible" => Some(true),
-                "hidden" => Some(false),
-                _ => None,
-            }),
-            vertical: self.read_enum("editor.scrollbar.vertical", |s| match s {
-                "auto" | "visible" => Some(true),
-                "hidden" => Some(false),
-                _ => None,
-            }),
-        })?;
+        let show_horizontal = self.read_enum("editor.scrollbar.horizontal", |s| match s {
+            "auto" | "visible" => Some(true),
+            "hidden" => Some(false),
+            _ => None,
+        });
+        let show_vertical = self.read_enum("editor.scrollbar.vertical", |s| match s {
+            "auto" | "visible" => Some(true),
+            "hidden" => Some(false),
+            _ => None,
+        });
 
         Some(ScrollbarContent {
-            axes: Some(scrollbar_axes),
+            show_horizontal,
+            show_vertical,
             ..Default::default()
         })
     }
@@ -458,14 +456,6 @@ impl VsCodeSettings {
             max_width_columns: self
                 .read_u32("editor.minimap.maxColumn")
                 .and_then(|v| NonZeroU32::new(v)),
-            ..Default::default()
-        })
-    }
-
-    fn git_panel_settings_content(&self) -> Option<GitPanelSettingsContent> {
-        skip_default(GitPanelSettingsContent {
-            button: self.read_bool("git.enabled"),
-            fallback_branch_name: self.read_string("git.defaultBranchName"),
             ..Default::default()
         })
     }

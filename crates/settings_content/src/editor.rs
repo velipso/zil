@@ -5,9 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 
-use crate::{
-    DelayMs, ShowScrollbar, serialize_f32_with_two_decimal_places,
-};
+use crate::{DelayMs, serialize_f32_with_two_decimal_places};
 
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -244,14 +242,14 @@ pub struct ToolbarContent {
 #[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Default)]
 pub struct ScrollbarContent {
-    /// When to show the scrollbar in the editor.
-    ///
-    /// Default: auto
-    pub show: Option<ShowScrollbar>,
-    /// Whether to show git diff indicators in the scrollbar.
+    /// Whether to show the horizontal scrollbar in the editor.
     ///
     /// Default: true
-    pub git_diff: Option<bool>,
+    pub show_horizontal: Option<bool>,
+    /// Whether to show the horizontal scrollbar in the editor.
+    ///
+    /// Default: true
+    pub show_vertical: Option<bool>,    
     /// Whether to show buffer search result indicators in the scrollbar.
     ///
     /// Default: true
@@ -268,8 +266,6 @@ pub struct ScrollbarContent {
     ///
     /// Default: true
     pub cursors: Option<bool>,
-    /// Forcefully enable or disable the scrollbar for each axis
-    pub axes: Option<ScrollbarAxesContent>,
 }
 
 /// Sticky scroll related settings
@@ -315,21 +311,6 @@ pub struct MinimapContent {
     ///
     /// Default: 80
     pub max_width_columns: Option<num::NonZeroU32>,
-}
-
-/// Forcefully enable or disable the scrollbar for each axis
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Default)]
-pub struct ScrollbarAxesContent {
-    /// When false, forcefully disables the horizontal scrollbar. Otherwise, obey other settings.
-    ///
-    /// Default: true
-    pub horizontal: Option<bool>,
-
-    /// When false, forcefully disables the vertical scrollbar. Otherwise, obey other settings.
-    ///
-    /// Default: true
-    pub vertical: Option<bool>,
 }
 
 /// Gutter related settings

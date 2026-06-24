@@ -21,8 +21,6 @@ use theme::ActiveTheme as _;
 
 use std::ops::Range;
 
-use crate::scrollbars::{ScrollbarAutoHide, ScrollbarVisibility, ShowScrollbar};
-
 const SCROLLBAR_HIDE_DELAY_INTERVAL: Duration = Duration::from_secs(1);
 const SCROLLBAR_HIDE_DURATION: Duration = Duration::from_millis(400);
 const SCROLLBAR_SHOW_DURATION: Duration = Duration::from_millis(50);
@@ -30,45 +28,6 @@ const SCROLLBAR_SHOW_DURATION: Duration = Duration::from_millis(50);
 pub const EDITOR_SCROLLBAR_WIDTH: Pixels = ScrollbarStyle::Editor.to_pixels();
 const SCROLLBAR_PADDING: Pixels = px(4.);
 const BORDER_WIDTH: Pixels = px(1.);
-
-pub mod scrollbars {
-    use gpui::{App, Global};
-    use schemars::JsonSchema;
-    use serde::{Deserialize, Serialize};
-
-    /// When to show the scrollbar in the editor.
-    ///
-    /// Default: auto
-    #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-    #[serde(rename_all = "snake_case")]
-    pub enum ShowScrollbar {
-        /// Show the scrollbar if there's important information or
-        /// follow the system's configured behavior.
-        #[default]
-        Auto,
-        /// Match the system's configured behavior.
-        System,
-        /// Always show the scrollbar.
-        Always,
-        /// Never show the scrollbar.
-        Never,
-    }
-
-    pub trait ScrollbarVisibility: 'static {
-        fn visibility(&self, cx: &App) -> ShowScrollbar;
-    }
-
-    #[derive(Default)]
-    pub struct ScrollbarAutoHide(pub bool);
-
-    impl ScrollbarAutoHide {
-        pub fn should_hide(&self) -> bool {
-            self.0
-        }
-    }
-
-    impl Global for ScrollbarAutoHide {}
-}
 
 fn get_scrollbar_state<T>(
     mut config: Scrollbars<T>,
@@ -85,7 +44,7 @@ where
 
     let state = window.use_keyed_state(element_id, cx, |_, cx| {
         let parent_id = cx.entity_id();
-        ScrollbarStateWrapper(cx.new(|cx| ScrollbarState::new_from_config(config, parent_id, cx)))
+        ScrollbarStateWrapper(cx.new(|cx| ScrollbarState::new(config, parent_id, cx)))
     });
 
     state.update(cx, |state, cx| {
@@ -243,59 +202,6 @@ impl<T: ScrollableHandle> UniformListDecoration for ScrollbarStateWrapper<T> {
     }
 }
 
-// impl WithScrollbar for UniformList {
-//     type Output = Self;
-
-//     #[track_caller]
-//     fn custom_scrollbars<S, T>(
-//         self,
-//         config: Scrollbars<S, T>,
-//         window: &mut Window,
-//         cx: &mut App,
-//     ) -> Self::Output
-//     where
-//         S: ScrollbarVisibilitySetting,
-//         T: ScrollableHandle,
-//     {
-//         let scrollbar = get_scrollbar_state(config, std::panic::Location::caller(), window, cx);
-//         self.when_some(
-//             scrollbar.read_with(cx, |wrapper, cx| {
-//                 wrapper
-//                     .0
-//                     .read(cx)
-//                     .handle_to_track::<UniformListScrollHandle>()
-//                     .cloned()
-//             }),
-//             |this, handle| this.track_scroll(handle),
-//         )
-//         .with_decoration(scrollbar)
-//     }
-// }
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum ShowBehavior {
-    Always,
-    Autohide,
-    Never,
-}
-
-impl ShowBehavior {
-    fn from_setting(setting: ShowScrollbar, cx: &mut App) -> Self {
-        match setting {
-            ShowScrollbar::Never => Self::Never,
-            ShowScrollbar::Auto => Self::Autohide,
-            ShowScrollbar::System => {
-                if cx.default_global::<ScrollbarAutoHide>().should_hide() {
-                    Self::Autohide
-                } else {
-                    Self::Always
-                }
-            }
-            ShowScrollbar::Always => Self::Always,
-        }
-    }
-}
-
 pub enum ScrollAxes {
     Horizontal,
     Vertical,
@@ -367,7 +273,6 @@ impl ScrollbarStyle {
 #[derive(Clone)]
 pub struct Scrollbars<T: ScrollableHandle = ScrollHandle> {
     id: Option<ElementId>,
-    get_visibility: fn(&App) -> ShowScrollbar,
     tracked_entity: Option<Option<EntityId>>,
     scrollable_handle: Handle<T>,
     visibility: Point<ReservedSpace>,
@@ -378,23 +283,8 @@ pub struct Scrollbars<T: ScrollableHandle = ScrollHandle> {
 
 impl Scrollbars {
     pub fn new(show_along: ScrollAxes) -> Self {
-        Self::new_with_setting(show_along, |_| ShowScrollbar::default())
-    }
-
-    pub fn always_visible(show_along: ScrollAxes) -> Self {
-        Self::new_with_setting(show_along, |_| ShowScrollbar::Always)
-    }
-
-    pub fn for_settings<S: ScrollbarVisibility + Default>() -> Scrollbars {
-        Scrollbars::new_with_setting(ScrollAxes::Both, |cx| S::default().visibility(cx))
-    }
-}
-
-impl Scrollbars {
-    fn new_with_setting(show_along: ScrollAxes, get_visibility: fn(&App) -> ShowScrollbar) -> Self {
         Self {
             id: None,
-            get_visibility,
             scrollable_handle: Handle::Untracked(ScrollHandle::new),
             tracked_entity: None,
             visibility: show_along.apply_to(Default::default(), ReservedSpace::Thumb),
@@ -438,7 +328,6 @@ impl<ScrollHandle: ScrollableHandle> Scrollbars<ScrollHandle> {
             id,
             tracked_entity: tracked_entity_id,
             visibility,
-            get_visibility,
             track_color,
             border,
             style,
@@ -452,7 +341,6 @@ impl<ScrollHandle: ScrollableHandle> Scrollbars<ScrollHandle> {
             visibility,
             track_color,
             border,
-            get_visibility,
             style,
         }
     }
@@ -502,14 +390,6 @@ enum AnimationState {
 const DELTA_MAX: f32 = 1.0;
 
 impl VisibilityState {
-    fn from_behavior(behavior: ShowBehavior) -> Self {
-        match behavior {
-            ShowBehavior::Always => Self::Visible,
-            ShowBehavior::Never => Self::Disabled,
-            ShowBehavior::Autohide => Self::for_show(),
-        }
-    }
-
     fn for_show() -> Self {
         Self::Animating {
             showing: true,
@@ -568,15 +448,9 @@ impl VisibilityState {
         }
     }
 
-    fn toggle_visible(&self, show_behavior: ShowBehavior) -> Self {
+    fn toggle_visible(&self) -> Self {
         match self {
-            Self::Hidden | Self::ThumbHidden => {
-                if show_behavior == ShowBehavior::Autohide {
-                    Self::for_show()
-                } else {
-                    Self::Visible
-                }
-            }
+            Self::Hidden | Self::ThumbHidden => Self::for_show(),
             Self::Animating {
                 showing: false,
                 delta: progress,
@@ -602,16 +476,6 @@ struct TrackColors {
     has_border: bool,
 }
 
-pub fn on_new_scrollbars<T: gpui::Global>(cx: &mut App) {
-    cx.observe_new::<ScrollbarState>(|_, window, cx| {
-        if let Some(window) = window {
-            cx.observe_global_in::<T>(window, ScrollbarState::settings_changed)
-                .detach();
-        }
-    })
-    .detach();
-}
-
 /// This is used to ensure notifies within the state do not notify the parent
 /// unintentionally.
 struct ScrollbarStateWrapper<T: ScrollableHandle>(Entity<ScrollbarState<T>>);
@@ -622,8 +486,6 @@ struct ScrollbarState<T: ScrollableHandle = ScrollHandle> {
     notify_id: Option<EntityId>,
     manually_added: bool,
     scroll_handle: T,
-    show_behavior: ShowBehavior,
-    get_visibility: fn(&App) -> ShowScrollbar,
     visibility: Point<ReservedSpace>,
     track_color: Option<TrackColors>,
     show_state: VisibilityState,
@@ -634,13 +496,12 @@ struct ScrollbarState<T: ScrollableHandle = ScrollHandle> {
 }
 
 impl<T: ScrollableHandle> ScrollbarState<T> {
-    fn new_from_config(config: Scrollbars<T>, parent_id: EntityId, cx: &mut Context<Self>) -> Self {
+    fn new(config: Scrollbars<T>, parent_id: EntityId, _cx: &mut Context<Self>) -> Self {
         let (manually_added, scroll_handle) = match config.scrollable_handle {
             Handle::Tracked(handle) => (true, handle),
             Handle::Untracked(func) => (false, func()),
         };
 
-        let show_behavior = ShowBehavior::from_setting((config.get_visibility)(cx), cx);
         ScrollbarState {
             thumb_state: Default::default(),
             notify_id: config.tracked_entity.map(|id| id.unwrap_or(parent_id)),
@@ -651,28 +512,18 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
                 background: color,
                 has_border: config.border,
             }),
-            show_behavior,
-            get_visibility: config.get_visibility,
             style: config.style.unwrap_or_default(),
-            show_state: VisibilityState::from_behavior(show_behavior),
+            show_state: VisibilityState::for_show(),
             mouse_in_parent: true,
             last_prepaint_state: None,
             _auto_hide_task: None,
         }
     }
 
-    fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_show_behavior(
-            ShowBehavior::from_setting((self.get_visibility)(cx), cx),
-            window,
-            cx,
-        );
-    }
-
     /// Schedules a scrollbar auto hide if no auto hide is currently in progress yet.
     fn schedule_auto_hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self._auto_hide_task.is_none() {
-            self._auto_hide_task = (self.visible() && self.show_behavior == ShowBehavior::Autohide)
+            self._auto_hide_task = self.visible()
                 .then(|| {
                     cx.spawn_in(window, async move |scrollbar_state, cx| {
                         cx.background_executor()
@@ -692,24 +543,10 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
     }
 
     fn show_scrollbars(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let visibility = self.show_state.toggle_visible(self.show_behavior);
+        let visibility = self.show_state.toggle_visible();
         self.set_visibility(visibility, cx);
         self._auto_hide_task.take();
         self.schedule_auto_hide(window, cx);
-    }
-
-    fn set_show_behavior(
-        &mut self,
-        behavior: ShowBehavior,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.show_behavior != behavior {
-            self.show_behavior = behavior;
-            self.set_visibility(VisibilityState::from_behavior(behavior), cx);
-            self.schedule_auto_hide(window, cx);
-            cx.notify();
-        }
     }
 
     fn set_visibility(&mut self, visibility: VisibilityState, cx: &mut Context<Self>) {
@@ -801,7 +638,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
             if state == ThumbState::Inactive {
                 self.schedule_auto_hide(window, cx);
             } else {
-                self.set_visibility(self.show_state.toggle_visible(self.show_behavior), cx);
+                self.set_visibility(self.show_state.toggle_visible(), cx);
                 self._auto_hide_task.take();
             }
             self.thumb_state = state;

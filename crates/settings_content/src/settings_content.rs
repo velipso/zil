@@ -133,8 +133,6 @@ pub struct SettingsContent {
     /// Settings related to the file finder.
     pub file_finder: Option<FileFinderSettingsContent>,
 
-    pub git_panel: Option<GitPanelSettingsContent>,
-
     pub tabs: Option<ItemSettingsContent>,
     pub tab_bar: Option<TabBarSettingsContent>,
     pub status_bar: Option<StatusBarSettingsContent>,
@@ -558,86 +556,6 @@ pub struct CallSettingsContent {
     pub share_on_join: Option<bool>,
 }
 
-#[with_fallible_options]
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
-pub struct GitPanelSettingsContent {
-    /// Whether to show the panel button in the status bar.
-    ///
-    /// Default: true
-    pub button: Option<bool>,
-    /// Where to dock the panel.
-    ///
-    /// Default: right
-    pub dock: Option<DockPosition>,
-    /// Default width of the panel in pixels.
-    ///
-    /// Default: 360
-    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
-    pub default_width: Option<f32>,
-    /// How entry statuses are displayed.
-    ///
-    /// Default: icon
-    pub status_style: Option<StatusStyle>,
-
-    /// Whether to show file icons in the git panel.
-    ///
-    /// Default: false
-    pub file_icons: Option<bool>,
-
-    /// Whether to show folder icons or chevrons for directories in the git panel.
-    ///
-    /// Default: true
-    pub folder_icons: Option<bool>,
-
-    /// How and when the scrollbar should be displayed.
-    ///
-    /// Default: inherits editor scrollbar settings
-    pub scrollbar: Option<ScrollbarSettings>,
-
-    /// What the default branch name should be when
-    /// `init.defaultBranch` is not set in git
-    ///
-    /// Default: main
-    pub fallback_branch_name: Option<String>,
-
-    /// Whether to sort entries in the panel by path
-    /// or by status (the default).
-    ///
-    /// Default: false
-    pub sort_by_path: Option<bool>,
-
-    /// Whether to collapse untracked files in the diff panel.
-    ///
-    /// Default: false
-    pub collapse_untracked_diff: Option<bool>,
-
-    /// Whether to show entries with tree or flat view in the panel
-    ///
-    /// Default: false
-    pub tree_view: Option<bool>,
-
-    /// Whether to show the addition/deletion change count next to each file in the Git panel.
-    ///
-    /// Default: true
-    pub diff_stats: Option<bool>,
-
-    /// Whether to show a badge on the git panel icon with the count of uncommitted changes.
-    ///
-    /// Default: false
-    pub show_count_badge: Option<bool>,
-
-    /// Whether the git panel should open on startup.
-    ///
-    /// Default: false
-    pub starts_open: Option<bool>,
-
-    /// Maximum length of the commit message title before a warning is shown.
-    /// Set to 0 to disable.
-    ///
-    /// Default: 72
-    pub commit_title_max_length: Option<usize>,
-}
-
 #[derive(
     Default,
     Copy,
@@ -657,45 +575,6 @@ pub enum StatusStyle {
     #[default]
     Icon,
     LabelColor,
-}
-
-#[with_fallible_options]
-#[derive(
-    Copy, Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq,
-)]
-pub struct ScrollbarSettings {
-    pub show: Option<ShowScrollbar>,
-}
-
-/// When to show the scrollbar.
-///
-/// Default: auto
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ShowScrollbar {
-    /// Show the scrollbar if there's important information or
-    /// follow the system's configured behavior.
-    #[default]
-    Auto,
-    /// Match the system's configured behavior.
-    System,
-    /// Always show the scrollbar.
-    Always,
-    /// Never show the scrollbar.
-    Never,
 }
 
 #[with_fallible_options]

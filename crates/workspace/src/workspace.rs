@@ -219,8 +219,6 @@ actions!(
         ToggleAllDocks,
         /// Closes the current window.
         CloseWindow,
-        /// Closes the current project.
-        CloseProject,
         /// Moves the focused panel to the next position.
         MoveFocusedPanelToNextPosition,
         /// Creates a new file.

@@ -540,23 +540,12 @@
   },
   // Scrollbar related settings
   "scrollbar": {
-    // When to show the scrollbar in the editor.
-    // This setting can take four values:
-    //
-    // 1. Show the scrollbar if there's important information or
-    //    follow the system's configured behavior (default):
-    //   "auto"
-    // 2. Match the system's configured behavior:
-    //    "system"
-    // 3. Always show the scrollbar:
-    //    "always"
-    // 4. Never show the scrollbar:
-    //    "never"
-    "show": "auto",
+    // Whether to show the horizontal scrollbar in the editor.
+    "show_horizontal": true,
+    // Whether to show the vertical scrollbar in the editor.
+    "show_vertical": true,    
     // Whether to show cursor positions in the scrollbar.
     "cursors": true,
-    // Whether to show git diff indicators in the scrollbar.
-    "git_diff": true,
     // Whether to show buffer search results in the scrollbar.
     "search_results": true,
     // Whether to show selected text occurrences in the scrollbar.

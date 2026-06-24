@@ -10922,7 +10922,6 @@ dependencies = [
  "log",
  "menu",
  "num-format",
- "schemars",
  "serde",
  "smallvec",
  "strum",

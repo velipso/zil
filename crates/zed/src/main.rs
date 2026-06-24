@@ -377,7 +377,6 @@ fn main() {
         let mut languages = LanguageRegistry::new(cx.background_executor().clone());
         languages.set_language_server_download_dir(paths::languages_dir().clone());
         let languages = Arc::new(languages);
-        ui::on_new_scrollbars::<SettingsStore>(cx);
 
         languages::init(languages.clone(), fs.clone(), cx);
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));

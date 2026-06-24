@@ -1,6 +1,4 @@
 use core::num;
-
-use gpui::App;
 use language::CursorShape;
 pub use settings::{
     CurrentLineHighlight, DelayMs,
@@ -9,7 +7,6 @@ pub use settings::{
     ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
-use ui::scrollbars::ShowScrollbar;
 
 /// Imports from the VSCode settings at
 /// https://code.visualstudio.com/docs/reference/default-settings
@@ -61,13 +58,12 @@ pub struct Toolbar {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Scrollbar {
-    pub show: ShowScrollbar,
-    pub git_diff: bool,
+    pub show_horizontal: bool,
+    pub show_vertical: bool,
     pub selected_text: bool,
     pub selected_symbol: bool,
     pub search_results: bool,
     pub cursors: bool,
-    pub axes: ScrollbarAxes,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -154,7 +150,6 @@ impl Settings for EditorSettings {
         let scrollbar = editor.scrollbar.unwrap();
         let minimap = editor.minimap.unwrap();
         let gutter = editor.gutter.unwrap();
-        let axes = scrollbar.axes.unwrap();
         let toolbar = editor.toolbar.unwrap();
         let search = editor.search.unwrap();
         let drag_and_drop_selection = editor.drag_and_drop_selection.unwrap();
@@ -174,23 +169,12 @@ impl Settings for EditorSettings {
                 code_actions: toolbar.code_actions.unwrap(),
             },
             scrollbar: Scrollbar {
-                show: scrollbar.show.map(ui_scrollbar_settings_from_raw).unwrap(),
-                git_diff: scrollbar.git_diff.unwrap()
-                    && content
-                        .git
-                        .as_ref()
-                        .unwrap()
-                        .enabled
-                        .unwrap()
-                        .is_git_diff_enabled(),
+                show_horizontal: scrollbar.show_horizontal.unwrap(),
+                show_vertical: scrollbar.show_vertical.unwrap(),
                 selected_text: scrollbar.selected_text.unwrap(),
                 selected_symbol: scrollbar.selected_symbol.unwrap(),
                 search_results: scrollbar.search_results.unwrap(),
                 cursors: scrollbar.cursors.unwrap(),
-                axes: ScrollbarAxes {
-                    horizontal: axes.horizontal.unwrap(),
-                    vertical: axes.vertical.unwrap(),
-                },
             },
             minimap: Minimap {
                 show: minimap.show.unwrap(),
@@ -235,25 +219,5 @@ impl Settings for EditorSettings {
             lsp_document_colors: editor.lsp_document_colors.unwrap(),
             minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,
         }
-    }
-}
-
-#[derive(Default)]
-pub struct EditorSettingsScrollbarProxy;
-
-impl ui::scrollbars::ScrollbarVisibility for EditorSettingsScrollbarProxy {
-    fn visibility(&self, cx: &App) -> ShowScrollbar {
-        EditorSettings::get_global(cx).scrollbar.show
-    }
-}
-
-pub fn ui_scrollbar_settings_from_raw(
-    value: settings::ShowScrollbar,
-) -> ui::scrollbars::ShowScrollbar {
-    match value {
-        settings::ShowScrollbar::Auto => ShowScrollbar::Auto,
-        settings::ShowScrollbar::System => ShowScrollbar::System,
-        settings::ShowScrollbar::Always => ShowScrollbar::Always,
-        settings::ShowScrollbar::Never => ShowScrollbar::Never,
     }
 }

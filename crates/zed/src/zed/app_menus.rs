@@ -116,7 +116,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                         save_intent: None,
                     },
                 ),
-                MenuItem::action("Close Project", workspace::CloseProject),
                 MenuItem::action("Close Window", workspace::CloseWindow),
             ],
         },

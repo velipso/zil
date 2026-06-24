@@ -19,7 +19,7 @@ use crate::{
     },
     editor_settings::{
         CurrentLineHighlight, DocumentColorsRenderMode, Minimap, MinimapThumb, MinimapThumbBorder,
-        ScrollBeyondLastLine, ScrollbarAxes, ShowMinimap,
+        ScrollBeyondLastLine, ShowMinimap,
     },
     scroll::{
         ActiveScrollbarState, ScrollOffset, ScrollPixelOffset, ScrollbarThumbState,
@@ -68,7 +68,7 @@ use sum_tree::Bias;
 use text::BufferId;
 use theme::{ActiveTheme, Appearance, PlayerColor};
 use ui::utils::ensure_minimum_contrast;
-use ui::{ButtonLike, prelude::*, scrollbars::ShowScrollbar};
+use ui::{ButtonLike, prelude::*};
 use unicode_segmentation::UnicodeSegmentation;
 use util::{ResultExt, debug_panic};
 use workspace::{
@@ -996,10 +996,7 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<EditorScrollbars> {
-        let show_scrollbars = self.editor.read(cx).show_scrollbars;
-        if (!show_scrollbars.horizontal && !show_scrollbars.vertical)
-            || self.style.scrollbar_width.is_zero()
-        {
+        if !self.editor.read(cx).mode.could_have_scrollbars() || self.style.scrollbar_width.is_zero() {
             return None;
         }
 
@@ -1013,28 +1010,23 @@ impl EditorElement {
 
         let editor_settings = EditorSettings::get_global(cx);
         let scrollbar_settings = editor_settings.scrollbar;
-        let show_scrollbars = match scrollbar_settings.show {
-            ShowScrollbar::Auto => {
-                let editor = self.editor.read(cx);
-                let is_singleton = editor.buffer_kind(cx) == ItemBufferKind::Singleton;
-                // Buffer Search Results
-                (is_singleton && scrollbar_settings.search_results && editor.has_background_highlights(HighlightKey::BufferSearchHighlights))
-                ||
-                // Selected Text Occurrences
-                (is_singleton && scrollbar_settings.selected_text && editor.has_background_highlights(HighlightKey::SelectedTextHighlight))
-                ||
-                // Selected Symbol Occurrences
-                (is_singleton && scrollbar_settings.selected_symbol && (editor.has_background_highlights(HighlightKey::DocumentHighlightRead) || editor.has_background_highlights(HighlightKey::DocumentHighlightWrite)))
-                ||
-                // Cursors out of sight
-                non_visible_cursors
-                ||
-                // Scrollmanager
-                editor.scroll_manager.scrollbars_visible()
-            }
-            ShowScrollbar::System => self.editor.read(cx).scroll_manager.scrollbars_visible(),
-            ShowScrollbar::Always => true,
-            ShowScrollbar::Never => return None,
+        let show_scrollbars = {
+            let editor = self.editor.read(cx);
+            let is_singleton = editor.buffer_kind(cx) == ItemBufferKind::Singleton;
+            // Buffer Search Results
+            (is_singleton && scrollbar_settings.search_results && editor.has_background_highlights(HighlightKey::BufferSearchHighlights))
+            ||
+            // Selected Text Occurrences
+            (is_singleton && scrollbar_settings.selected_text && editor.has_background_highlights(HighlightKey::SelectedTextHighlight))
+            ||
+            // Selected Symbol Occurrences
+            (is_singleton && scrollbar_settings.selected_symbol && (editor.has_background_highlights(HighlightKey::DocumentHighlightRead) || editor.has_background_highlights(HighlightKey::DocumentHighlightWrite)))
+            ||
+            // Cursors out of sight
+            non_visible_cursors
+            ||
+            // Scrollmanager
+            editor.scroll_manager.scrollbars_visible()
         };
 
         // The horizontal scrollbar is usually slightly offset to align nicely with
@@ -1050,10 +1042,8 @@ impl EditorElement {
 
         Some(EditorScrollbars::from_scrollbar_axes(
             ScrollbarAxes {
-                horizontal: scrollbar_settings.axes.horizontal
-                    && self.editor.read(cx).show_scrollbars.horizontal,
-                vertical: scrollbar_settings.axes.vertical
-                    && self.editor.read(cx).show_scrollbars.vertical,
+                horizontal: scrollbar_settings.show_horizontal,
+                vertical: scrollbar_settings.show_vertical,
             },
             scrollbar_layout_information,
             content_offset,
@@ -1215,17 +1205,12 @@ impl EditorElement {
     fn get_minimap_width(
         &self,
         minimap_settings: &Minimap,
-        scrollbars_shown: bool,
         text_width: Pixels,
         em_width: Pixels,
         font_size: Pixels,
         rem_size: Pixels,
         cx: &App,
     ) -> Option<Pixels> {
-        if minimap_settings.show == ShowMinimap::Auto && !scrollbars_shown {
-            return None;
-        }
-
         let minimap_font_size = self.editor.read_with(cx, |editor, cx| {
             editor.minimap().map(|minimap_editor| {
                 minimap_editor
@@ -3276,7 +3261,6 @@ impl EditorElement {
                             editor.set_scroll_position(position, window, cx);
                         }
 
-                        editor.scroll_manager.show_scrollbars(window, cx);
                         cx.stop_propagation();
                     } else if let Some((layout, axis)) = scrollbars_layout
                         .get_hovered_axis(window)
@@ -3289,8 +3273,6 @@ impl EditorElement {
                         } else {
                             editor.scroll_manager.reset_scrollbar_state(cx);
                         }
-
-                        editor.scroll_manager.show_scrollbars(window, cx);
                     } else {
                         editor.scroll_manager.reset_scrollbar_state(cx);
                     }
@@ -3367,8 +3349,6 @@ impl EditorElement {
                                 .apply_along(axis, |_| start_position as ScrollOffset);
 
                             editor.set_scroll_position(position, window, cx);
-                        } else {
-                            editor.scroll_manager.show_scrollbars(window, cx);
                         }
 
                         cx.stop_propagation();
@@ -4979,6 +4959,7 @@ impl Element for EditorElement {
             ..Default::default()
         };
 
+        let could_have_scrollbars = self.editor.read(cx).mode.could_have_scrollbars();
         let is_minimap = self.editor.read(cx).mode.is_minimap();
         let is_singleton = self.editor.read(cx).buffer_kind(cx) == ItemBufferKind::Singleton;
 
@@ -5011,16 +4992,13 @@ impl Element for EditorElement {
                     let text_width = bounds.size.width - gutter_dimensions.width;
 
                     let settings = EditorSettings::get_global(cx);
-                    let scrollbars_shown = settings.scrollbar.show != ShowScrollbar::Never;
-                    let vertical_scrollbar_width = (scrollbars_shown
-                        && settings.scrollbar.axes.vertical
-                        && self.editor.read(cx).show_scrollbars.vertical)
+                    let vertical_scrollbar_width = (could_have_scrollbars
+                        && settings.scrollbar.show_vertical)
                         .then_some(style.scrollbar_width)
                         .unwrap_or_default();
                     let minimap_width = self
                         .get_minimap_width(
                             &settings.minimap,
-                            scrollbars_shown,
                             text_width,
                             em_width,
                             font_size,
@@ -6121,6 +6099,11 @@ struct ColoredRange<T> {
     color: Hsla,
 }
 
+struct ScrollbarAxes {
+    horizontal: bool,
+    vertical: bool,
+}
+
 impl Along for ScrollbarAxes {
     type Unit = bool;
 
@@ -6216,8 +6199,8 @@ impl EditorScrollbars {
         };
 
         Self {
-            vertical: create_scrollbar_layout(ScrollbarAxis::Vertical),
             horizontal: create_scrollbar_layout(ScrollbarAxis::Horizontal),
+            vertical: create_scrollbar_layout(ScrollbarAxis::Vertical),
             visible: show_scrollbars,
         }
     }

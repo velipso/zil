@@ -21,12 +21,9 @@ use std::{
     cmp::Ordering,
     time::{Duration, Instant},
 };
-use ui::scrollbars::ScrollbarAutoHide;
-use util::ResultExt;
 use workspace::WorkspaceId;
 
 pub const SCROLL_EVENT_SEPARATION: Duration = Duration::from_millis(28);
-const SCROLLBAR_SHOW_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct WasScrolled(pub(crate) bool);
 
@@ -220,7 +217,6 @@ pub struct ScrollManager {
         AutoscrollStrategy,
     )>,
     show_scrollbars: bool,
-    hide_scrollbar_task: Option<Task<()>>,
     active_scrollbar: Option<ActiveScrollbarState>,
     visible_line_count: Option<f64>,
     visible_column_count: Option<f64>,
@@ -243,7 +239,6 @@ impl ScrollManager {
             ongoing: OngoingScroll::new(),
             autoscroll_request: None,
             show_scrollbars: true,
-            hide_scrollbar_task: None,
             active_scrollbar: None,
             last_autoscroll: None,
             visible_line_count: None,
@@ -493,29 +488,6 @@ impl ScrollManager {
         cx.notify();
 
         WasScrolled(true)
-    }
-
-    pub fn show_scrollbars(&mut self, window: &mut Window, cx: &mut Context<Editor>) {
-        if !self.show_scrollbars {
-            self.show_scrollbars = true;
-            cx.notify();
-        }
-
-        if cx.default_global::<ScrollbarAutoHide>().should_hide() {
-            self.hide_scrollbar_task = Some(cx.spawn_in(window, async move |editor, cx| {
-                cx.background_executor()
-                    .timer(SCROLLBAR_SHOW_INTERVAL)
-                    .await;
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.scroll_manager.show_scrollbars = false;
-                        cx.notify();
-                    })
-                    .log_err();
-            }));
-        } else {
-            self.hide_scrollbar_task = None;
-        }
     }
 
     pub fn scrollbars_visible(&self) -> bool {

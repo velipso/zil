@@ -53,8 +53,8 @@ pub use display_map::{
 };
 pub use editor_settings::{
     CurrentLineHighlight,
-    DocumentColorsRenderMode, EditorSettings, EditorSettingsScrollbarProxy, ScrollBeyondLastLine,
-    ScrollbarAxes, SearchSettings, ShowMinimap, ui_scrollbar_settings_from_raw,
+    DocumentColorsRenderMode, EditorSettings, ScrollBeyondLastLine,
+    ScrollbarAxes, SearchSettings, ShowMinimap,
 };
 pub use element::{
     CursorLayout, EditorElement, HighlightedRange, HighlightedRangeLine, PointForPosition,
@@ -154,10 +154,7 @@ use theme::{
     ActiveTheme, GlobalTheme, PlayerColor, StatusColors, SyntaxTheme, Theme,
 };
 use theme_settings::{ThemeSettings, observe_buffer_font_size_adjustment};
-use ui::{
-    ContextMenu, Disclosure,
-    prelude::*, scrollbars::ScrollbarAutoHide,
-};
+use ui::{ContextMenu, Disclosure, prelude::*};
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, maybe, post_inc};
 use workspace::{
@@ -355,6 +352,11 @@ impl EditorMode {
     }
 
     #[inline]
+    pub fn is_auto_height(&self) -> bool {
+        matches!(self, Self::AutoHeight { .. })
+    }
+
+    #[inline]
     pub fn is_single_line(&self) -> bool {
         matches!(self, Self::SingleLine { .. })
     }
@@ -362,6 +364,11 @@ impl EditorMode {
     #[inline]
     fn is_minimap(&self) -> bool {
         matches!(self, Self::Minimap { .. })
+    }
+
+    #[inline]
+    fn could_have_scrollbars(&self) -> bool {
+        self.is_full()
     }
 }
 
@@ -772,7 +779,6 @@ pub struct Editor {
     mode: EditorMode,
     breadcrumbs_visibility: BreadcrumbsVisibility,
     show_gutter: bool,
-    show_scrollbars: ScrollbarAxes,
     minimap_visibility: MinimapVisibility,
     offset_content: bool,
     disable_expand_excerpt_buttons: bool,
@@ -1762,10 +1768,6 @@ impl Editor {
             project,
             blink_manager: blink_manager.clone(),
             show_local_selections: true,
-            show_scrollbars: ScrollbarAxes {
-                horizontal: full_mode,
-                vertical: full_mode,
-            },
             minimap_visibility: MinimapVisibility::for_mode(&mode, cx),
             offset_content: !matches!(mode, EditorMode::SingleLine),
             breadcrumbs_visibility: BreadcrumbsVisibility::from_settings(cx),
@@ -1957,12 +1959,7 @@ impl Editor {
         editor.end_selection(window, cx);
         editor.selection_history.mode = SelectionHistoryMode::Normal;
 
-        editor.scroll_manager.show_scrollbars(window, cx);
-
         if full_mode {
-            let should_auto_hide_scrollbars = cx.should_auto_hide_scrollbars();
-            cx.set_global(ScrollbarAutoHide(should_auto_hide_scrollbars));
-
             editor.minimap =
                 editor.create_minimap(EditorSettings::get_global(cx).minimap, window, cx);
             editor.colors = Some(LspColorData::new(cx));

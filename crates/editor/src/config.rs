@@ -77,9 +77,14 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut editor_settings = EditorSettings::get_global(cx).clone();
-        editor_settings.gutter.line_numbers = !editor_settings.gutter.line_numbers;
-        EditorSettings::override_global(editor_settings, cx);
+       let fs = <dyn fs::Fs>::global(cx);
+
+        settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
+            let gutter = content.editor.gutter.get_or_insert_default();
+            gutter.line_numbers = Some(!gutter.line_numbers.unwrap_or(true));
+        });
+
+        cx.notify();
     }
 
     pub fn line_numbers_enabled(&self, cx: &App) -> bool {
@@ -108,16 +113,6 @@ impl Editor {
 
     pub fn set_show_gutter(&mut self, show_gutter: bool, cx: &mut Context<Self>) {
         self.show_gutter = show_gutter;
-        cx.notify();
-    }
-
-    pub fn set_show_vertical_scrollbar(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_scrollbars.vertical = show;
-        cx.notify();
-    }
-
-    pub fn set_show_horizontal_scrollbar(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_scrollbars.horizontal = show;
         cx.notify();
     }
 
@@ -163,11 +158,6 @@ impl Editor {
         self.set_breadcrumbs_visibility(self.breadcrumbs_visibility.toggle_visibility(), cx);
     }
 
-    pub fn disable_scrollbars_and_minimap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_show_scrollbars(false, cx);
-        self.set_minimap_visibility(MinimapVisibility::Disabled, window, cx);
-    }
-
     pub fn hide_minimap_by_default(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.set_minimap_visibility(self.minimap_visibility.hidden(), window, cx);
     }
@@ -190,14 +180,6 @@ impl Editor {
 
     pub fn disable_expand_excerpt_buttons(&mut self, cx: &mut Context<Self>) {
         self.disable_expand_excerpt_buttons = true;
-        cx.notify();
-    }
-
-    fn set_show_scrollbars(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_scrollbars = ScrollbarAxes {
-            horizontal: show,
-            vertical: show,
-        };
         cx.notify();
     }
 
