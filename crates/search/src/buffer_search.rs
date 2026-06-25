@@ -6,8 +6,8 @@ use crate::{
     ToggleCaseSensitive, ToggleRegex, ToggleReplace, ToggleSelection, ToggleWholeWord,
     buffer_search::registrar::WithResultsOrExternalQuery,
     search_bar::{
-        ActionButtonState, HistoryNavigationDirection, alignment_element,
-        filter_search_results_input, input_base_styles, render_action_button, render_text_input,
+        ActionButtonState, HistoryNavigationDirection,
+        input_base_styles, render_action_button, render_text_input,
         should_navigate_history,
     },
 };
@@ -115,7 +115,6 @@ impl Render for BufferSearchBar {
             replacement,
             selection,
             select_all,
-            find_in_results,
         } = self.supported_options(cx);
 
         self.query_editor.update(cx, |query_editor, cx| {
@@ -166,11 +165,7 @@ impl Render for BufferSearchBar {
         let input_base_styles =
             |border_color| input_base_styles(border_color, |div| div.w(input_width));
 
-        let input_style = if find_in_results {
-            filter_search_results_input(query_border, |div| div.w(input_width), cx)
-        } else {
-            input_base_styles(query_border)
-        };
+        let input_style = input_base_styles(query_border);
 
         let query_column = input_style
             .child(div().flex_1().min_w_0().py_1().child(render_text_input(
@@ -201,6 +196,44 @@ impl Render for BufferSearchBar {
                         ))
                     }),
             );
+
+        let query_focus = self.query_editor.focus_handle(cx);
+        let matches_column = h_flex()
+            .pl_2()
+            .ml_2()
+            .border_l_1()
+            .border_color(theme_colors.border_variant)
+            .child(render_action_button(
+                "buffer-search-nav-button",
+                ui::IconName::ChevronLeft,
+                self.active_match_index
+                    .is_none()
+                    .then_some(ActionButtonState::Disabled),
+                "Select Previous Match",
+                &SelectPreviousMatch,
+                query_focus.clone(),
+            ))
+            .child(render_action_button(
+                "buffer-search-nav-button",
+                ui::IconName::ChevronRight,
+                self.active_match_index
+                    .is_none()
+                    .then_some(ActionButtonState::Disabled),
+                "Select Next Match",
+                &SelectNextMatch,
+                query_focus.clone(),
+            ))
+            .when(!narrow_mode, |this| {
+                this.child(div().ml_2().min_w(rems_from_px(40.)).child(
+                    Label::new(match_text).size(LabelSize::Small).color(
+                        if self.active_match_index.is_some() {
+                            Color::Default
+                        } else {
+                            Color::Disabled
+                        },
+                    ),
+                ))
+            });
 
         let mode_column = h_flex()
             .gap_1()
@@ -243,72 +276,21 @@ impl Render for BufferSearchBar {
                     }),
                 )
             })
-            .when(!find_in_results, |el| {
-                let query_focus = self.query_editor.focus_handle(cx);
-                let matches_column = h_flex()
-                    .pl_2()
-                    .ml_2()
-                    .border_l_1()
-                    .border_color(theme_colors.border_variant)
-                    .child(render_action_button(
-                        "buffer-search-nav-button",
-                        ui::IconName::ChevronLeft,
-                        self.active_match_index
-                            .is_none()
-                            .then_some(ActionButtonState::Disabled),
-                        "Select Previous Match",
-                        &SelectPreviousMatch,
-                        query_focus.clone(),
-                    ))
-                    .child(render_action_button(
-                        "buffer-search-nav-button",
-                        ui::IconName::ChevronRight,
-                        self.active_match_index
-                            .is_none()
-                            .then_some(ActionButtonState::Disabled),
-                        "Select Next Match",
-                        &SelectNextMatch,
-                        query_focus.clone(),
-                    ))
-                    .when(!narrow_mode, |this| {
-                        this.child(div().ml_2().min_w(rems_from_px(40.)).child(
-                            Label::new(match_text).size(LabelSize::Small).color(
-                                if self.active_match_index.is_some() {
-                                    Color::Default
-                                } else {
-                                    Color::Disabled
-                                },
-                            ),
-                        ))
-                    });
-
-                el.when(select_all, |el| {
-                    el.child(render_action_button(
-                        "buffer-search-nav-button",
-                        IconName::SelectAll,
-                        Default::default(),
-                        "Select All Matches",
-                        &SelectAllMatches,
-                        query_focus.clone(),
-                    ))
-                })
-                .child(matches_column)
-            })
-            .when(find_in_results, |el| {
+            .when(select_all, |el| {
                 el.child(render_action_button(
-                    "buffer-search",
-                    IconName::Close,
+                    "buffer-search-nav-button",
+                    IconName::SelectAll,
                     Default::default(),
-                    "Close Search Bar",
-                    &Dismiss,
-                    focus_handle.clone(),
+                    "Select All Matches",
+                    &SelectAllMatches,
+                    query_focus.clone(),
                 ))
-            });
+            })
+            .child(matches_column);
 
         let search_line = h_flex()
             .w_full()
             .gap_2()
-            .when(find_in_results, |el| el.child(alignment_element()))
             .child(query_column)
             .child(mode_column);
 
@@ -366,7 +348,7 @@ impl Render for BufferSearchBar {
             h_flex()
                 .relative()
                 .child(search_line)
-                .when(!narrow_mode && !find_in_results, |this| {
+                .when(!narrow_mode, |this| {
                     this.child(
                         h_flex()
                             .absolute()
@@ -516,15 +498,10 @@ impl ToolbarItemView for BufferSearchBar {
                 self.active_searchable_item_subscriptions = Some(search_event_subscription);
             }
 
-            let is_project_search = searchable_item_handle.supported_options(cx).find_in_results;
             self.active_searchable_item = Some(searchable_item_handle);
             drop(self.update_matches(true, false, window, cx));
             if !self.is_dismissed() {
-                if is_project_search {
-                    self.dismiss(&Default::default(), window, cx);
-                } else {
-                    return ToolbarItemLocation::Secondary;
-                }
+                return ToolbarItemLocation::Secondary;
             }
         }
         ToolbarItemLocation::Hidden
@@ -574,29 +551,17 @@ impl BufferSearchBar {
         }));
         registrar.register_handler(WithResultsOrExternalQuery(
             |this, action: &SelectNextMatch, window, cx| {
-                if this.supported_options(cx).find_in_results {
-                    cx.propagate();
-                } else {
-                    this.select_next_match(action, window, cx);
-                }
+                this.select_next_match(action, window, cx);
             },
         ));
         registrar.register_handler(WithResultsOrExternalQuery(
             |this, action: &SelectPreviousMatch, window, cx| {
-                if this.supported_options(cx).find_in_results {
-                    cx.propagate();
-                } else {
-                    this.select_prev_match(action, window, cx);
-                }
+                this.select_prev_match(action, window, cx);
             },
         ));
         registrar.register_handler(WithResultsOrExternalQuery(
             |this, action: &SelectAllMatches, window, cx| {
-                if this.supported_options(cx).find_in_results {
-                    cx.propagate();
-                } else {
-                    this.select_all_matches(action, window, cx);
-                }
+                this.select_all_matches(action, window, cx);
             },
         ));
         registrar.register_handler(ForDeployed(
@@ -617,18 +582,10 @@ impl BufferSearchBar {
             this.deploy(deploy, None, window, cx);
         }));
         registrar.register_handler(ForDeployed(|this, _: &DeployReplace, window, cx| {
-            if this.supported_options(cx).find_in_results {
-                cx.propagate();
-            } else {
-                this.deploy(&Deploy::replace(), None, window, cx);
-            }
+            this.deploy(&Deploy::replace(), None, window, cx);
         }));
         registrar.register_handler(ForDismissed(|this, _: &DeployReplace, window, cx| {
-            if this.supported_options(cx).find_in_results {
-                cx.propagate();
-            } else {
-                this.deploy(&Deploy::replace(), None, window, cx);
-            }
+            this.deploy(&Deploy::replace(), None, window, cx);
         }));
         registrar.register_handler(ForDeployed(
             |this, action: &UseSelectionForFind, window, cx| {
@@ -3383,42 +3340,6 @@ mod tests {
         assert_eq!(
             events.try_recv().unwrap(),
             (ToolbarItemEvent::ChangeLocation(ToolbarItemLocation::PrimaryLeft))
-        );
-    }
-
-    #[perf]
-    #[gpui::test]
-    async fn test_hides_and_uses_secondary_when_part_of_project_search(cx: &mut TestAppContext) {
-        let (editor, search_bar, cx) = init_multibuffer_test(cx);
-
-        editor.update(cx, |editor, _| {
-            editor.set_in_project_search(true);
-        });
-
-        let initial_location = search_bar.update_in(cx, |search_bar, window, cx| {
-            search_bar.set_active_pane_item(Some(&editor), window, cx)
-        });
-
-        assert_eq!(initial_location, ToolbarItemLocation::Hidden);
-
-        let mut events = cx.events::<ToolbarItemEvent, BufferSearchBar>(&search_bar);
-
-        search_bar.update_in(cx, |search_bar, window, cx| {
-            search_bar.dismiss(&Dismiss, window, cx);
-        });
-
-        assert_eq!(
-            events.try_recv().unwrap(),
-            (ToolbarItemEvent::ChangeLocation(ToolbarItemLocation::Hidden))
-        );
-
-        search_bar.update_in(cx, |search_bar, window, cx| {
-            search_bar.show(window, cx);
-        });
-
-        assert_eq!(
-            events.try_recv().unwrap(),
-            (ToolbarItemEvent::ChangeLocation(ToolbarItemLocation::Secondary))
         );
     }
 

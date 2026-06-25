@@ -62,6 +62,7 @@ pub enum ToolbarItemLocation {
 }
 
 pub struct Toolbar {
+    top: bool,
     active_item: Option<Box<dyn ItemHandle>>,
     hidden: bool,
     can_navigate: bool,
@@ -125,7 +126,8 @@ impl Render for Toolbar {
             .when(has_left_items || has_right_items, |this| {
                 this.gap(DynamicSpacing::Base06.rems(cx))
             })
-            .border_b_1()
+            .when(self.top, |this| this.border_b_1())
+            .when(!self.top, |this| this.border_t_1())
             .border_color(cx.theme().colors().border_variant)
             .bg(cx.theme().colors().toolbar_background)
             .when(has_left_items || has_right_items, |this| {
@@ -160,15 +162,10 @@ impl Render for Toolbar {
     }
 }
 
-impl Default for Toolbar {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Toolbar {
-    pub fn new() -> Self {
+    pub fn new(top: bool) -> Self {
         Self {
+            top,
             active_item: None,
             items: Default::default(),
             hidden: false,

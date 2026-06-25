@@ -381,7 +381,8 @@ pub struct Pane {
     active_item_index: usize,
     last_focus_handle_by_item: HashMap<EntityId, WeakFocusHandle>,
     nav_history: NavHistory,
-    toolbar: Entity<Toolbar>,
+    toolbar_top: Entity<Toolbar>,
+    toolbar_bottom: Entity<Toolbar>,
     pub(crate) workspace: WeakEntity<Workspace>,
     project: WeakEntity<Project>,
     pub drag_split_direction: Option<SplitDirection>,
@@ -550,7 +551,8 @@ impl Pane {
                 pane: handle,
                 next_timestamp,
             }))),
-            toolbar: cx.new(|_| Toolbar::new()),
+            toolbar_top: cx.new(|_| Toolbar::new(true)),
+            toolbar_bottom: cx.new(|_| Toolbar::new(false)),
             tab_bar_scroll_handle: ScrollHandle::new(),
             suppress_scroll: false,
             drag_split_direction: None,
@@ -635,7 +637,10 @@ impl Pane {
             cx.notify();
         }
 
-        self.toolbar.update(cx, |toolbar, cx| {
+        self.toolbar_top.update(cx, |toolbar, cx| {
+            toolbar.focus_changed(true, window, cx);
+        });
+        self.toolbar_bottom.update(cx, |toolbar, cx| {
             toolbar.focus_changed(true, window, cx);
         });
 
@@ -673,7 +678,10 @@ impl Pane {
 
     fn focus_out(&mut self, _event: FocusOutEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.was_focused = false;
-        self.toolbar.update(cx, |toolbar, cx| {
+        self.toolbar_top.update(cx, |toolbar, cx| {
+            toolbar.focus_changed(false, window, cx);
+        });
+        self.toolbar_bottom.update(cx, |toolbar, cx| {
             toolbar.focus_changed(false, window, cx);
         });
 
@@ -739,7 +747,10 @@ impl Pane {
     }
 
     pub fn set_can_navigate(&mut self, can_navigate: bool, cx: &mut Context<Self>) {
-        self.toolbar.update(cx, |toolbar, cx| {
+        self.toolbar_top.update(cx, |toolbar, cx| {
+            toolbar.set_can_navigate(can_navigate, cx);
+        });
+        self.toolbar_bottom.update(cx, |toolbar, cx| {
             toolbar.set_can_navigate(can_navigate, cx);
         });
         cx.notify();
@@ -868,7 +879,8 @@ impl Pane {
     }
 
     fn history_updated(&mut self, cx: &mut Context<Self>) {
-        self.toolbar.update(cx, |_, cx| cx.notify());
+        self.toolbar_top.update(cx, |_, cx| cx.notify());
+        self.toolbar_bottom.update(cx, |_, cx| cx.notify());
     }
 
     pub(crate) fn open_item(
@@ -2235,8 +2247,12 @@ impl Pane {
         }
     }
 
-    pub fn toolbar(&self) -> &Entity<Toolbar> {
-        &self.toolbar
+    pub fn toolbar_top(&self) -> &Entity<Toolbar> {
+        &self.toolbar_top
+    }
+
+    pub fn toolbar_bottom(&self) -> &Entity<Toolbar> {
+        &self.toolbar_bottom
     }
 
     pub fn handle_deleted_project_item(
@@ -2266,7 +2282,10 @@ impl Pane {
             .items
             .get(self.active_item_index)
             .map(|item| item.as_ref());
-        self.toolbar.update(cx, |toolbar, cx| {
+        self.toolbar_top.update(cx, |toolbar, cx| {
+            toolbar.set_active_item(active_item, window, cx);
+        });
+        self.toolbar_bottom.update(cx, |toolbar, cx| {
             toolbar.set_active_item(active_item, window, cx);
         });
     }
@@ -3300,7 +3319,10 @@ impl Render for Pane {
             key_context.add("EmptyPane");
         }
 
-        self.toolbar
+        self.toolbar_top
+            .read(cx)
+            .contribute_context(&mut key_context, cx);
+        self.toolbar_bottom
             .read(cx)
             .contribute_context(&mut key_context, cx);
 
@@ -3474,8 +3496,9 @@ impl Render for Pane {
                                 .v_flex()
                                 .size_full()
                                 .overflow_hidden()
-                                .child(self.toolbar.clone())
+                                .child(self.toolbar_top.clone())
                                 .child(item.to_any_view())
+                                .child(self.toolbar_bottom.clone())
                         } else {
                             div.id("pane_placeholder")
                                 .h_flex()

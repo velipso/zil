@@ -1247,26 +1247,13 @@ impl SearchableItem for Editor {
     }
 
     fn supported_options(&self) -> SearchOptions {
-        if self.in_project_search {
-            SearchOptions {
-                case: true,
-                word: true,
-                regex: true,
-                replacement: false,
-                selection: false,
-                select_all: true,
-                find_in_results: true,
-            }
-        } else {
-            SearchOptions {
-                case: true,
-                word: true,
-                regex: true,
-                replacement: true,
-                selection: true,
-                select_all: true,
-                find_in_results: false,
-            }
+        SearchOptions {
+            case: true,
+            word: true,
+            regex: true,
+            replacement: true,
+            selection: true,
+            select_all: true,
         }
     }
 

@@ -57,7 +57,6 @@ pub struct SearchOptions {
     pub replacement: bool,
     pub selection: bool,
     pub select_all: bool,
-    pub find_in_results: bool,
 }
 
 // Whether to always select the current selection (even if empty)
@@ -81,7 +80,6 @@ pub trait SearchableItem: Item + EventEmitter<SearchEvent> {
             replacement: true,
             selection: true,
             select_all: true,
-            find_in_results: false,
         }
     }
 

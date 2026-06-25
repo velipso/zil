@@ -83,7 +83,7 @@ impl SearchActionsRegistrar for PaneDivRegistrar {
             div.on_action(move |action: &A, window: &mut Window, cx: &mut App| {
                 let search_bar = pane
                     .read(cx)
-                    .toolbar()
+                    .toolbar_bottom()
                     .read(cx)
                     .item_of_type::<BufferSearchBar>();
                 let should_notify = search_bar
@@ -121,7 +121,7 @@ impl SearchActionsRegistrar for Workspace {
             let pane = workspace.active_pane();
             let callback = callback.clone();
             pane.update(cx, |this, cx| {
-                this.toolbar().update(cx, move |this, cx| {
+                this.toolbar_bottom().update(cx, move |this, cx| {
                     if let Some(search_bar) = this.item_of_type::<BufferSearchBar>() {
                         let should_notify = search_bar.update(cx, move |search_bar, cx| {
                             callback.execute(search_bar, action, window, cx)

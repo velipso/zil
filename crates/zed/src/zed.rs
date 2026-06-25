@@ -850,19 +850,18 @@ fn initialize_pane(
     cx: &mut Context<Workspace>,
 ) {
     pane.update(cx, |pane, cx| {
-        pane.toolbar().update(cx, |toolbar, cx| {
+        let buffer_search_bar = cx.new(|cx| {
+            search::BufferSearchBar::new(
+                Some(workspace.project().read(cx).languages().clone()),
+                window,
+                cx,
+            )
+        });
+        pane.toolbar_top().update(cx, |toolbar, cx| {
             let breadcrumbs = cx.new(|_| Breadcrumbs::new());
             toolbar.add_item(breadcrumbs, window, cx);
-            let buffer_search_bar = cx.new(|cx| {
-                search::BufferSearchBar::new(
-                    Some(workspace.project().read(cx).languages().clone()),
-                    window,
-                    cx,
-                )
-            });
-            toolbar.add_item(buffer_search_bar.clone(), window, cx);
             let quick_action_bar =
-                cx.new(|cx| QuickActionBar::new(buffer_search_bar, cx));
+                cx.new(|cx| QuickActionBar::new(buffer_search_bar.clone(), cx));
             toolbar.add_item(quick_action_bar, window, cx);
             let lsp_log_item = cx.new(|_| LspLogToolbarItemView::new());
             toolbar.add_item(lsp_log_item, window, cx);
@@ -873,7 +872,10 @@ fn initialize_pane(
             toolbar.add_item(highlights_tree_item, window, cx);
             let image_view_toolbar = cx.new(|_| image_viewer::ImageViewToolbarControls::new());
             toolbar.add_item(image_view_toolbar, window, cx);
-        })
+        });
+        pane.toolbar_bottom().update(cx, |toolbar, cx| {
+            toolbar.add_item(buffer_search_bar, window, cx);
+        });
     });
 }
 
