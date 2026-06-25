@@ -43,7 +43,7 @@ use ui::{
 use util::{ResultExt, paths::PathMatcher};
 use workspace::{
     ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace,
-    item::{ItemBufferKind, ItemHandle},
+    item::ItemHandle,
     searchable::{
         Direction, FilteredSearchRange, SearchEvent, SearchToken, SearchableItemHandle,
         WeakSearchableItemHandle,
@@ -519,9 +519,7 @@ impl ToolbarItemView for BufferSearchBar {
             let is_project_search = searchable_item_handle.supported_options(cx).find_in_results;
             self.active_searchable_item = Some(searchable_item_handle);
             drop(self.update_matches(true, false, window, cx));
-            if self.needs_expand_collapse_option(cx) {
-                return ToolbarItemLocation::PrimaryLeft;
-            } else if !self.is_dismissed() {
+            if !self.is_dismissed() {
                 if is_project_search {
                     self.dismiss(&Default::default(), window, cx);
                 } else {
@@ -739,8 +737,6 @@ impl BufferSearchBar {
             }
         }
 
-        let needs_collapse_expand = self.needs_expand_collapse_option(cx);
-
         if let Some(active_editor) = self.active_searchable_item.as_mut() {
             self.selection_search_enabled = None;
             self.replace_enabled = false;
@@ -750,14 +746,6 @@ impl BufferSearchBar {
             self.focus(&handle, window, cx);
         }
 
-        if needs_collapse_expand {
-            cx.emit(Event::UpdateLocation);
-            cx.emit(ToolbarItemEvent::ChangeLocation(
-                ToolbarItemLocation::PrimaryLeft,
-            ));
-            cx.notify();
-            return;
-        }
         cx.emit(Event::UpdateLocation);
         cx.emit(ToolbarItemEvent::ChangeLocation(
             ToolbarItemLocation::Hidden,
@@ -850,13 +838,7 @@ impl BufferSearchBar {
         handle.search_bar_visibility_changed(true, window, cx);
         cx.notify();
         cx.emit(Event::UpdateLocation);
-        cx.emit(ToolbarItemEvent::ChangeLocation(
-            if self.needs_expand_collapse_option(cx) {
-                ToolbarItemLocation::PrimaryLeft
-            } else {
-                ToolbarItemLocation::Secondary
-            },
-        ));
+        cx.emit(ToolbarItemEvent::ChangeLocation(ToolbarItemLocation::Secondary));
         true
     }
 
@@ -865,25 +847,6 @@ impl BufferSearchBar {
             .as_ref()
             .map(|item| item.supported_options(cx))
             .unwrap_or_default()
-    }
-
-    // We provide an expand/collapse button if we are in a multibuffer
-    // and not doing a project search.
-    fn needs_expand_collapse_option(&self, cx: &App) -> bool {
-        if let Some(item) = &self.active_searchable_item {
-            let buffer_kind = item.buffer_kind(cx);
-
-            if buffer_kind == ItemBufferKind::Singleton {
-                return false;
-            }
-
-            let workspace::searchable::SearchOptions {
-                find_in_results, ..
-            } = item.supported_options(cx);
-            !find_in_results
-        } else {
-            false
-        }
     }
 
     fn toggle_fold_all(&mut self, _: &ToggleFoldAll, window: &mut Window, cx: &mut Context<Self>) {
