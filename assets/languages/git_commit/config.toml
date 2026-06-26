@@ -1,0 +1,16 @@
+name = "Git Commit"
+grammar = "git_commit"
+path_suffixes = [
+  "TAG_EDITMSG",
+  "MERGE_MSG",
+  "COMMIT_EDITMSG",
+  "NOTES_EDITMSG",
+  "EDIT_DESCRIPTION",
+]
+line_comments = ["# "]
+rewrap_prefixes = [
+    "[-*+]\\s+",
+    "\\d+\\.\\s+",
+    ">\\s*",
+    "[-*+]\\s+\\[[\\sx]\\]\\s+"
+]

@@ -1,0 +1,11 @@
+name = "C++"
+grammar = "cpp"
+path_suffixes = ["cc", "ccm", "hh", "cpp", "cppm", "h", "hpp", "cxx", "cxxm", "hxx", "c++", "c++m", "h++", "hip", "ipp", "inl", "ino", "ixx", "cu", "cuh", "C", "H"]
+modeline_aliases = ["c++", "cpp", "cxx"]
+line_comments = ["// ", "/// ", "//! "]
+first_line_pattern = '^//.*-\*-\s*C\+\+\s*-\*-'
+auto_indent_strings = ["{", "[", "("]
+auto_outdent_strings = ["}", "]", ")"]
+debuggers = ["CodeLLDB", "GDB"]
+block_comment = { start = "/*", prefix = "", end = "*/", tab_size = 1 }
+documentation_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }

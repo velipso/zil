@@ -111,6 +111,7 @@ struct Grammar {
     id: String,
     repository: String,
     commit: String,
+    src: Option<String>,
 }
 
 fn read_manifest(path: &Path) -> Result<GrammarManifest> {
@@ -157,7 +158,7 @@ fn build(clang_path: PathBuf, args: &BuildArgs) -> Result<()> {
         let grammar_wasm = output_dir.join(format!("{}.wasm", grammar.id));
         if !grammar_wasm.exists() {
             create_dir_all(&output_dir)?;
-            let src_dir = grammar_dir.join("src");
+            let src_dir = grammar_dir.join(grammar.src.unwrap_or("src".to_string()));
             let parser_c = src_dir.join("parser.c");
             let scanner_c = src_dir.join("scanner.c");
             println!("compiling {}", grammar.id);

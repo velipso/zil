@@ -1,7 +1,0 @@
-name = "CSS"
-grammar = "css"
-path_suffixes = ["css", "postcss", "pcss"]
-completion_query_characters = ["-", "@"]
-block_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
-prettier_parser_name = "css"
-word_characters = ["#"]

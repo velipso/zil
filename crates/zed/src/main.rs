@@ -376,7 +376,8 @@ fn main() {
         cx.set_http_client(client.http_client());
         let languages = LanguageRegistry::new(fs.clone(), cx.background_executor().clone());
         let languages = Arc::new(languages);
-        languages.clone().reload_languages_from_config(cx).detach();
+        let language_reload_task = languages.clone().reload_languages_from_config(cx);
+        cx.foreground_executor().block_on(language_reload_task);
 
         languages::init(languages.clone(), fs.clone(), cx);
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));

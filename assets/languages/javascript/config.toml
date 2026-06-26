@@ -1,0 +1,24 @@
+name = "JavaScript"
+grammar = "tsx"
+path_suffixes = ["js", "jsx", "mjs", "cjs"]
+modeline_aliases = ["js", "js2"]
+# [/ ] is so we match "env node" or "/node" but not "ts-node"
+first_line_pattern = '^#!.*\b(?:[/ ]node|deno run.*--ext[= ]js)\b'
+line_comments = ["// "]
+block_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
+documentation_comment = { start = "/**", prefix = "* ", end = "*/", tab_size = 1 }
+wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", end_suffix = ">" }
+word_characters = ["$", "#"]
+tab_size = 2
+auto_indent_strings = ["{", "[", "("]
+auto_outdent_strings = ["}", "]", ")"]
+scope_opt_in_language_servers = ["tailwindcss-language-server", "emmet-language-server"]
+debuggers = ["JavaScript"]
+
+[overrides.element]
+line_comments = { remove = true }
+block_comment = { start = "{/* ", prefix = "", end = "*/}", tab_size = 1 }
+opt_into_language_servers = ["emmet-language-server"]
+
+[overrides.string]
+opt_into_language_servers = ["tailwindcss-language-server"]

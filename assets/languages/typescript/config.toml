@@ -1,0 +1,18 @@
+name = "TypeScript"
+grammar = "typescript"
+path_suffixes = ["ts", "cts", "mts"]
+modeline_aliases = ["ts"]
+first_line_pattern = '^#!.*\b(?:deno run|ts-node|bun|tsx|[/ ]node)\b'
+line_comments = ["// "]
+block_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
+documentation_comment = { start = "/**", prefix = "* ", end = "*/", tab_size = 1 }
+wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", end_suffix = ">" }
+word_characters = ["#", "$"]
+tab_size = 2
+debuggers = ["JavaScript"]
+scope_opt_in_language_servers = ["tailwindcss-language-server"]
+auto_indent_strings = [">", "{", "[", "("]
+auto_outdent_strings = ["<", "}", "]", ")"]
+
+[overrides.string]
+opt_into_language_servers = ["tailwindcss-language-server"]

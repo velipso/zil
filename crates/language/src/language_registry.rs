@@ -186,7 +186,8 @@ impl LanguageRegistry {
             if let Ok(mut entries) = fs.read_dir(languages_dir).await {
                 while let Some(Ok(entry)) = entries.next().await {
                     if let Some(config) =
-                        LanguageConfig::load(entry.join(LanguageConfig::FILE_NAME)).log_err() {
+                        LanguageConfig::load(entry.join("config.toml")).log_err()
+                    {
                         registry.register_language(
                             config.name.clone(),
                             config.grammar.clone(),
@@ -194,17 +195,16 @@ impl LanguageRegistry {
                             config.hidden,
                             None,
                             Arc::new(move || {
-                                let config =
-                                    LanguageConfig::load(entry.join(LanguageConfig::FILE_NAME))?;
                                 let queries = load_plugin_queries(&entry);
+
                                 Ok(LoadedLanguage {
-                                    config,
+                                    config: config.clone(),
                                     queries,
                                     context_provider: None,
                                     toolchain_provider: None,
                                     manifest_name: None,
                                 })
-                            })
+                            }),
                         );
                     }
                 }
@@ -218,7 +218,8 @@ impl LanguageRegistry {
                     if entry.is_file()
                         && entry.extension().is_some_and(|ext| ext == "wasm")
                         && let Some(grammar_name_os) = entry.file_stem()
-                        && let Some(grammar_name) = grammar_name_os.to_str() {
+                        && let Some(grammar_name) = grammar_name_os.to_str()
+                    {
                         grammars.push((Arc::<str>::from(grammar_name), entry));
                     }
                 }

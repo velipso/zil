@@ -1,0 +1,7 @@
+name = "CSS"
+grammar = "css"
+path_suffixes = ["css", "postcss", "pcss"]
+block_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
+word_characters = ["#"]
+auto_indent_strings = ["{", "[", "("]
+auto_outdent_strings = ["}", "]", ")"]

@@ -1,0 +1,9 @@
+name = "C"
+grammar = "c"
+path_suffixes = ["c"]
+line_comments = ["// "]
+debuggers = ["CodeLLDB", "GDB"]
+block_comment = { start = "/*", prefix = "", end = "*/", tab_size = 1 }
+documentation_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
+auto_indent_strings = ["{", "[", "("]
+auto_outdent_strings = ["}", "]", ")"]

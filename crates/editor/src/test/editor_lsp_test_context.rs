@@ -1,25 +1,18 @@
 use std::{
-    borrow::Cow,
     ops::{Deref, DerefMut, Range},
     path::Path,
     sync::Arc,
 };
 
 use anyhow::Result;
-use language::{markdown_lang, rust_lang};
 use multi_buffer::MultiBufferOffset;
 use serde_json::json;
 
 use crate::{Editor, ToPoint};
-use collections::HashSet;
 use futures::Future;
 use futures::stream::StreamExt;
 use gpui::{Context, Entity, Focusable as _, VisualTestContext, Window};
-use indoc::indoc;
-use language::{
-    BlockCommentConfig, FakeLspAdapter, Language, LanguageConfig, LanguageMatcher, LanguageQueries,
-    point_to_lsp,
-};
+use language::{FakeLspAdapter, Language, point_to_lsp};
 use lsp::{notification, request};
 use project::Project;
 use workspace::{AppState, MultiWorkspace, Workspace, WorkspaceHandle};
@@ -158,194 +151,6 @@ impl EditorLspTestContext {
             workspace,
             buffer_lsp_url: lsp::Uri::from_file_path(root.join("dir").join(file_name)).unwrap(),
         }
-    }
-
-    pub async fn new_rust(
-        capabilities: lsp::ServerCapabilities,
-        cx: &mut gpui::TestAppContext,
-    ) -> EditorLspTestContext {
-        Self::new(Arc::into_inner(rust_lang()).unwrap(), capabilities, cx).await
-    }
-
-    pub async fn new_typescript(
-        capabilities: lsp::ServerCapabilities,
-        cx: &mut gpui::TestAppContext,
-    ) -> EditorLspTestContext {
-        let mut word_characters: HashSet<char> = Default::default();
-        word_characters.insert('$');
-        word_characters.insert('#');
-        let language = Language::new(
-            LanguageConfig {
-                name: "Typescript".into(),
-                matcher: LanguageMatcher {
-                    path_suffixes: vec!["ts".to_string()],
-                    ..Default::default()
-                },
-                word_characters,
-                ..Default::default()
-            },
-            Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
-        )
-        .with_queries(LanguageQueries {
-            text_objects: Some(Cow::from(indoc! {r#"
-                (function_declaration
-                    body: (_
-                        "{"
-                        (_)* @function.inside
-                        "}")) @function.around
-
-                (method_definition
-                    body: (_
-                        "{"
-                        (_)* @function.inside
-                        "}")) @function.around
-
-                ; Arrow function in variable declaration - capture the full declaration
-                ([
-                    (lexical_declaration
-                        (variable_declarator
-                            value: (arrow_function
-                                body: (statement_block
-                                    "{"
-                                    (_)* @function.inside
-                                    "}"))))
-                    (variable_declaration
-                        (variable_declarator
-                            value: (arrow_function
-                                body: (statement_block
-                                    "{"
-                                    (_)* @function.inside
-                                    "}"))))
-                ]) @function.around
-
-                ([
-                    (lexical_declaration
-                        (variable_declarator
-                            value: (arrow_function)))
-                    (variable_declaration
-                        (variable_declarator
-                            value: (arrow_function)))
-                ]) @function.around
-
-                ; Catch-all for arrow functions in other contexts (callbacks, etc.)
-                ((arrow_function) @function.around (#not-has-parent? @function.around variable_declarator))
-                "#})),
-            ..Default::default()
-        })
-        .expect("Could not parse queries");
-
-        Self::new(language, capabilities, cx).await
-    }
-
-    pub async fn new_tsx(
-        capabilities: lsp::ServerCapabilities,
-        cx: &mut gpui::TestAppContext,
-    ) -> EditorLspTestContext {
-        let mut word_characters: HashSet<char> = Default::default();
-        word_characters.insert('$');
-        word_characters.insert('#');
-        let language = Language::new(
-            LanguageConfig {
-                name: "TSX".into(),
-                matcher: LanguageMatcher {
-                    path_suffixes: vec!["tsx".to_string()],
-                    ..Default::default()
-                },
-                word_characters,
-                ..Default::default()
-            },
-            Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
-        )
-        .with_queries(LanguageQueries {
-            text_objects: Some(Cow::from(indoc! {r#"
-                (function_declaration
-                    body: (_
-                        "{"
-                        (_)* @function.inside
-                        "}")) @function.around
-
-                (method_definition
-                    body: (_
-                        "{"
-                        (_)* @function.inside
-                        "}")) @function.around
-
-                ; Arrow function in variable declaration - capture the full declaration
-                ([
-                    (lexical_declaration
-                        (variable_declarator
-                            value: (arrow_function
-                                body: (statement_block
-                                    "{"
-                                    (_)* @function.inside
-                                    "}"))))
-                    (variable_declaration
-                        (variable_declarator
-                            value: (arrow_function
-                                body: (statement_block
-                                    "{"
-                                    (_)* @function.inside
-                                    "}"))))
-                ]) @function.around
-
-                ([
-                    (lexical_declaration
-                        (variable_declarator
-                            value: (arrow_function)))
-                    (variable_declaration
-                        (variable_declarator
-                            value: (arrow_function)))
-                ]) @function.around
-
-                ; Catch-all for arrow functions in other contexts (callbacks, etc.)
-                ((arrow_function) @function.around (#not-has-parent? @function.around variable_declarator))
-                "#})),
-            ..Default::default()
-        })
-        .expect("Could not parse queries");
-
-        Self::new(language, capabilities, cx).await
-    }
-
-    pub async fn new_html(cx: &mut gpui::TestAppContext) -> Self {
-        let language = Language::new(
-            LanguageConfig {
-                name: "HTML".into(),
-                matcher: LanguageMatcher {
-                    path_suffixes: vec!["html".into()],
-                    ..Default::default()
-                },
-                block_comment: Some(BlockCommentConfig {
-                    start: "<!--".into(),
-                    prefix: "".into(),
-                    end: "-->".into(),
-                    tab_size: 0,
-                }),
-                ..Default::default()
-            },
-            Some(tree_sitter_html::LANGUAGE.into()),
-        )
-        .with_queries(LanguageQueries {
-            ..Default::default()
-        })
-        .expect("Could not parse queries");
-        Self::new(language, Default::default(), cx).await
-    }
-
-    pub async fn new_markdown_with_rust(cx: &mut gpui::TestAppContext) -> Self {
-        let context = Self::new(
-            Arc::into_inner(markdown_lang()).unwrap(),
-            Default::default(),
-            cx,
-        )
-        .await;
-
-        let language_registry = context.workspace.read_with(cx, |workspace, cx| {
-            workspace.project().read(cx).languages().clone()
-        });
-        language_registry.add(rust_lang());
-
-        context
     }
 
     /// Constructs lsp range using a marked string with '[', ']' range delimiters

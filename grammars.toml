@@ -1,12 +1,32 @@
 [[grammar]]
-id = "html"
-repository = "https://github.com/tree-sitter/tree-sitter-html"
-commit = "bfa075d83c6b97cd48440b3829ab8d24a2319809"
+id = "bash"
+repository = "https://github.com/tree-sitter/tree-sitter-bash"
+commit = "a06c2e4415e9bc0346c6b86d401879ffb44058f7"
 
 [[grammar]]
-id = "proto"
-repository = "https://github.com/coder3101/tree-sitter-proto"
-commit = "a6caac94b5aa36b322b5b70040d5b67132f109d0"
+id = "c"
+repository = "https://github.com/tree-sitter/tree-sitter-c"
+commit = "7fa1be1b694b6e763686793d97da01f36a0e5c12"
+
+[[grammar]]
+id = "cpp"
+repository = "https://github.com/tree-sitter/tree-sitter-cpp"
+commit = "5cb9b693cfd7bfacab1d9ff4acac1a4150700609"
+
+[[grammar]]
+id = "css"
+repository = "https://github.com/tree-sitter/tree-sitter-css"
+commit = "dda5cfc5722c429eaba1c910ca32c2c0c5bb1a3f"
+
+[[grammar]]
+id = "diff"
+repository = "https://github.com/tree-sitter-grammars/tree-sitter-diff"
+commit = "2520c3f934b3179bb540d23e0ef45f75304b5fed"
+
+[[grammar]]
+id = "git_commit"
+repository = "https://github.com/zed-industries/tree-sitter-git-commit"
+commit = "88309716a69dd13ab83443721ba6e0b491d37ee9"
 
 [[grammar]]
 id = "glsl"
@@ -14,6 +34,80 @@ repository = "https://github.com/theHamsta/tree-sitter-glsl"
 commit = "31064ce53385150f894a6c72d61b94076adf640a"
 
 [[grammar]]
-id = "diff"
-repository = "https://github.com/tree-sitter-grammars/tree-sitter-diff"
-commit = "2520c3f934b3179bb540d23e0ef45f75304b5fed"
+id = "go"
+repository = "https://github.com/tree-sitter/tree-sitter-go"
+commit = "2346a3ab1bb3857b48b29d779a1ef9799a248cd7"
+
+[[grammar]]
+id = "gomod"
+repository = "https://github.com/camdencheek/tree-sitter-go-mod"
+commit = "2e886870578eeba1927a2dc4bd2e2b3f598c5f9a"
+
+[[grammar]]
+id = "gowork"
+repository = "https://github.com/zed-industries/tree-sitter-go-work"
+commit = "acb0617bf7f4fda02c6217676cc64acb89536dc7"
+
+[[grammar]]
+id = "html"
+repository = "https://github.com/tree-sitter/tree-sitter-html"
+commit = "bfa075d83c6b97cd48440b3829ab8d24a2319809"
+
+[[grammar]]
+id = "jsdoc"
+repository = "https://github.com/tree-sitter/tree-sitter-jsdoc"
+commit = "658d18dcdddb75c760363faa4963427a7c6b52db"
+
+[[grammar]]
+id = "json"
+repository = "https://github.com/tree-sitter/tree-sitter-json"
+commit = "001c28d7a29832b06b0e831ec77845553c89b56d"
+
+[[grammar]]
+id = "markdown"
+repository = "https://github.com/tree-sitter-grammars/tree-sitter-markdown"
+commit = "9a23c1a96c0513d8fc6520972beedd419a973539"
+src = "tree-sitter-markdown/src"
+
+[[grammar]]
+id = "markdown_inline"
+repository = "https://github.com/tree-sitter-grammars/tree-sitter-markdown"
+commit = "9a23c1a96c0513d8fc6520972beedd419a973539"
+src = "tree-sitter-markdown-inline/src"
+
+[[grammar]]
+id = "proto"
+repository = "https://github.com/coder3101/tree-sitter-proto"
+commit = "a6caac94b5aa36b322b5b70040d5b67132f109d0"
+
+[[grammar]]
+id = "python"
+repository = "https://github.com/tree-sitter/tree-sitter-python"
+commit = "26855eabccb19c6abf499fbc5b8dc7cc9ab8bc64"
+
+[[grammar]]
+id = "regex"
+repository = "https://github.com/tree-sitter/tree-sitter-regex"
+commit = "b2ac15e27fce703d2f37a79ccd94a5c0cbe9720b"
+
+[[grammar]]
+id = "rust"
+repository = "https://github.com/tree-sitter/tree-sitter-rust"
+commit = "77a3747266f4d621d0757825e6b11edcbf991ca5"
+
+[[grammar]]
+id = "tsx"
+repository = "https://github.com/zed-industries/tree-sitter-typescript"
+commit = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899"
+src = "tsx/src"
+
+[[grammar]]
+id = "typescript"
+repository = "https://github.com/zed-industries/tree-sitter-typescript"
+commit = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899"
+src = "typescript/src"
+
+[[grammar]]
+id = "yaml"
+repository = "https://github.com/zed-industries/tree-sitter-yaml"
+commit = "baff0b51c64ef6a1fb1f8390f3ad6015b83ec13a"

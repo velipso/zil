@@ -66,9 +66,6 @@ use theme::{ActiveTheme as _, SyntaxTheme};
 use util::RandomCharIter;
 use util::{RangeExt, debug_panic, maybe, paths::PathStyle, rel_path::RelPath};
 
-#[cfg(any(test, feature = "test-support"))]
-pub use {tree_sitter_python, tree_sitter_rust, tree_sitter_typescript};
-
 pub use lsp::DiagnosticSeverity;
 
 /// Indicate whether a [`Buffer`] has permissions to edit.
