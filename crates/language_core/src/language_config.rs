@@ -31,39 +31,20 @@ pub struct LanguageConfig {
     pub name: LanguageName,
     /// The name of this language for a Markdown code fence block
     pub code_fence_block_name: Option<Arc<str>>,
-    /// Alternative language names that Jupyter kernels may report for this language.
-    /// Used when a kernel's `language` field differs from Zed's language name.
-    /// For example, the Nu extension would set this to `["nushell"]`.
-    #[serde(default)]
-    pub kernel_language_names: Vec<Arc<str>>,
-    // The name of the grammar in a WASM bundle (experimental).
+    /// The name of the grammar in a WASM bundle (experimental).
     pub grammar: Option<Arc<str>>,
     /// The criteria for matching this language to a given file.
     #[serde(flatten)]
     pub matcher: LanguageMatcher,
-    /// If set to true, auto indentation uses last non empty line to determine
-    /// the indentation level for a new line.
-    #[serde(default = "auto_indent_using_last_non_empty_line_default")]
-    pub auto_indent_using_last_non_empty_line: bool,
-    // Whether indentation of pasted content should be adjusted based on the context.
+    /// Whether indentation of pasted content should be adjusted based on the context.
     #[serde(default)]
     pub auto_indent_on_paste: Option<bool>,
-    /// A regex that is used to determine whether the indentation level should be
-    /// increased in the following line.
-    #[serde(default, deserialize_with = "deserialize_regex")]
-    #[schemars(schema_with = "regex_json_schema")]
-    pub increase_indent_pattern: Option<Regex>,
-    /// A regex that is used to determine whether the indentation level should be
-    /// decreased in the following line.
-    #[serde(default, deserialize_with = "deserialize_regex")]
-    #[schemars(schema_with = "regex_json_schema")]
-    pub decrease_indent_pattern: Option<Regex>,
-    /// A list of rules for decreasing indentation. Each rule pairs a regex with a set of valid
-    /// "block-starting" tokens. When a line matches a pattern, its indentation is aligned with
-    /// the most recent line that began with a corresponding token. This enables context-aware
-    /// outdenting, like aligning an `else` with its `if`.
+    /// Strings that trigger auto indentation.
     #[serde(default)]
-    pub decrease_indent_patterns: Vec<DecreaseIndentConfig>,
+    pub auto_indent_strings: Vec<Arc<str>>,
+    /// Strings that trigger auto outdention.
+    #[serde(default)]
+    pub auto_outdent_strings: Vec<Arc<str>>,
     /// A placeholder used internally by Semantic Index.
     #[serde(default)]
     pub collapsed_placeholder: String,
@@ -118,10 +99,6 @@ pub struct LanguageConfig {
     /// When set, selections can be wrapped using prefix/suffix pairs on both sides.
     #[serde(default)]
     pub wrap_characters: Option<WrapCharactersConfig>,
-    /// The name of a Prettier parser that will be used for this language when no file path is available.
-    /// If there's a parser name in the language settings, that will be used instead.
-    #[serde(default)]
-    pub prettier_parser_name: Option<String>,
     /// If true, this language is only for syntax highlighting via an injection into other
     /// languages, but should not appear to the user as a distinct language.
     #[serde(default)]
@@ -151,14 +128,11 @@ impl Default for LanguageConfig {
         Self {
             name: LanguageName::new_static(""),
             code_fence_block_name: None,
-            kernel_language_names: Default::default(),
             grammar: None,
             matcher: LanguageMatcher::default(),
-            auto_indent_using_last_non_empty_line: auto_indent_using_last_non_empty_line_default(),
             auto_indent_on_paste: None,
-            increase_indent_pattern: Default::default(),
-            decrease_indent_pattern: Default::default(),
-            decrease_indent_patterns: Default::default(),
+            auto_indent_strings: Default::default(),
+            auto_outdent_strings: Default::default(),
             line_comments: Default::default(),
             block_comment: Default::default(),
             documentation_comment: Default::default(),
@@ -174,7 +148,6 @@ impl Default for LanguageConfig {
             tab_size: None,
             soft_wrap: None,
             wrap_characters: None,
-            prettier_parser_name: None,
             hidden: false,
             completion_query_characters: Default::default(),
             linked_edit_characters: Default::default(),
@@ -367,10 +340,6 @@ pub struct WrapCharactersConfig {
     /// after the prefix (i.e., between prefix and suffix).
     pub end_prefix: String,
     pub end_suffix: String,
-}
-
-pub fn auto_indent_using_last_non_empty_line_default() -> bool {
-    true
 }
 
 pub fn deserialize_regex<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Regex>, D::Error> {

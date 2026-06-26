@@ -5,7 +5,6 @@ pub type QueryFieldAccessor = fn(&mut LanguageQueries) -> &mut Option<Cow<'stati
 pub const QUERY_FILENAME_PREFIXES: &[(&str, QueryFieldAccessor)] = &[
     ("highlights", |q| &mut q.highlights),
     ("outline", |q| &mut q.outline),
-    ("indents", |q| &mut q.indents),
     ("injections", |q| &mut q.injections),
     ("overrides", |q| &mut q.overrides),
     ("redactions", |q| &mut q.redactions),
@@ -17,7 +16,6 @@ pub const QUERY_FILENAME_PREFIXES: &[(&str, QueryFieldAccessor)] = &[
 #[derive(Debug, Default)]
 pub struct LanguageQueries {
     pub highlights: Option<Cow<'static, str>>,
-    pub indents: Option<Cow<'static, str>>,
     pub outline: Option<Cow<'static, str>>,
     pub injections: Option<Cow<'static, str>>,
     pub overrides: Option<Cow<'static, str>>,

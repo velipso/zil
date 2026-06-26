@@ -40,12 +40,12 @@ pub use language_core::highlight_map::{HighlightId, HighlightMap};
 use futures::future::FutureExt as _;
 pub use language_core::{
     BlockCommentConfig, CodeLabel, CodeLabelBuilder, DebugVariablesConfig, DebuggerTextObject,
-    DecreaseIndentConfig, Grammar, GrammarId, HighlightsConfig, IndentConfig, InjectionConfig,
+    DecreaseIndentConfig, Grammar, GrammarId, HighlightsConfig, InjectionConfig,
     InjectionPatternConfig, LanguageConfig, LanguageConfigOverride,
     LanguageId, LanguageMatcher, OrderedListConfig, OutlineConfig, Override, OverrideConfig,
     OverrideEntry, PromptResponseContext, RedactionConfig,
     SoftWrap, Symbol, TaskListConfig, TextObject, TextObjectConfig, ToLspPosition,
-    WrapCharactersConfig, auto_indent_using_last_non_empty_line_default, deserialize_regex,
+    WrapCharactersConfig, deserialize_regex,
     deserialize_regex_vec, regex_json_schema, regex_vec_json_schema, serialize_regex,
 };
 pub use language_registry::{
@@ -865,10 +865,6 @@ impl Language {
         })
     }
 
-    pub fn with_indents_query(self, source: &str) -> Result<Self> {
-        self.with_grammar_query_and_name(|grammar, name| grammar.with_indents_query(source, name))
-    }
-
     pub fn with_injection_query(self, source: &str) -> Result<Self> {
         self.with_grammar_query_and_name(|grammar, name| grammar.with_injection_query(source, name))
     }
@@ -928,23 +924,6 @@ impl Language {
             .code_fence_block_name
             .clone()
             .unwrap_or_else(|| self.config.name.as_ref().to_lowercase().into())
-    }
-
-    pub fn matches_kernel_language(&self, kernel_language: &str) -> bool {
-        let kernel_language_lower = kernel_language.to_lowercase();
-
-        if self.code_fence_block_name().to_lowercase() == kernel_language_lower {
-            return true;
-        }
-
-        if self.config.name.as_ref().to_lowercase() == kernel_language_lower {
-            return true;
-        }
-
-        self.config
-            .kernel_language_names
-            .iter()
-            .any(|name| name.to_lowercase() == kernel_language_lower)
     }
 
     pub fn context_provider(&self) -> Option<Arc<dyn ContextProvider>> {
@@ -1011,10 +990,6 @@ impl Language {
 
     pub fn lsp_id(&self) -> String {
         self.config.name.lsp_id()
-    }
-
-    pub fn prettier_parser_name(&self) -> Option<&str> {
-        self.config.prettier_parser_name.as_deref()
     }
 
     pub fn config(&self) -> &LanguageConfig {
@@ -1430,9 +1405,6 @@ pub fn rust_lang() -> Arc<Language> {
         outline: Some(Cow::from(include_str!(
             "../../grammars/src/rust/outline.scm"
         ))),
-        indents: Some(Cow::from(include_str!(
-            "../../grammars/src/rust/indents.scm"
-        ))),
         text_objects: Some(Cow::from(include_str!(
             "../../grammars/src/rust/textobjects.scm"
         ))),
@@ -1476,9 +1448,6 @@ pub fn markdown_lang() -> Arc<Language> {
         ))),
         highlights: Some(Cow::from(include_str!(
             "../../grammars/src/markdown/highlights.scm"
-        ))),
-        indents: Some(Cow::from(include_str!(
-            "../../grammars/src/markdown/indents.scm"
         ))),
         outline: Some(Cow::from(include_str!(
             "../../grammars/src/markdown/outline.scm"

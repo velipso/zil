@@ -187,23 +187,6 @@ impl EditorLspTestContext {
             Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
         )
         .with_queries(LanguageQueries {
-            indents: Some(Cow::from(indoc! {r#"
-                [
-                    (call_expression)
-                    (assignment_expression)
-                    (member_expression)
-                    (lexical_declaration)
-                    (variable_declaration)
-                    (assignment_expression)
-                    (if_statement)
-                    (for_statement)
-                ] @indent
-
-                (_ "[" "]" @end) @indent
-                (_ "<" ">" @end) @indent
-                (_ "{" "}" @end) @indent
-                (_ "(" ")" @end) @indent
-                "#})),
             text_objects: Some(Cow::from(indoc! {r#"
                 (function_declaration
                     body: (_
@@ -274,29 +257,6 @@ impl EditorLspTestContext {
             Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         )
         .with_queries(LanguageQueries {
-            indents: Some(Cow::from(indoc! {r#"
-                [
-                    (call_expression)
-                    (assignment_expression)
-                    (member_expression)
-                    (lexical_declaration)
-                    (variable_declaration)
-                    (assignment_expression)
-                    (if_statement)
-                    (for_statement)
-                ] @indent
-
-                (_ "[" "]" @end) @indent
-                (_ "<" ">" @end) @indent
-                (_ "{" "}" @end) @indent
-                (_ "(" ")" @end) @indent
-
-                (jsx_opening_element ">" @end) @indent
-
-                (jsx_element
-                  (jsx_opening_element) @start
-                  (jsx_closing_element)? @end) @indent
-                "#})),
             text_objects: Some(Cow::from(indoc! {r#"
                 (function_declaration
                     body: (_

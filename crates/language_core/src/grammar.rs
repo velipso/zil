@@ -4,7 +4,6 @@ use crate::{
 };
 use anyhow::{Context as _, Result};
 use collections::HashMap;
-use gpui_shared_string::SharedString;
 use lsp::LanguageServerName;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -33,7 +32,6 @@ pub struct Grammar {
     pub error_query: Option<Query>,
     pub highlights_config: Option<HighlightsConfig>,
     pub redactions_config: Option<RedactionConfig>,
-    pub indents_config: Option<IndentConfig>,
     pub outline_config: Option<OutlineConfig>,
     pub text_object_config: Option<TextObjectConfig>,
     pub injection_config: Option<InjectionConfig>,
@@ -45,15 +43,6 @@ pub struct Grammar {
 pub struct HighlightsConfig {
     pub query: Query,
     pub identifier_capture_indices: Vec<u32>,
-}
-
-pub struct IndentConfig {
-    pub query: Query,
-    pub indent_capture_ix: u32,
-    pub start_capture_ix: Option<u32>,
-    pub end_capture_ix: Option<u32>,
-    pub outdent_capture_ix: Option<u32>,
-    pub suffixed_start_captures: HashMap<u32, SharedString>,
 }
 
 pub struct OutlineConfig {
@@ -239,7 +228,6 @@ impl Grammar {
             highlights_config: None,
             outline_config: None,
             text_object_config: None,
-            indents_config: None,
             injection_config: None,
             override_config: None,
             redactions_config: None,
@@ -283,11 +271,6 @@ impl Grammar {
             self = self
                 .with_highlights_query(query.as_ref())
                 .context("Error loading highlights query")?;
-        }
-        if let Some(query) = queries.indents {
-            self = self
-                .with_indents_query(query.as_ref(), name)
-                .context("Error loading indents query")?;
         }
         if let Some(query) = queries.outline {
             self = self
@@ -447,47 +430,6 @@ impl Grammar {
             query,
             objects_by_capture_ix,
         });
-        Ok(self)
-    }
-
-    pub fn with_indents_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
-        let query = Query::new(&self.ts_language, source)?;
-        let mut indent_capture_ix = 0;
-        let mut start_capture_ix = None;
-        let mut end_capture_ix = None;
-        let mut outdent_capture_ix = None;
-        if populate_capture_indices(
-            &query,
-            language_name,
-            "indents",
-            &["start."],
-            &mut [
-                Capture::Required("indent", &mut indent_capture_ix),
-                Capture::Optional("start", &mut start_capture_ix),
-                Capture::Optional("end", &mut end_capture_ix),
-                Capture::Optional("outdent", &mut outdent_capture_ix),
-            ],
-        ) {
-            let mut suffixed_start_captures = HashMap::default();
-            for (ix, name) in query.capture_names().iter().enumerate() {
-                if let Some(suffix) = name.strip_prefix("start.") {
-                    suffixed_start_captures.insert(ix as u32, suffix.to_owned().into());
-                }
-            }
-
-            self.indents_config = Some(IndentConfig {
-                query,
-                indent_capture_ix,
-                start_capture_ix,
-                end_capture_ix,
-                outdent_capture_ix,
-                suffixed_start_captures,
-            });
-        }
         Ok(self)
     }
 
