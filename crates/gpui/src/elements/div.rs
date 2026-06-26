@@ -3134,7 +3134,10 @@ pub struct ElementHoverState {
 
 pub(crate) enum ActiveTooltip {
     /// Currently delaying before showing the tooltip.
-    WaitingForShow { _task: Task<()> },
+    WaitingForShow {
+        mouse_position: Point<Pixels>,
+        _task: Task<()>
+    },
     /// Tooltip is visible, element was hovered or for hoverable tooltips, the tooltip was hovered.
     Visible {
         tooltip: AnyTooltip,
@@ -3203,7 +3206,7 @@ pub(crate) fn register_tooltip_mouse_handlers(
         let active_tooltip = active_tooltip.clone();
         let build_tooltip = build_tooltip.clone();
         let check_is_hovered = check_is_hovered.clone();
-        move |_: &MouseMoveEvent, phase, window, cx| {
+        move |event: &MouseMoveEvent, phase, window, cx| {
             handle_tooltip_mouse_move(
                 &active_tooltip,
                 &build_tooltip,
@@ -3212,6 +3215,7 @@ pub(crate) fn register_tooltip_mouse_handlers(
                 tooltip_id,
                 current_view,
                 phase,
+                event.position,
                 window,
                 cx,
             )
@@ -3256,6 +3260,7 @@ fn handle_tooltip_mouse_move(
     tooltip_id: Option<TooltipId>,
     current_view: EntityId,
     phase: DispatchPhase,
+    mouse_position: Point<Pixels>,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -3277,12 +3282,14 @@ fn handle_tooltip_mouse_move(
                 Action::None
             }
         }
-        Some(ActiveTooltip::WaitingForShow { .. }) => {
+        Some(ActiveTooltip::WaitingForShow { mouse_position: scheduled_mouse_position, .. }) => {
             let is_hovered = check_is_hovered(window);
-            if is_hovered {
-                Action::None
-            } else {
+            if !is_hovered {
                 Action::CancelShow
+            } else if *scheduled_mouse_position != mouse_position {
+                Action::ScheduleShow
+            } else {
+                Action::None
             }
         }
         Some(ActiveTooltip::Visible { is_hoverable, .. }) => {
@@ -3362,6 +3369,7 @@ fn handle_tooltip_mouse_move(
             active_tooltip
                 .borrow_mut()
                 .replace(ActiveTooltip::WaitingForShow {
+                    mouse_position,
                     _task: delayed_show_task,
                 });
         }
