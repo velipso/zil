@@ -60,10 +60,6 @@ pub fn init(languages: Arc<LanguageRegistry>, _fs: Arc<dyn Fs>, cx: &mut App) {
             ..Default::default()
         },
         LanguageInfo {
-            name: "diff",
-            ..Default::default()
-        },
-        LanguageInfo {
             name: "go",
             semantic_token_rules: Some(semantic_token_rules("go")),
             ..Default::default()

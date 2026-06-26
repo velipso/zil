@@ -310,15 +310,6 @@ pub fn debug_scenarios_file() -> &'static PathBuf {
     DEBUG_SCENARIOS_FILE.get_or_init(|| config_dir().join("debug.json"))
 }
 
-/// Returns the path to the user-global `AGENTS.md` file.
-///
-/// This file holds personal agent instructions that apply to every project the
-/// user opens, and is loaded into the native Zed agent's system prompt.
-pub fn agents_file() -> &'static PathBuf {
-    static AGENTS_FILE: OnceLock<PathBuf> = OnceLock::new();
-    AGENTS_FILE.get_or_init(|| config_dir().join("AGENTS.md"))
-}
-
 /// User-facing display form of the user-global `AGENTS.md` file path —
 /// i.e. what a human should see in messages and prompts, with the
 /// platform's native path separator and home/config directory shorthand.
@@ -336,42 +327,12 @@ pub const GLOBAL_AGENTS_FILE_DISPLAY: &str =
 pub const GLOBAL_AGENTS_FILE_DISPLAY: &str =
     const_format::concatcp!("~/.config/", APP_NAME_LOWERCASE, "/AGENTS.md");
 
-/// Returns the path to the extensions directory.
-///
-/// This is where installed extensions are stored.
-pub fn extensions_dir() -> &'static PathBuf {
-    static EXTENSIONS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EXTENSIONS_DIR.get_or_init(|| data_dir().join("extensions"))
-}
-
-/// Returns the path to the extensions directory.
-///
-/// This is where installed extensions are stored on a remote.
-pub fn remote_extensions_dir() -> &'static PathBuf {
-    static EXTENSIONS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EXTENSIONS_DIR.get_or_init(|| data_dir().join("remote_extensions"))
-}
-
-/// Returns the path to the extensions directory.
-///
-/// This is where installed extensions are stored on a remote.
-pub fn remote_extensions_uploads_dir() -> &'static PathBuf {
-    static UPLOAD_DIR: OnceLock<PathBuf> = OnceLock::new();
-    UPLOAD_DIR.get_or_init(|| remote_extensions_dir().join("uploads"))
-}
-
 /// Returns the path to the themes directory.
 ///
 /// This is where themes that are not provided by extensions are stored.
 pub fn themes_dir() -> &'static PathBuf {
     static THEMES_DIR: OnceLock<PathBuf> = OnceLock::new();
     THEMES_DIR.get_or_init(|| config_dir().join("themes"))
-}
-
-/// Returns the path to the snippets directory.
-pub fn snippets_dir() -> &'static PathBuf {
-    static SNIPPETS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    SNIPPETS_DIR.get_or_init(|| config_dir().join("snippets"))
 }
 
 /// Returns the path to the contexts directory.
@@ -431,10 +392,18 @@ pub fn embeddings_dir() -> &'static PathBuf {
 
 /// Returns the path to the languages directory.
 ///
-/// This is where language servers are downloaded to for languages built-in to Zed.
+/// This is where languages are defined (config.toml, highlights.scm, etc).
 pub fn languages_dir() -> &'static PathBuf {
     static LANGUAGES_DIR: OnceLock<PathBuf> = OnceLock::new();
-    LANGUAGES_DIR.get_or_init(|| data_dir().join("languages"))
+    LANGUAGES_DIR.get_or_init(|| config_dir().join("languages"))
+}
+
+/// Returns the path to the grammars directory.
+///
+/// This is where grammars are defined (diff.wasm, html.wasm, etc).
+pub fn grammars_dir() -> &'static PathBuf {
+    static GRAMMARS_DIR: OnceLock<PathBuf> = OnceLock::new();
+    GRAMMARS_DIR.get_or_init(|| config_dir().join("grammars"))
 }
 
 /// Returns the path to the debug adapters directory

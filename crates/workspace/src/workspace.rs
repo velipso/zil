@@ -993,7 +993,7 @@ impl AppState {
 
         let fs = fs::FakeFs::new(cx.background_executor().clone());
         <dyn Fs>::set_global(fs.clone(), cx);
-        let languages = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
+        let languages = Arc::new(LanguageRegistry::test(fs.clone(), cx.background_executor().clone()));
         let http_client = http_client::FakeHttpClient::with_404_response();
         let client = Client::new(http_client, cx);
         let session = cx.new(|cx| AppSession::new(Session::test(), cx));

@@ -377,7 +377,6 @@ impl LocalLspStore {
             settings,
             toolchain.clone(),
             delegate.clone(),
-            true,
             wait_until_worktree_trust,
             cx,
         );
@@ -583,7 +582,6 @@ impl LocalLspStore {
         settings: Arc<LspSettings>,
         toolchain: Option<Toolchain>,
         delegate: Arc<dyn LspAdapterDelegate>,
-        allow_binary_download: bool,
         wait_until_worktree_trust: Option<watch::Receiver<bool>>,
         cx: &mut App,
     ) -> Task<Result<LanguageServerBinary>> {
@@ -676,7 +674,6 @@ impl LocalLspStore {
                 .as_ref()
                 .and_then(|b| b.ignore_system_version)
                 .unwrap_or_default(),
-            allow_binary_download,
             pre_release: settings
                 .fetch
                 .as_ref()
@@ -7499,19 +7496,6 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
             .into_iter()
             .map(|adapter| adapter.adapter.clone() as Arc<dyn LspAdapter>)
             .collect()
-    }
-
-    async fn language_server_download_dir(&self, name: &LanguageServerName) -> Option<Arc<Path>> {
-        let dir = self.language_registry.language_server_download_dir(name)?;
-
-        if !dir.exists() {
-            smol::fs::create_dir_all(&dir)
-                .await
-                .context("failed to create container directory")
-                .log_err()?;
-        }
-
-        Some(dir)
     }
 
     async fn read_text_file(&self, path: &RelPath) -> Result<String> {

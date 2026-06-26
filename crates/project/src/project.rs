@@ -1194,7 +1194,7 @@ impl Project {
         cx: &mut AsyncApp,
     ) -> Entity<Project> {
         let fs = Arc::new(RealFs::new(None, cx.background_executor().clone()));
-        let languages = LanguageRegistry::test(cx.background_executor().clone());
+        let languages = LanguageRegistry::test(fs.clone(), cx.background_executor().clone());
         let http_client = http_client::FakeHttpClient::with_404_response();
         let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
@@ -1250,7 +1250,7 @@ impl Project {
         init_worktree_trust: bool,
         cx: &mut gpui::TestAppContext,
     ) -> Entity<Project> {
-        let languages = LanguageRegistry::test(cx.executor());
+        let languages = LanguageRegistry::test(fs.clone(), cx.executor());
         let http_client = http_client::FakeHttpClient::with_404_response();
         let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));

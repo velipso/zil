@@ -153,10 +153,10 @@ fn build(clang_path: PathBuf, args: &BuildArgs) -> Result<()> {
             )?;
         }
 
-        let output_dir = args.output.join(&grammar.id);
-        if !output_dir.exists() {
+        let output_dir = &args.output;
+        let grammar_wasm = output_dir.join(format!("{}.wasm", grammar.id));
+        if !grammar_wasm.exists() {
             create_dir_all(&output_dir)?;
-            let grammar_wasm = output_dir.join("grammar.wasm");
             let src_dir = grammar_dir.join("src");
             let parser_c = src_dir.join("parser.c");
             let scanner_c = src_dir.join("scanner.c");

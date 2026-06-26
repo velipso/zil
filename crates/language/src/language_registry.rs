@@ -11,12 +11,13 @@ pub use language_core::{
 };
 use settings::{AllLanguageSettingsContent, LanguageSettingsContent};
 
+use fs::Fs;
 use futures::{
-    Future,
+    Future, StreamExt,
     channel::{mpsc, oneshot},
 };
 use globset::GlobSet;
-use gpui::{App, BackgroundExecutor};
+use gpui::{App, BackgroundExecutor, Task};
 use lsp::LanguageServerId;
 use parking_lot::{Mutex, RwLock};
 use postage::watch;
@@ -33,13 +34,13 @@ use sum_tree::Bias;
 use text::{Point, Rope};
 use theme::Theme;
 use unicase::UniCase;
-use util::{maybe, post_inc};
+use util::{ResultExt, maybe, post_inc};
 
 pub struct LanguageRegistry {
-    state: RwLock<LanguageRegistryState>,
-    language_server_download_dir: Option<Arc<Path>>,
+    state: Arc<RwLock<LanguageRegistryState>>,
     executor: BackgroundExecutor,
     lsp_binary_status_tx: ServerStatusSender,
+    fs: Arc<dyn Fs>,
 }
 
 struct LanguageRegistryState {
@@ -138,44 +139,93 @@ pub struct LoadedLanguage {
 }
 
 impl LanguageRegistry {
-    pub fn new(executor: BackgroundExecutor) -> Self {
-        let this = Self {
-            state: RwLock::new(LanguageRegistryState {
-                next_language_server_id: 0,
-                languages: Vec::new(),
-                available_languages: Vec::new(),
-                grammars: Default::default(),
-                language_settings: Default::default(),
-                loading_languages: Default::default(),
-                lsp_adapters: Default::default(),
-                all_lsp_adapters: Default::default(),
-                available_lsp_adapters: HashMap::default(),
-                subscription: watch::channel(),
-                theme: Default::default(),
-                version: 0,
-                reload_count: 0,
+    pub fn new(fs: Arc<dyn Fs>, executor: BackgroundExecutor) -> Self {
+        let state = Arc::new(RwLock::new(LanguageRegistryState {
+            next_language_server_id: 0,
+            languages: Vec::new(),
+            available_languages: Vec::new(),
+            grammars: Default::default(),
+            language_settings: Default::default(),
+            loading_languages: Default::default(),
+            lsp_adapters: Default::default(),
+            all_lsp_adapters: Default::default(),
+            available_lsp_adapters: HashMap::default(),
+            subscription: watch::channel(),
+            theme: Default::default(),
+            version: 0,
+            reload_count: 0,
 
-                #[cfg(any(test, feature = "test-support"))]
-                fake_server_entries: Default::default(),
-            }),
-            language_server_download_dir: None,
+            #[cfg(any(test, feature = "test-support"))]
+            fake_server_entries: Default::default(),
+        }));
+
+        let this = Self {
+            state,
             lsp_binary_status_tx: Default::default(),
             executor,
+            fs,
         };
+
         this.add(PLAIN_TEXT.clone());
+
         this
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    pub fn test(executor: BackgroundExecutor) -> Self {
-        let mut this = Self::new(executor);
-        this.language_server_download_dir = Some(Path::new("/the-download-dir").into());
-        this
+    pub fn test(fs: Arc<dyn Fs>, executor: BackgroundExecutor) -> Self {
+        Self::new(fs, executor)
     }
 
-    /// Clears out all of the loaded languages and reload them from scratch.
-    pub fn reload(&self) {
-        self.state.write().reload();
+    pub fn reload_languages_from_config(self: Arc<Self>, cx: &mut App) -> Task<()> {
+        let fs = self.fs.clone();
+        let registry = self.clone();
+
+        cx.background_executor().spawn(async move {
+            let languages_dir = paths::languages_dir();
+
+            if let Ok(mut entries) = fs.read_dir(languages_dir).await {
+                while let Some(Ok(entry)) = entries.next().await {
+                    if let Some(config) =
+                        LanguageConfig::load(entry.join(LanguageConfig::FILE_NAME)).log_err() {
+                        registry.register_language(
+                            config.name.clone(),
+                            config.grammar.clone(),
+                            config.matcher.clone(),
+                            config.hidden,
+                            None,
+                            Arc::new(move || {
+                                let config =
+                                    LanguageConfig::load(entry.join(LanguageConfig::FILE_NAME))?;
+                                let queries = load_plugin_queries(&entry);
+                                Ok(LoadedLanguage {
+                                    config,
+                                    queries,
+                                    context_provider: None,
+                                    toolchain_provider: None,
+                                    manifest_name: None,
+                                })
+                            })
+                        );
+                    }
+                }
+            }
+
+            let grammars_dir = paths::grammars_dir();
+            let mut grammars = Vec::<(Arc<str>, PathBuf)>::new();
+
+            if let Ok(mut entries) = fs.read_dir(grammars_dir).await {
+                while let Some(Ok(entry)) = entries.next().await {
+                    if entry.is_file()
+                        && entry.extension().is_some_and(|ext| ext == "wasm")
+                        && let Some(grammar_name_os) = entry.file_stem()
+                        && let Some(grammar_name) = grammar_name_os.to_str() {
+                        grammars.push((Arc::<str>::from(grammar_name), entry));
+                    }
+                }
+            }
+
+            registry.register_wasm_grammars(grammars);
+        })
     }
 
     /// Reorders the list of language servers for the given language.
@@ -529,10 +579,6 @@ impl LanguageRegistry {
         for language in &state.languages {
             language.set_theme(theme.syntax());
         }
-    }
-
-    pub fn set_language_server_download_dir(&mut self, path: impl Into<Arc<Path>>) {
-        self.language_server_download_dir = Some(path.into());
     }
 
     pub fn language_for_name(
@@ -1069,12 +1115,6 @@ impl LanguageRegistry {
         self.state.write().next_language_server_id()
     }
 
-    pub fn language_server_download_dir(&self, name: &LanguageServerName) -> Option<Arc<Path>> {
-        self.language_server_download_dir
-            .as_ref()
-            .map(|dir| Arc::from(dir.join(name.0.as_ref())))
-    }
-
     #[cfg(any(test, feature = "test-support"))]
     pub fn create_fake_language_server(
         &self,
@@ -1134,16 +1174,6 @@ impl LanguageRegistryState {
         );
         self.languages.push(language);
         self.version += 1;
-        *self.subscription.0.borrow_mut() = ();
-    }
-
-    fn reload(&mut self) {
-        self.languages.clear();
-        self.version += 1;
-        self.reload_count += 1;
-        for language in &mut self.available_languages {
-            language.loaded = false;
-        }
         *self.subscription.0.borrow_mut() = ();
     }
 
@@ -1220,4 +1250,33 @@ impl ServerStatusSender {
         let mut txs = self.txs.lock();
         txs.retain(|tx| tx.unbounded_send((name.clone(), status.clone())).is_ok());
     }
+}
+
+fn load_plugin_queries(root_path: &Path) -> LanguageQueries {
+    let mut result = LanguageQueries::default();
+    if let Some(entries) = std::fs::read_dir(root_path).log_err() {
+        for entry in entries {
+            let Some(entry) = entry.log_err() else {
+                continue;
+            };
+            let path = entry.path();
+            if let Some(remainder) = path.strip_prefix(root_path).ok().and_then(|p| p.to_str()) {
+                if !remainder.ends_with(".scm") {
+                    continue;
+                }
+                for (name, query) in QUERY_FILENAME_PREFIXES {
+                    if remainder.starts_with(name) {
+                        if let Some(contents) = std::fs::read_to_string(&path).log_err() {
+                            match query(&mut result) {
+                                None => *query(&mut result) = Some(contents.into()),
+                                Some(r) => r.to_mut().push_str(contents.as_ref()),
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    result
 }

@@ -12,3 +12,8 @@ commit = "a6caac94b5aa36b322b5b70040d5b67132f109d0"
 id = "glsl"
 repository = "https://github.com/theHamsta/tree-sitter-glsl"
 commit = "31064ce53385150f894a6c72d61b94076adf640a"
+
+[[grammar]]
+id = "diff"
+repository = "https://github.com/tree-sitter-grammars/tree-sitter-diff"
+commit = "2520c3f934b3179bb540d23e0ef45f75304b5fed"

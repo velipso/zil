@@ -19,7 +19,6 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("c", tree_sitter_c::LANGUAGE.into()),
         ("cpp", tree_sitter_cpp::LANGUAGE.into()),
         ("css", tree_sitter_css::LANGUAGE.into()),
-        ("diff", tree_sitter_diff::LANGUAGE.into()),
         ("go", tree_sitter_go::LANGUAGE.into()),
         ("gomod", tree_sitter_go_mod::LANGUAGE.into()),
         ("gowork", tree_sitter_gowork::LANGUAGE.into()),

@@ -23,7 +23,7 @@ use fs::{Fs, RealFs};
 use futures::StreamExt;
 use git::GitHostingProviderRegistry;
 use gpui::{
-    App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _,
+    App, AppContext, Application, AssetSource, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _,
 };
 use gpui_platform;
 
@@ -72,7 +72,7 @@ fn build_application() -> Application {
 }
 
 fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
-    let message = "Zed failed to launch";
+    let message = "Zil failed to launch";
     let error_details = errors
         .into_iter()
         .flat_map(|(kind, paths)| {
@@ -374,9 +374,9 @@ fn main() {
 
         let client = Client::production(cx);
         cx.set_http_client(client.http_client());
-        let mut languages = LanguageRegistry::new(cx.background_executor().clone());
-        languages.set_language_server_download_dir(paths::languages_dir().clone());
+        let languages = LanguageRegistry::new(fs.clone(), cx.background_executor().clone());
         let languages = Arc::new(languages);
+        languages.clone().reload_languages_from_config(cx).detach();
 
         languages::init(languages.clone(), fs.clone(), cx);
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
@@ -505,8 +505,6 @@ fn main() {
         let fs = app_state.fs.clone();
         load_user_themes_in_background(fs.clone(), cx);
         watch_themes(fs.clone(), cx);
-        #[cfg(debug_assertions)]
-        watch_languages(fs.clone(), app_state.languages.clone(), cx);
 
         let menus = app_menus(cx);
         cx.set_menus(menus);
@@ -701,11 +699,41 @@ pub(crate) async fn restore_or_create_workspace(
     Ok(())
 }
 
+fn copy_asset_dir(prefix: &str, target_dir: &Path) -> io::Result<()> {
+    let Ok(asset_paths) = Assets.list(prefix) else {
+        return Ok(());
+    };
+    for asset_path in asset_paths {
+        let asset_path = asset_path.as_str();
+
+        let relative_path = asset_path
+            .strip_prefix(prefix)
+            .unwrap()
+            .trim_start_matches('/');
+
+        let target_path = target_dir.join(relative_path);
+
+        if let Some(parent) = target_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let Ok(Some(asset)) = Assets.load(asset_path) else {
+            continue;
+        };
+
+        if !target_path.exists() {
+            std::fs::write(&target_path, asset)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
     [
         paths::config_dir(),
-        paths::extensions_dir(),
         paths::languages_dir(),
+        paths::grammars_dir(),
         paths::debug_adapters_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
@@ -713,9 +741,22 @@ fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
     ]
     .into_iter()
     .fold(HashMap::default(), |mut errors, path| {
-        if let Err(e) = std::fs::create_dir_all(path) {
-            errors.entry(e.kind()).or_insert_with(Vec::new).push(path);
+        if !path.exists() {
+            let result = std::fs::create_dir_all(path).and_then(|_| {
+                if path == paths::languages_dir() {
+                    copy_asset_dir("languages", path)
+                } else if path == paths::grammars_dir() {
+                    copy_asset_dir("grammars", path)
+                } else {
+                    Ok(())
+                }
+            });
+
+            if let Err(e) = result {
+                errors.entry(e.kind()).or_insert_with(Vec::new).push(path);
+            }
         }
+
         errors
     })
 }
@@ -890,41 +931,6 @@ fn watch_themes(fs: Arc<dyn fs::Fs>, cx: &mut App) {
         }
     })
     .detach()
-}
-
-#[cfg(debug_assertions)]
-fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &mut App) {
-    use std::time::Duration;
-
-    cx.background_spawn(async move {
-        let languages_src = Path::new("crates/grammars/src");
-        let Some(languages_src) = fs.canonicalize(languages_src).await.log_err() else {
-            return;
-        };
-
-        let (mut events, watcher) = fs.watch(&languages_src, Duration::from_millis(100)).await;
-
-        // add subdirectories since fs.watch is not recursive on Linux
-        if let Some(mut paths) = fs.read_dir(&languages_src).await.log_err() {
-            while let Some(path) = paths.next().await {
-                if let Some(path) = path.log_err()
-                    && fs.is_dir(&path).await
-                {
-                    watcher.add(&path).log_err();
-                }
-            }
-        }
-
-        while let Some(event) = events.next().await {
-            let has_language_file = event
-                .iter()
-                .any(|event| event.path.extension().is_some_and(|ext| ext == "scm"));
-            if has_language_file {
-                languages.reload();
-            }
-        }
-    })
-    .detach();
 }
 
 fn dump_all_gpui_actions() {

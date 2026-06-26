@@ -1,4 +1,4 @@
 name = "Diff"
 grammar = "diff"
 path_suffixes = ["diff", "patch"]
-brackets = []
+first_line_pattern = '^diff '
