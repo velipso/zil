@@ -1,55 +1,58 @@
-# Zil
+Zil
+===
 
 Zil is a fork of [Zed v1.6.3](https://github.com/zed-industries/zed/tree/v1.6.3).
 
-My goal is to remove everything I dislike, which is probably 90% of it.
+Features
+--------
 
-The initial fork + vendoring added **1,665,382** lines of code.
+The biggest feature of Zil is that it doesn't have many features! How many features? _**Zil**ch!_ 🤏
 
-I have currently deleted **1,010,077** lines of code! 🎉
+It is a bare-bones text editor, and doesn't get in your way.
 
----
+I have **removed** the vast majority of features from Zed, including AI Agents, LSPs, auto-updates,
+edit completions, inlay hints, projects, git diff viewing, extensions, random downloading of binary
+files, collaboration, formatting, code actions, and more! I have deleted over 1 _million_ lines of
+code 🎉!
 
-Welcome to Zed, a high-performance, multiplayer code editor from the creators of [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
+I am a simple man. I just want to sit and type. Sometimes I use multiple cursors. That's about it.
 
----
+I did add a few features, believe it or not:
 
-### Installation
+1. Stacked tabs in the tab bar (more convenient when lots of tabs open -- no scrolling!)
+2. More intuitive alt-clicking to add cursors
+3. Simple plugin system for syntax highlighting
 
-On macOS, Linux, and Windows you can [download Zed directly](https://zed.dev/download) or install Zed via your local package manager ([macOS](https://zed.dev/docs/installation#macos)/[Linux](https://zed.dev/docs/linux#installing-via-a-package-manager)/[Windows](https://zed.dev/docs/windows#package-managers)).
+Why Fork?
+---------
 
-Other platforms are not yet available:
+Zed is a nice editor, but I really dislike the constant updates and features that I need to disable.
 
-- Web ([tracking discussion](https://github.com/zed-industries/zed/discussions/26195))
+There are two other forks I'm aware of:
 
-### Developing Zed
+1. [Zedless](https://github.com/zedless-editor/zedless)
+2. [Gram](https://gram.liten.app/)
 
-- [Building Zed for macOS](./docs/src/development/macos.md)
-- [Building Zed for Linux](./docs/src/development/linux.md)
-- [Building Zed for Windows](./docs/src/development/windows.md)
+Both of these seem great, but they still have too many features.
 
-### Contributing
+My philosophy when it comes to tools is that they should do one thing well. I don't need a terminal
+embedded in my editor -- I have one already. I don't need to browse folders, I have Finder. I don't
+need to have AI, I can open one in a browser if I want one. I don't need collaboration tools, I have
+Google Meet.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for ways you can contribute to Zed.
+This way, my entire desktop is my "IDE"! Easy!
 
-Also... we're hiring! Check out our [jobs](https://zed.dev/jobs) page for open roles.
+Still Left To Do
+----------------
 
-### Licensing
+Lots! Everywhere I look, there is something that can be ripped out.
 
-Zed source code is licensed primarily under GPL-3.0-or-later, with Apache-2.0 components where marked.
+Major changes still needed:
 
-License information for third party dependencies must be correctly provided for CI to pass.
-
-We use [`cargo-about`](https://github.com/EmbarkStudios/cargo-about) to automatically comply with open source licenses. If CI is failing, check the following:
-
-- Is it showing a `no license specified` error for a crate you've created? If so, add `publish = false` under `[package]` in your crate's Cargo.toml.
-- Is the error `failed to satisfy license requirements` for a dependency? If so, first determine what license the project has and whether this system is sufficient to comply with this license's requirements. If you're unsure, ask a lawyer. Once you've verified that this system is acceptable add the license's SPDX identifier to the `accepted` array in `script/licenses/zed-licenses.toml`.
-- Is `cargo-about` unable to find the license for a dependency? If so, add a clarification field at the end of `script/licenses/zed-licenses.toml`, as specified in the [cargo-about book](https://embarkstudios.github.io/cargo-about/cli/generate/config.html#crate-configuration).
-
-## Sponsorship
-
-Zed is developed by **Zed Industries, Inc.**, a for-profit company.
-
-If you’d like to financially support the project, you can do so via GitHub Sponsors.
-Sponsorships go directly to Zed Industries and are used as general company revenue.
-There are no perks or entitlements associated with sponsorship.
+1. Rip out LSPs entirely. They don't run, but a lot of code is still there.
+2. Rip out client/remote entirely.
+3. Rip out git/diffs entirely.
+4. Rework themes and add to new plugin system.
+5. Clean up _lots_ of dead code that Rust misses.
+6. Rename symbols/paths/etc from "Zed" to "Zil".
+7. Build binaries for Mac/Windows/Linux when ready.
