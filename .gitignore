@@ -5,7 +5,6 @@
 .webrtc-sys/
 **/venv
 **/.direnv
-*.wasm
 *.xcodeproj
 .DS_Store
 .blob_store
