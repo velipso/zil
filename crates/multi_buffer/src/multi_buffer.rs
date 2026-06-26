@@ -21,7 +21,7 @@ use gpui::{App, Context, Entity, EventEmitter};
 use itertools::Itertools;
 use language::{
     AutoindentMode, Buffer, BufferChunks, BufferEditSource, BufferRow, BufferSnapshot, Capability,
-    CharClassifier, CharKind, CharScopeContext, Chunk, CursorShape, DiagnosticEntryRef, File,
+    CharClassifier, CharKind, Chunk, CursorShape, DiagnosticEntryRef, File,
     IndentGuideSettings, IndentSize, Language, LanguageAwareStyling, LanguageScope, OffsetRangeExt,
     OffsetUtf16, OutlineItem, Point, PointUtf16, Selection, TextDimension, TextObject,
     ToOffset as _, ToPoint as _, TransactionId, TreeSitterOptions, Unclipped,
@@ -3206,12 +3206,9 @@ impl MultiBufferSnapshot {
     pub fn is_inside_word<T: ToOffset>(
         &self,
         position: T,
-        scope_context: Option<CharScopeContext>,
     ) -> bool {
         let position = position.to_offset(self);
-        let classifier = self
-            .char_classifier_at(position)
-            .scope_context(scope_context);
+        let classifier = self.char_classifier_at(position);
         let next_char_kind = self.chars_at(position).next().map(|c| classifier.kind(c));
         let prev_char_kind = self
             .reversed_chars_at(position)
@@ -3223,14 +3220,13 @@ impl MultiBufferSnapshot {
     pub fn surrounding_word<T: ToOffset>(
         &self,
         start: T,
-        scope_context: Option<CharScopeContext>,
     ) -> (Range<MultiBufferOffset>, Option<CharKind>) {
         let mut start = start.to_offset(self);
         let mut end = start;
         let mut next_chars = self.chars_at(start).peekable();
         let mut prev_chars = self.reversed_chars_at(start).peekable();
 
-        let classifier = self.char_classifier_at(start).scope_context(scope_context);
+        let classifier = self.char_classifier_at(start);
 
         let word_kind = cmp::max(
             prev_chars.peek().copied().map(|c| classifier.kind(c)),
@@ -3259,10 +3255,9 @@ impl MultiBufferSnapshot {
     pub fn char_kind_before<T: ToOffset>(
         &self,
         start: T,
-        scope_context: Option<CharScopeContext>,
     ) -> Option<CharKind> {
         let start = start.to_offset(self);
-        let classifier = self.char_classifier_at(start).scope_context(scope_context);
+        let classifier = self.char_classifier_at(start);
         self.reversed_chars_at(start)
             .next()
             .map(|ch| classifier.kind(ch))

@@ -585,23 +585,6 @@ pub enum CharKind {
     Word,
 }
 
-/// Context for character classification within a specific scope.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum CharScopeContext {
-    /// Character classification for completion queries.
-    ///
-    /// This context treats certain characters as word constituents that would
-    /// normally be considered punctuation, such as '-' in Tailwind classes
-    /// ("bg-yellow-100") or '.' in import paths ("foo.ts").
-    Completion,
-    /// Character classification for linked edits.
-    ///
-    /// This context handles characters that should be treated as part of
-    /// identifiers during linked editing operations, such as '.' in JSX
-    /// component names like `<Animated.View>`.
-    LinkedEdit,
-}
-
 #[derive(Default, Clone, Debug)]
 pub struct HighlightedText {
     pub text: SharedString,
@@ -3770,14 +3753,13 @@ impl BufferSnapshot {
     pub fn surrounding_word<T: ToOffset>(
         &self,
         start: T,
-        scope_context: Option<CharScopeContext>,
     ) -> (Range<usize>, Option<CharKind>) {
         let mut start = start.to_offset(self);
         let mut end = start;
         let mut next_chars = self.chars_at(start).take(128).peekable();
         let mut prev_chars = self.reversed_chars_at(start).take(128).peekable();
 
-        let classifier = self.char_classifier_at(start).scope_context(scope_context);
+        let classifier = self.char_classifier_at(start);
         let word_kind = cmp::max(
             prev_chars.peek().copied().map(|c| classifier.kind(c)),
             next_chars.peek().copied().map(|c| classifier.kind(c)),
@@ -5370,7 +5352,6 @@ pub(crate) fn contiguous_ranges(
 #[derive(Default, Debug)]
 pub struct CharClassifier {
     scope: Option<LanguageScope>,
-    scope_context: Option<CharScopeContext>,
     ignore_punctuation: bool,
 }
 
@@ -5378,15 +5359,7 @@ impl CharClassifier {
     pub fn new(scope: Option<LanguageScope>) -> Self {
         Self {
             scope,
-            scope_context: None,
             ignore_punctuation: false,
-        }
-    }
-
-    pub fn scope_context(self, scope_context: Option<CharScopeContext>) -> Self {
-        Self {
-            scope_context,
-            ..self
         }
     }
 
@@ -5415,11 +5388,7 @@ impl CharClassifier {
         }
 
         if let Some(scope) = &self.scope {
-            let characters = match self.scope_context {
-                Some(CharScopeContext::Completion) => scope.completion_query_characters(),
-                Some(CharScopeContext::LinkedEdit) => scope.linked_edit_characters(),
-                None => scope.word_characters(),
-            };
+            let characters = scope.word_characters();
             if let Some(characters) = characters
                 && characters.contains(&c)
             {

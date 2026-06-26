@@ -16,7 +16,7 @@ use gpui::{
     IntoElement, ParentElement, Pixels, SharedString, Styled, Task, WeakEntity, Window, point,
 };
 use language::{
-    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, Point,
+    Bias, Buffer, BufferRow, CharKind, HighlightedText, LocalFile, Point,
     SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
 };
 use multi_buffer::{BufferOffset, MultiBufferOffset, PathKey};
@@ -1278,8 +1278,7 @@ impl SearchableItem for Editor {
             }
             SeedQuerySetting::Selection => String::new(),
             SeedQuerySetting::Always => {
-                let (range, kind) = buffer_snapshot
-                    .surrounding_word(selection.start, Some(CharScopeContext::Completion));
+                let (range, kind) = buffer_snapshot.surrounding_word(selection.start);
                 if kind == Some(CharKind::Word) {
                     let text: String = buffer_snapshot.text_for_range(range).collect();
                     if !text.trim().is_empty() {

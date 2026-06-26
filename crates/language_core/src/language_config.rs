@@ -103,12 +103,6 @@ pub struct LanguageConfig {
     /// languages, but should not appear to the user as a distinct language.
     #[serde(default)]
     pub hidden: bool,
-    /// A list of characters that Zed should treat as word characters for completion queries.
-    #[serde(default)]
-    pub completion_query_characters: HashSet<char>,
-    /// A list of characters that Zed should treat as word characters for linked edit operations.
-    #[serde(default)]
-    pub linked_edit_characters: HashSet<char>,
     /// A list of preferred debuggers for this language.
     #[serde(default)]
     pub debuggers: IndexSet<SharedString>,
@@ -149,8 +143,6 @@ impl Default for LanguageConfig {
             soft_wrap: None,
             wrap_characters: None,
             hidden: false,
-            completion_query_characters: Default::default(),
-            linked_edit_characters: Default::default(),
             debuggers: Default::default(),
         }
     }
@@ -298,13 +290,7 @@ pub struct LanguageConfigOverride {
     #[serde(default)]
     pub word_characters: Override<HashSet<char>>,
     #[serde(default)]
-    pub completion_query_characters: Override<HashSet<char>>,
-    #[serde(default)]
-    pub linked_edit_characters: Override<HashSet<char>>,
-    #[serde(default)]
     pub opt_into_language_servers: Vec<LanguageServerName>,
-    #[serde(default)]
-    pub prefer_label_for_snippet: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Debug, Serialize, JsonSchema)]

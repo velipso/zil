@@ -2687,8 +2687,8 @@ impl Editor {
             // this might look odd to put on the background thread, but
             // `surrounding_word` can be quite expensive as it calls into
             // tree-sitter language scopes
-            let (start_word_range, _) = snapshot.surrounding_word(cursor_buffer_position, None);
-            let (end_word_range, _) = snapshot.surrounding_word(tail_buffer_position, None);
+            let (start_word_range, _) = snapshot.surrounding_word(cursor_buffer_position);
+            let (end_word_range, _) = snapshot.surrounding_word(tail_buffer_position);
             (start_word_range, end_word_range)
         });
 
@@ -4641,7 +4641,7 @@ impl Editor {
             let selection_is_empty = selection.is_empty();
 
             let (start, end) = if selection_is_empty {
-                let (word_range, _) = buffer.surrounding_word(selection.start, None);
+                let (word_range, _) = buffer.surrounding_word(selection.start);
                 (word_range.start, word_range.end)
             } else {
                 (
@@ -7577,7 +7577,7 @@ impl SemanticsProvider for WeakEntity<Project> {
                         // Fallback on using TreeSitter info to determine identifier range
                         buffer.read_with(cx, |buffer, _| {
                             let snapshot = buffer.snapshot();
-                            let (range, kind) = snapshot.surrounding_word(position, None);
+                            let (range, kind) = snapshot.surrounding_word(position);
                             if kind != Some(CharKind::Word) {
                                 return None;
                             }

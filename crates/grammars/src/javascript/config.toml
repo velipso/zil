@@ -11,17 +11,7 @@ wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", e
 word_characters = ["$", "#"]
 tab_size = 2
 scope_opt_in_language_servers = ["tailwindcss-language-server", "emmet-language-server"]
-prettier_parser_name = "babel"
 debuggers = ["JavaScript"]
-
-[jsx_tag_auto_close]
-open_tag_node_name = "jsx_opening_element"
-close_tag_node_name = "jsx_closing_element"
-jsx_element_node_name = "jsx_element"
-tag_name_node_name = "identifier"
-
-[overrides.default]
-linked_edit_characters = ["."]
 
 [overrides.element]
 line_comments = { remove = true }
@@ -29,5 +19,4 @@ block_comment = { start = "{/* ", prefix = "", end = "*/}", tab_size = 1 }
 opt_into_language_servers = ["emmet-language-server"]
 
 [overrides.string]
-completion_query_characters = ["-", "."]
 opt_into_language_servers = ["tailwindcss-language-server"]

@@ -321,7 +321,6 @@ impl EditorLspTestContext {
                     end: "-->".into(),
                     tab_size: 0,
                 }),
-                completion_query_characters: ['-'].into_iter().collect(),
                 ..Default::default()
             },
             Some(tree_sitter_html::LANGUAGE.into()),

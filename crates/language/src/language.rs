@@ -1077,37 +1077,6 @@ impl LanguageScope {
         )
     }
 
-    /// Returns a list of language-specific characters that are considered part of
-    /// a completion query.
-    pub fn completion_query_characters(&self) -> Option<&HashSet<char>> {
-        Override::as_option(
-            self.config_override()
-                .map(|o| &o.completion_query_characters),
-            Some(&self.language.config.completion_query_characters),
-        )
-    }
-
-    /// Returns a list of language-specific characters that are considered part of
-    /// identifiers during linked editing operations.
-    pub fn linked_edit_characters(&self) -> Option<&HashSet<char>> {
-        Override::as_option(
-            self.config_override().map(|o| &o.linked_edit_characters),
-            Some(&self.language.config.linked_edit_characters),
-        )
-    }
-
-    /// Returns whether to prefer snippet `label` over `new_text` to replace text when
-    /// completion is accepted.
-    ///
-    /// In cases like when cursor is in string or renaming existing function,
-    /// you don't want to expand function signature instead just want function name
-    /// to replace existing one.
-    pub fn prefers_label_for_snippet_in_completion(&self) -> bool {
-        self.config_override()
-            .and_then(|o| o.prefer_label_for_snippet)
-            .unwrap_or(false)
-    }
-
     pub fn language_allowed(&self, name: &LanguageServerName) -> bool {
         let config = &self.language.config;
         let opt_in_servers = &config.scope_opt_in_language_servers;

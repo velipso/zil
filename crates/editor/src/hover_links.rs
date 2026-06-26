@@ -355,7 +355,7 @@ pub fn show_link_definition(
                                     let snapshot = editor.buffer.read(cx).snapshot(cx);
                                     // If no symbol range returned from language server, use the surrounding word.
                                     let (offset_range, _) =
-                                        snapshot.surrounding_word(*trigger_anchor, None);
+                                        snapshot.surrounding_word(*trigger_anchor);
                                     RangeInEditor::Text(
                                         snapshot.anchor_before(offset_range.start)
                                             ..snapshot.anchor_after(offset_range.end),
