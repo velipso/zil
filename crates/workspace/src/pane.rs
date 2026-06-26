@@ -3274,11 +3274,10 @@ fn default_render_tab_bar_buttons(
         .gap(DynamicSpacing::Base04.rems(cx))
         .child(
             PopoverMenu::new("pane-tab-bar-split")
-                .trigger_with_tooltip(
+                .trigger(
                     IconButton::new("split", IconName::Split)
                         .icon_size(IconSize::Small)
-                        .disabled(!can_clone && !can_split_move),
-                    Tooltip::text("Split Pane"),
+                        .disabled(!can_clone && !can_split_move)
                 )
                 .anchor(Anchor::TopRight)
                 .with_handle(pane.split_item_context_menu_handle.clone())

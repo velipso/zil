@@ -18,7 +18,6 @@ pub mod shared_screen;
 pub use shared_screen::SharedScreen;
 pub mod focus_follows_mouse;
 mod status_bar;
-mod theme_preview;
 mod toast_layer;
 mod toolbar;
 mod workspace_settings;
@@ -649,7 +648,6 @@ pub fn prompt_for_open_path_and_open(
 
 pub fn init(app_state: Arc<AppState>, cx: &mut App) {
     component::init();
-    theme_preview::init(cx);
     toast_layer::init(cx);
     history_manager::init(app_state.fs.clone(), cx);
 

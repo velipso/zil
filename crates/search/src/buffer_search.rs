@@ -36,10 +36,7 @@ use zed_actions::{
     workspace::CopyPath, workspace::CopyRelativePath,
 };
 
-use ui::{
-    BASE_REM_SIZE_IN_PX, IconButtonShape, Tooltip, prelude::*,
-    utils::SearchInputWidth,
-};
+use ui::{BASE_REM_SIZE_IN_PX, IconButtonShape, Tooltip, prelude::*};
 use util::{ResultExt, paths::PathMatcher};
 use workspace::{
     ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace,
@@ -160,7 +157,7 @@ impl Render for BufferSearchBar {
         let replacement_border = theme_colors.border;
 
         let container_width = window.viewport_size().width;
-        let input_width = SearchInputWidth::calc_width(container_width);
+        let input_width = container_width;
 
         let input_base_styles =
             |border_color| input_base_styles(border_color, |div| div.w(input_width));
@@ -209,7 +206,7 @@ impl Render for BufferSearchBar {
                 self.active_match_index
                     .is_none()
                     .then_some(ActionButtonState::Disabled),
-                "Select Previous Match",
+                Some("Select Previous Match"),
                 &SelectPreviousMatch,
                 query_focus.clone(),
             ))
@@ -219,7 +216,7 @@ impl Render for BufferSearchBar {
                 self.active_match_index
                     .is_none()
                     .then_some(ActionButtonState::Disabled),
-                "Select Next Match",
+                Some("Select Next Match"),
                 &SelectNextMatch,
                 query_focus.clone(),
             ))
@@ -243,7 +240,7 @@ impl Render for BufferSearchBar {
                     "buffer-search-bar-toggle",
                     IconName::Replace,
                     self.replace_enabled.then_some(ActionButtonState::Toggled),
-                    "Toggle Replace",
+                    Some("Toggle Replace"),
                     &ToggleReplace,
                     focus_handle.clone(),
                 ))
@@ -281,7 +278,7 @@ impl Render for BufferSearchBar {
                     "buffer-search-nav-button",
                     IconName::SelectAll,
                     Default::default(),
-                    "Select All Matches",
+                    Some("Select All Matches"),
                     &SelectAllMatches,
                     query_focus.clone(),
                 ))
@@ -310,7 +307,7 @@ impl Render for BufferSearchBar {
                     "buffer-search-replace-button",
                     IconName::ReplaceNext,
                     Default::default(),
-                    "Replace Next Match",
+                    Some("Replace Next Match"),
                     &ReplaceNext,
                     focus_handle.clone(),
                 ))
@@ -318,7 +315,7 @@ impl Render for BufferSearchBar {
                     "buffer-search-replace-button",
                     IconName::ReplaceAll,
                     Default::default(),
-                    "Replace All Matches",
+                    Some("Replace All Matches"),
                     &ReplaceAll,
                     focus_handle,
                 ));
@@ -357,7 +354,7 @@ impl Render for BufferSearchBar {
                                 "buffer-search",
                                 IconName::Close,
                                 Default::default(),
-                                "Close Search Bar",
+                                None,
                                 &Dismiss,
                                 focus_handle.clone(),
                             )),

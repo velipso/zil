@@ -1,14 +1,14 @@
 use editor::{Editor, EditorSettings};
 use gpui::{
     Action, Anchor, ClickEvent, Context, ElementId, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement, ParentElement, Render, Styled,
+    Focusable, InteractiveElement, ParentElement, Render, Styled,
     Window,
 };
 use search::{BufferSearchBar, buffer_search};
 use settings::{Settings, SettingsStore};
 use ui::{
     ButtonStyle, ContextMenu, IconButton, IconName, IconSize,
-    PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*,
+    PopoverMenu, PopoverMenuHandle, prelude::*,
 };
 use workspace::item::ItemBufferKind;
 use workspace::{
@@ -77,7 +77,6 @@ impl Render for QuickActionBar {
         let show_line_numbers = editor_value.line_numbers_enabled(cx);
         let supports_minimap = editor_value.supports_minimap(cx);
         let minimap_enabled = supports_minimap && editor_value.minimap().is_some();
-        let focus_handle = editor_value.focus_handle(cx);
         let stacked_tabs = {
             let editor = editor.clone();
             editor.read_with(cx, |editor, cx| {
@@ -95,9 +94,6 @@ impl Render for QuickActionBar {
                 "toggle buffer search",
                 search::SEARCH_ICON,
                 !self.buffer_search_bar.read(cx).is_dismissed(),
-                Box::new(buffer_search::Deploy::find()),
-                focus_handle.clone(),
-                "Buffer Search",
                 {
                     let buffer_search_bar = self.buffer_search_bar.clone();
                     move |_, window, cx| {
@@ -113,12 +109,11 @@ impl Render for QuickActionBar {
         let editor = editor.downgrade();
         let editor_settings_dropdown = {
             PopoverMenu::new("editor-settings")
-                .trigger_with_tooltip(
+                .trigger(
                     IconButton::new("toggle_editor_settings_icon", IconName::Sliders)
                         .icon_size(IconSize::Small)
                         .style(ButtonStyle::Subtle)
-                        .toggle_state(self.toggle_settings_handle.is_deployed()),
-                    Tooltip::text("Editor Controls"),
+                        .toggle_state(self.toggle_settings_handle.is_deployed())
                 )
                 .anchor(Anchor::TopRight)
                 .with_handle(self.toggle_settings_handle.clone())
@@ -232,9 +227,6 @@ struct QuickActionBarButton {
     id: ElementId,
     icon: IconName,
     toggled: bool,
-    action: Box<dyn Action>,
-    focus_handle: FocusHandle,
-    tooltip: SharedString,
     on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
 }
 
@@ -243,18 +235,12 @@ impl QuickActionBarButton {
         id: impl Into<ElementId>,
         icon: IconName,
         toggled: bool,
-        action: Box<dyn Action>,
-        focus_handle: FocusHandle,
-        tooltip: impl Into<SharedString>,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             id: id.into(),
             icon,
             toggled,
-            action,
-            focus_handle,
-            tooltip: tooltip.into(),
             on_click: Box::new(on_click),
         }
     }
@@ -262,16 +248,10 @@ impl QuickActionBarButton {
 
 impl RenderOnce for QuickActionBarButton {
     fn render(self, _window: &mut Window, _: &mut App) -> impl IntoElement {
-        let tooltip = self.tooltip.clone();
-        let action = self.action.boxed_clone();
-
         IconButton::new(self.id.clone(), self.icon)
             .icon_size(IconSize::Small)
             .style(ButtonStyle::Subtle)
             .toggle_state(self.toggled)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in(tooltip.clone(), &*action, &self.focus_handle, cx)
-            })
             .on_click(move |event, window, cx| (self.on_click)(event, window, cx))
     }
 }

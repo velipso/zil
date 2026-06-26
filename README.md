@@ -20,8 +20,9 @@ I am a simple man. I just want to sit and type. Sometimes I use multiple cursors
 I did add a few features, believe it or not:
 
 1. Stacked tabs in the tab bar (more convenient when lots of tabs open -- no scrolling!)
-2. More intuitive alt-clicking to add cursors
-3. Simple plugin system for syntax highlighting
+2. Simple plugin system for syntax highlighting
+3. More intuitive alt-clicking to add cursors
+4. Simplified auto-indent system to be more predictable
 
 Why Fork?
 ---------
