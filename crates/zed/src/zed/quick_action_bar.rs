@@ -233,8 +233,11 @@ impl Render for QuickActionBar {
                                     {
                                         let editor_focus_handle = editor_focus_handle.clone();
                                         move |window, cx| {
-                                            window.focus(&editor_focus_handle, cx);
-                                            window.dispatch_action(Box::new(editor::actions::ToggleGoToLine), cx);
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::ToggleGoToLine,
+                                                window,
+                                                cx
+                                            );
                                         }
                                     }
                                 )

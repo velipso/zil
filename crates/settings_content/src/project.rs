@@ -155,7 +155,7 @@ pub struct WorktreeSettingsContent {
 }
 
 #[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct LspSettings {
     pub binary: Option<BinarySettings>,
@@ -172,17 +172,6 @@ pub struct LspSettings {
     /// Consult the documentation for the specific language server to see which settings are supported.
     pub settings: Option<serde_json::Value>,
     pub fetch: Option<FetchSettings>,
-}
-
-impl Default for LspSettings {
-    fn default() -> Self {
-        Self {
-            binary: None,
-            initialization_options: None,
-            settings: None,
-            fetch: None,
-        }
-    }
 }
 
 #[with_fallible_options]

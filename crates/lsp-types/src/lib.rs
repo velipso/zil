@@ -229,13 +229,6 @@ impl std::fmt::Display for NumberOrString {
 }
 
 impl NumberOrString {
-    pub fn to_string(&self) -> String {
-        match self {
-            NumberOrString::Number(n) => n.to_string(),
-            NumberOrString::String(s) => s.clone(),
-        }
-    }
-
     pub fn from_string(s: String) -> Self {
         s.parse()
             .map_or(NumberOrString::String(s), NumberOrString::Number)
