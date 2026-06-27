@@ -1,7 +1,5 @@
 mod action;
-mod agent;
 mod editor;
-mod extension;
 mod fallible_options;
 mod language;
 mod language_model;
@@ -13,9 +11,7 @@ mod title_bar;
 mod workspace;
 
 pub use action::{ActionName, ActionWithArguments};
-pub use agent::*;
 pub use editor::*;
-pub use extension::*;
 pub use fallible_options::*;
 pub use language::*;
 pub use language_model::*;
@@ -65,9 +61,9 @@ macro_rules! settings_overrides {
         }
     }
 }
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
-use std::sync::Arc;
 pub use util::serde::default_true;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +74,13 @@ pub enum ParseStatus {
     Unchanged,
     /// Settings failed to parse
     Failed { error: String },
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum SidebarSide {
+    #[default]
+    Left,
+    Right,
 }
 
 /// Determines when the mouse cursor should be hidden in response to keyboard
@@ -119,9 +122,6 @@ pub struct SettingsContent {
     pub theme: Box<ThemeSettingsContent>,
 
     #[serde(flatten)]
-    pub extension: ExtensionSettingsContent,
-
-    #[serde(flatten)]
     pub workspace: WorkspaceSettingsContent,
 
     #[serde(flatten)]
@@ -136,27 +136,6 @@ pub struct SettingsContent {
     pub tabs: Option<ItemSettingsContent>,
     pub tab_bar: Option<TabBarSettingsContent>,
 
-    pub agent: Option<AgentSettingsContent>,
-    pub agent_servers: Option<AllAgentServersSettings>,
-
-    /// Configuration of audio in Zed.
-    pub audio: Option<AudioSettingsContent>,
-
-    /// Whether or not to automatically check for updates.
-    ///
-    /// Default: true
-    pub auto_update: Option<bool>,
-
-    /// This base keymap settings adjusts the default keybindings in Zed to be similar
-    /// to other common code editors. By default, Zed's keymap closely follows VSCode's
-    /// keymap, with minor adjustments, this corresponds to the "VSCode" setting.
-    ///
-    /// Default: VSCode
-    pub base_keymap: Option<BaseKeymapContent>,
-
-    /// Configuration for the collab panel visual settings.
-    pub collaboration_panel: Option<PanelSettingsContent>,
-
     pub debugger: Option<DebuggerSettingsContent>,
 
     /// Configuration for Git-related features
@@ -165,13 +144,6 @@ pub struct SettingsContent {
     /// Common language server settings.
     pub global_lsp_settings: Option<GlobalLspSettingsContent>,
 
-    pub repl: Option<ReplSettingsContent>,
-
-    /// Whether or not to enable Helix mode.
-    ///
-    /// Default: false
-    pub helix_mode: Option<bool>,
-
     /// Determines when the mouse cursor should be hidden in response to
     /// keyboard input. Applies globally across all input surfaces (editors,
     /// terminals, palettes, etc.).
@@ -179,23 +151,13 @@ pub struct SettingsContent {
     /// Default: on_typing_and_action
     pub hide_mouse: Option<HideMouseMode>,
 
-    pub journal: Option<JournalSettingsContent>,
-
     /// A map of log scopes to the desired log level.
     /// Useful for filtering out noisy logs or enabling more verbose logging.
     ///
     /// Example: {"log": {"client": "warn"}}
     pub log: Option<HashMap<String, String>>,
 
-    pub line_indicator_format: Option<LineIndicatorFormat>,
-
     pub language_models: Option<AllLanguageModelSettingsContent>,
-
-    /// Configuration for the Message Editor
-    pub message_editor: Option<MessageEditorSettings>,
-
-    /// Configuration for Node-related features
-    pub node: Option<NodeBinarySettings>,
 
     pub proxy: Option<String>,
 
@@ -214,19 +176,11 @@ pub struct SettingsContent {
 
     pub title_bar: Option<TitleBarSettingsContent>,
 
-    /// Whether or not to enable Vim mode.
-    ///
-    /// Default: false
-    pub vim_mode: Option<bool>,
-
     // Settings related to calls in Zed
     pub calls: Option<CallSettingsContent>,
 
     /// Settings for the which-key popup.
     pub which_key: Option<WhichKeySettingsContent>,
-
-    /// Settings related to Vim mode in Zed.
-    pub vim: Option<VimSettingsContent>,
 
     /// Number of lines to search for modelines at the beginning and end of files.
     /// Modelines contain editor directives (e.g., vim/emacs settings) that configure
@@ -334,131 +288,6 @@ pub struct UserSettingsContent {
 
 pub struct ExtensionsSettingsContent {
     pub all_languages: AllLanguageSettingsContent,
-}
-
-/// Base key bindings scheme. Base keymaps can be overridden with user keymaps.
-///
-/// Default: VSCode
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    Default,
-    strum::VariantArray,
-)]
-pub enum BaseKeymapContent {
-    #[default]
-    VSCode,
-    JetBrains,
-    SublimeText,
-    Atom,
-    TextMate,
-    Emacs,
-    Cursor,
-    None,
-}
-
-impl strum::VariantNames for BaseKeymapContent {
-    const VARIANTS: &'static [&'static str] = &[
-        "VSCode",
-        "JetBrains",
-        "Sublime Text",
-        "Atom",
-        "TextMate",
-        "Emacs",
-        "Cursor",
-        "None",
-    ];
-}
-
-/// Configuration of audio in Zed.
-#[with_fallible_options]
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
-pub struct AudioSettingsContent {
-    /// Automatically increase or decrease you microphone's volume. This affects how
-    /// loud you sound to others.
-    ///
-    /// Recommended: off (default)
-    /// Microphones are too quite in zed, until everyone is on experimental
-    /// audio and has auto speaker volume on this will make you very loud
-    /// compared to other speakers.
-    #[serde(rename = "experimental.auto_microphone_volume")]
-    pub auto_microphone_volume: Option<bool>,
-    /// Remove background noises. Works great for typing, cars, dogs, AC. Does
-    /// not work well on music.
-    /// Select specific output audio device.
-    #[serde(rename = "experimental.output_audio_device")]
-    pub output_audio_device: Option<AudioOutputDeviceName>,
-    /// Select specific input audio device.
-    #[serde(rename = "experimental.input_audio_device")]
-    pub input_audio_device: Option<AudioInputDeviceName>,
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct AudioOutputDeviceName(pub Option<String>);
-
-impl AsRef<Option<String>> for AudioInputDeviceName {
-    fn as_ref(&self) -> &Option<String> {
-        &self.0
-    }
-}
-
-impl From<Option<String>> for AudioInputDeviceName {
-    fn from(value: Option<String>) -> Self {
-        Self(value)
-    }
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct AudioInputDeviceName(pub Option<String>);
-
-impl AsRef<Option<String>> for AudioOutputDeviceName {
-    fn as_ref(&self) -> &Option<String> {
-        &self.0
-    }
-}
-
-impl From<Option<String>> for AudioOutputDeviceName {
-    fn from(value: Option<String>) -> Self {
-        Self(value)
-    }
-}
-
-/// Control what info is collected by Zed.
-#[with_fallible_options]
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Debug, MergeFrom)]
-pub struct TelemetrySettingsContent {
-    /// Send debug info like crash reports.
-    ///
-    /// Default: true
-    pub diagnostics: Option<bool>,
-    /// Send anonymized usage data like what languages you're using Zed with.
-    ///
-    /// Default: true
-    pub metrics: Option<bool>,
-    /// Allow sending requests to Anthropic models that cannot be offered with
-    /// Zero Data Retention.
-    ///
-    /// Default: false
-    pub anthropic_retention: Option<bool>,
-}
-
-impl Default for TelemetrySettingsContent {
-    fn default() -> Self {
-        Self {
-            diagnostics: Some(true),
-            metrics: Some(true),
-            anthropic_retention: Some(false),
-        }
-    }
 }
 
 #[with_fallible_options]
@@ -575,34 +404,6 @@ pub enum StatusStyle {
 
 #[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
-pub struct PanelSettingsContent {
-    /// Whether to show the panel button in the status bar.
-    ///
-    /// Default: true
-    pub button: Option<bool>,
-    /// Where to dock the panel.
-    ///
-    /// Default: right
-    pub dock: Option<DockPosition>,
-    /// Default width of the panel in pixels.
-    ///
-    /// Default: 240
-    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
-    pub default_width: Option<f32>,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
-pub struct MessageEditorSettings {
-    /// Whether to automatically replace emoji shortcodes with emoji characters.
-    /// For example: typing `:wave:` gets replaced with `👋`.
-    ///
-    /// Default: false
-    pub auto_replace_emoji_shortcode: Option<bool>,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct FileFinderSettingsContent {
     /// Whether to show file icons in the file finder.
     ///
@@ -676,69 +477,6 @@ pub enum FileFinderWidthContent {
     Full,
 }
 
-#[with_fallible_options]
-#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Debug, JsonSchema, MergeFrom)]
-pub struct VimSettingsContent {
-    pub default_mode: Option<ModeContent>,
-    pub toggle_relative_line_numbers: Option<bool>,
-    pub use_system_clipboard: Option<UseSystemClipboard>,
-    pub use_smartcase_find: Option<bool>,
-    pub use_regex_search: Option<bool>,
-    /// When enabled, the `:substitute` command replaces all matches in a line
-    /// by default. The 'g' flag then toggles this behavior.,
-    pub gdefault: Option<bool>,
-    pub custom_digraphs: Option<HashMap<String, Arc<str>>>,
-    pub highlight_on_yank_duration: Option<u64>,
-    pub cursor_shape: Option<CursorShapeSettings>,
-    /// When enabled, edit predictions are shown in Vim normal mode.
-    /// By default, edit predictions are only shown in insert and replace modes.
-    pub show_edit_predictions_in_normal_mode: Option<bool>,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ModeContent {
-    #[default]
-    Normal,
-    Insert,
-}
-
-/// Controls when to use system clipboard.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum UseSystemClipboard {
-    /// Don't use system clipboard.
-    Never,
-    /// Use system clipboard.
-    Always,
-    /// Use system clipboard for yank operations.
-    OnYank,
-}
-
 /// Cursor shape configuration for insert mode in Vim.
 #[derive(
     Copy,
@@ -765,44 +503,6 @@ pub enum VimInsertModeCursorShape {
     Underline,
     /// Hollow box cursor.
     Hollow,
-}
-
-/// The settings for cursor shape.
-#[with_fallible_options]
-#[derive(
-    Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom,
-)]
-pub struct CursorShapeSettings {
-    /// Cursor shape for the normal mode.
-    ///
-    /// Default: block
-    pub normal: Option<CursorShape>,
-    /// Cursor shape for the replace mode.
-    ///
-    /// Default: underline
-    pub replace: Option<CursorShape>,
-    /// Cursor shape for the visual mode.
-    ///
-    /// Default: block
-    pub visual: Option<CursorShape>,
-    /// Cursor shape for the insert mode.
-    ///
-    /// The default value follows the primary cursor_shape.
-    pub insert: Option<VimInsertModeCursorShape>,
-}
-
-/// Settings specific to journaling
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
-pub struct JournalSettingsContent {
-    /// The path of the directory where journal entries are stored.
-    ///
-    /// Default: `~`
-    pub path: Option<String>,
-    /// What format to display the hours in.
-    ///
-    /// Default: hour12
-    pub hour_format: Option<HourFormat>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
@@ -858,14 +558,6 @@ pub enum ShowIndentGuides {
 pub struct IndentGuidesSettingsContent {
     /// When to show the scrollbar in the outline panel.
     pub show: Option<ShowIndentGuides>,
-}
-
-#[derive(Clone, Copy, Default, PartialEq, Debug, JsonSchema, MergeFrom, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LineIndicatorFormat {
-    Short,
-    #[default]
-    Long,
 }
 
 #[with_fallible_options]
@@ -938,36 +630,6 @@ pub struct SshPortForwardOption {
     pub local_port: u16,
     pub remote_host: Option<String>,
     pub remote_port: u16,
-}
-
-/// Settings for configuring REPL display and behavior.
-#[with_fallible_options]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct ReplSettingsContent {
-    /// Maximum number of lines to keep in REPL's scrollback buffer.
-    /// Clamped with [4, 256] range.
-    ///
-    /// Default: 32
-    pub max_lines: Option<usize>,
-    /// Maximum number of columns to keep in REPL's scrollback buffer.
-    /// Clamped with [20, 512] range.
-    ///
-    /// Default: 128
-    pub max_columns: Option<usize>,
-    /// Whether to show small single-line outputs inline instead of in a block.
-    ///
-    /// Default: true
-    pub inline_output: Option<bool>,
-    /// Maximum number of characters for an output to be shown inline.
-    /// Only applies when `inline_output` is true.
-    ///
-    /// Default: 50
-    pub inline_output_max_length: Option<usize>,
-    /// Maximum number of lines of output to display before scrolling.
-    /// Set to 0 to disable output height limits.
-    ///
-    /// Default: 0
-    pub output_max_height_lines: Option<usize>,
 }
 
 /// Settings for configuring the which-key popup behaviour.

@@ -1,4 +1,3 @@
-mod base_keymap_setting;
 mod content_into_gpui;
 mod editable_setting_control;
 mod editorconfig_store;
@@ -31,7 +30,6 @@ use std::{borrow::Cow, fmt, str};
 use util::asset_str;
 
 pub use ::settings_content::*;
-pub use base_keymap_setting::*;
 pub use content_into_gpui::IntoGpui;
 pub use editable_setting_control::*;
 pub use editorconfig_store::{
@@ -147,12 +145,6 @@ pub const DEFAULT_KEYMAP_PATH: &str = "keymaps/default-linux.json";
 
 pub fn default_keymap() -> Cow<'static, str> {
     asset_str::<SettingsAssets>(DEFAULT_KEYMAP_PATH)
-}
-
-pub const VIM_KEYMAP_PATH: &str = "keymaps/vim.json";
-
-pub fn vim_keymap() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>(VIM_KEYMAP_PATH)
 }
 
 pub fn initial_user_settings_content() -> Cow<'static, str> {

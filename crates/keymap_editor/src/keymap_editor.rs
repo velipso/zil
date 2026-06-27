@@ -25,9 +25,7 @@ use gpui::{
 use language::{Language, LanguageConfig};
 
 use notifications::status_toast::StatusToast;
-use settings::{
-    BaseKeymap, KeybindSource, KeymapFile, SettingsAssets, infer_json_indent_size,
-};
+use settings::{KeybindSource, KeymapFile, SettingsAssets, infer_json_indent_size};
 use ui::{
     ActiveTheme as _, App, Banner, BorrowAppContext, ColumnWidthConfig, ContextMenu,
     IconButtonShape, IconPosition, Indicator, Modal, ModalFooter, ModalHeader, ParentElement as _,
@@ -3194,16 +3192,9 @@ async fn remove_keybinding(
 }
 
 fn collect_contexts_from_assets() -> Vec<SharedString> {
-    let mut keymap_assets = vec![
+    let keymap_assets = vec![
         util::asset_str::<SettingsAssets>(settings::DEFAULT_KEYMAP_PATH),
-        util::asset_str::<SettingsAssets>(settings::VIM_KEYMAP_PATH),
     ];
-    keymap_assets.extend(
-        BaseKeymap::OPTIONS
-            .iter()
-            .filter_map(|(_, base_keymap)| base_keymap.asset_path())
-            .map(util::asset_str::<SettingsAssets>),
-    );
 
     let mut contexts = HashSet::default();
 

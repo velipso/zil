@@ -172,57 +172,32 @@ impl VsCodeSettings {
 
     pub fn settings_content(&self) -> SettingsContent {
         SettingsContent {
-            agent: self.agent_settings_content(),
-            agent_servers: None,
-            audio: None,
-            auto_update: None,
-            base_keymap: Some(BaseKeymapContent::VSCode),
             calls: None,
-            collaboration_panel: None,
             credentials_url: None,
             debugger: None,
             editor: self.editor_settings_content(),
-            extension: ExtensionSettingsContent::default(),
             file_finder: None,
             git: self.git_settings_content(),
             global_lsp_settings: skip_default(GlobalLspSettingsContent {
                 semantic_token_rules: self.semantic_token_rules(),
                 ..GlobalLspSettingsContent::default()
             }),
-            helix_mode: None,
             hide_mouse: None,
-            journal: None,
             language_models: None,
-            line_indicator_format: None,
             log: None,
-            message_editor: None,
-            node: self.node_binary_settings(),
-
             project: self.project_settings_content(),
             proxy: self.read_string("http.proxy"),
             remote: RemoteSettingsContent::default(),
-            repl: None,
             server_url: None,
             session: None,
             tab_bar: self.tab_bar_settings_content(),
             tabs: self.item_settings_content(),
             theme: Box::new(self.theme_settings_content()),
             title_bar: None,
-            vim: None,
-            vim_mode: None,
             workspace: self.workspace_settings_content(),
             which_key: None,
             modeline_lines: None,
         }
-    }
-
-    fn agent_settings_content(&self) -> Option<AgentSettingsContent> {
-        let enabled = self.read_bool("chat.agent.enabled");
-        skip_default(AgentSettingsContent {
-            enabled: enabled,
-            button: enabled,
-            ..Default::default()
-        })
     }
 
     fn editor_settings_content(&self) -> EditorSettingsContent {
@@ -553,18 +528,6 @@ impl VsCodeSettings {
             associations.entry(v.into()).or_default().0.push(k.clone());
         }
         skip_default(associations)
-    }
-
-    fn node_binary_settings(&self) -> Option<NodeBinarySettings> {
-        // this just sets the binary name instead of a full path so it relies on path lookup
-        // resolving to the one you want
-        skip_default(NodeBinarySettings {
-            npm_path: self.read_enum("npm.packageManager", |s| match s {
-                v @ ("npm" | "yarn" | "bun" | "pnpm") => Some(v.to_owned()),
-                _ => None,
-            }),
-            ..Default::default()
-        })
     }
 
     fn git_settings_content(&self) -> Option<GitSettings> {

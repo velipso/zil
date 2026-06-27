@@ -1,21 +1,18 @@
-// Zed keymap
+// Zil keymap
 //
-// For information on binding keys, see the Zed
-// documentation: https://zed.dev/docs/key-bindings
-//
-// To see the default key bindings run `zed: open default keymap`
+// To see the default key bindings run `zil: open default keymap`
 // from the command palette.
 [
   {
     "context": "Workspace",
     "bindings": {
-      // "shift shift": "file_finder::Toggle"
+      // "shift shift": "workspace::ToggleStackedTabs"
     },
   },
   {
-    "context": "Editor && vim_mode == insert",
+    "context": "Editor && mode == full",
     "bindings": {
-      // "j k": "vim::NormalBefore"
+      // "j k": "editor::ToggleLineNumbers"
     },
   },
 ]

@@ -15,9 +15,6 @@ use std::path::PathBuf;
 use ui::prelude::*;
 use util::path_list::PathList;
 
-use settings::SidebarDockPosition;
-use ui::{ContextMenu, right_click_menu};
-
 use crate::{
     CloseIntent, CloseWindow, DockPosition, Event as WorkspaceEvent, Item, ModalView, OpenMode,
     Panel, Workspace, WorkspaceId, client_side_decorations,
@@ -51,40 +48,6 @@ actions!(
 pub struct SidebarRenderState {
     pub open: bool,
     pub side: SidebarSide,
-}
-
-pub fn sidebar_side_context_menu(
-    id: impl Into<ElementId>,
-    _cx: &App,
-) -> ui::RightClickMenu<ContextMenu> {
-    let current_position = SidebarDockPosition::Left;
-    right_click_menu(id).menu(move |window, cx| {
-        let fs = <dyn fs::Fs>::global(cx);
-        ContextMenu::build(window, cx, move |mut menu, _, _cx| {
-            let positions: [(SidebarDockPosition, &str); 2] = [
-                (SidebarDockPosition::Left, "Left"),
-                (SidebarDockPosition::Right, "Right"),
-            ];
-            for (position, label) in positions {
-                let fs = fs.clone();
-                menu = menu.toggleable_entry(
-                    label,
-                    position == current_position,
-                    IconPosition::Start,
-                    None,
-                    move |_window, cx| {
-                        settings::update_settings_file(fs.clone(), cx, move |settings, _cx| {
-                            settings
-                                .agent
-                                .get_or_insert_default()
-                                .set_sidebar_side(position);
-                        });
-                    },
-                );
-            }
-            menu
-        })
-    })
 }
 
 pub enum MultiWorkspaceEvent {

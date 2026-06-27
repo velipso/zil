@@ -38,7 +38,7 @@ use quick_action_bar::QuickActionBar;
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rope::Rope;
 use settings::{
-    BaseKeymap, DEFAULT_KEYMAP_PATH, InvalidSettingsError, KeybindSource, KeymapFile,
+    DEFAULT_KEYMAP_PATH, InvalidSettingsError, KeybindSource, KeymapFile,
     KeymapFileLoadResult, Settings, SettingsFile, SettingsStore,
     initial_project_settings_content, initial_tasks_content,
     update_settings_file,
@@ -1244,19 +1244,7 @@ pub fn handle_keymap_file_changes(
     user_keymap_watcher: gpui::Task<()>,
     cx: &mut App,
 ) {
-    let (base_keymap_tx, mut base_keymap_rx) = mpsc::unbounded();
     let (keyboard_layout_tx, mut keyboard_layout_rx) = mpsc::unbounded();
-    let mut old_base_keymap = *BaseKeymap::get_global(cx);
-
-    cx.observe_global::<SettingsStore>(move |cx| {
-        let new_base_keymap = *BaseKeymap::get_global(cx);
-
-        if new_base_keymap != old_base_keymap {
-            old_base_keymap = new_base_keymap;
-            base_keymap_tx.unbounded_send(()).unwrap();
-        }
-    })
-    .detach();
 
     #[cfg(target_os = "windows")]
     {
@@ -1294,7 +1282,6 @@ pub fn handle_keymap_file_changes(
         let mut user_keymap_content = String::new();
         loop {
             select_biased! {
-                _ = base_keymap_rx.next() => {},
                 _ = keyboard_layout_rx.next() => {},
                 content = user_keymap_file_rx.next() => {
                     if let Some(content) = content {
@@ -1419,18 +1406,9 @@ fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
 }
 
 pub fn load_default_keymap(cx: &mut App) {
-    let base_keymap = *BaseKeymap::get_global(cx);
-    if base_keymap == BaseKeymap::None {
-        return;
-    }
-
     cx.bind_keys(
         KeymapFile::load_asset(DEFAULT_KEYMAP_PATH, Some(KeybindSource::Default), cx).unwrap(),
     );
-
-    if let Some(asset_path) = base_keymap.asset_path() {
-        cx.bind_keys(KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx).unwrap());
-    }
 }
 
 fn open_project_settings_file(
