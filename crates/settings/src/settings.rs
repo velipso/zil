@@ -151,26 +151,10 @@ pub fn initial_user_settings_content() -> Cow<'static, str> {
     asset_str::<SettingsAssets>("settings/initial_user_settings.json")
 }
 
-pub fn initial_server_settings_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_server_settings.json")
-}
-
 pub fn initial_project_settings_content() -> Cow<'static, str> {
     asset_str::<SettingsAssets>("settings/initial_local_settings.json")
 }
 
 pub fn initial_keymap_content() -> Cow<'static, str> {
     asset_str::<SettingsAssets>("keymaps/initial.json")
-}
-
-pub fn initial_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_tasks.json")
-}
-
-pub fn initial_debug_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_debug_tasks.json")
-}
-
-pub fn initial_local_debug_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_local_debug_tasks.json")
 }

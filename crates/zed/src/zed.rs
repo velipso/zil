@@ -29,10 +29,7 @@ use language::Capability;
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 pub use open_listener::*;
-use paths::{
-    local_settings_file_relative_path,
-    local_tasks_file_relative_path,
-};
+use paths::local_settings_file_relative_path;
 use project::{ProjectItem};
 use quick_action_bar::QuickActionBar;
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
@@ -40,7 +37,7 @@ use rope::Rope;
 use settings::{
     DEFAULT_KEYMAP_PATH, InvalidSettingsError, KeybindSource, KeymapFile,
     KeymapFileLoadResult, Settings, SettingsFile, SettingsStore,
-    initial_project_settings_content, initial_tasks_content,
+    initial_project_settings_content,
     update_settings_file,
 };
 
@@ -92,10 +89,6 @@ actions!(
         OpenProjectSettingsFile,
         /// Opens the project tasks configuration.
         OpenProjectTasks,
-        /// Opens the tasks panel.
-        OpenTasks,
-        /// Opens debug tasks configuration.
-        OpenDebugTasks,
         /// Shows the default semantic token rules (read-only).
         ShowDefaultSemanticTokenRules,
         /// Resets the application database.
@@ -153,26 +146,6 @@ pub fn init(cx: &mut App) {
     .on_action(|_: &OpenAccountSettings, cx| {
         with_active_or_new_workspace(cx, |_, _, cx| {
             cx.open_url(&zed_urls::account_url(cx));
-        });
-    })
-    .on_action(|_: &OpenTasks, cx| {
-        with_active_or_new_workspace(cx, |_, window, cx| {
-            open_settings_file(
-                paths::tasks_file(),
-                || settings::initial_tasks_content().as_ref().into(),
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &OpenDebugTasks, cx| {
-        with_active_or_new_workspace(cx, |_, window, cx| {
-            open_settings_file(
-                paths::debug_scenarios_file(),
-                || settings::initial_debug_tasks_content().as_ref().into(),
-                window,
-                cx,
-            );
         });
     })
     .on_action(|_: &ShowDefaultSemanticTokenRules, cx| {
@@ -730,7 +703,6 @@ fn register_actions(
             }
         })
         .register_action(open_project_settings_file)
-        .register_action(open_project_tasks_file)
         .register_action({
             let app_state = app_state.clone();
             move |_, _: &NewWindow, _, cx| {
@@ -1421,21 +1393,6 @@ fn open_project_settings_file(
         workspace,
         local_settings_file_relative_path(),
         initial_project_settings_content(),
-        window,
-        cx,
-    )
-}
-
-fn open_project_tasks_file(
-    workspace: &mut Workspace,
-    _: &OpenProjectTasks,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    open_local_file(
-        workspace,
-        local_tasks_file_relative_path(),
-        initial_tasks_content(),
         window,
         cx,
     )

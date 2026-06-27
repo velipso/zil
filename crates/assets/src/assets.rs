@@ -12,9 +12,6 @@ use rust_embed::RustEmbed;
 #[include = "images/**/*"]
 #[include = "languages/**/*"]
 #[include = "themes/**/*"]
-#[exclude = "themes/src/*"]
-#[include = "sounds/**/*"]
-#[include = "prompts/**/*"]
 #[include = "licenses.txt"]
 #[exclude = "*.DS_Store"]
 pub struct Assets;
