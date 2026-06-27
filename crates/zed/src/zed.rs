@@ -25,9 +25,7 @@ use gpui::{
     WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, actions,
     image_cache, img, point, px, retain_all,
 };
-use image_viewer::ImageInfo;
 use language::Capability;
-use language_tools::lsp_button::{self, LspButton};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 pub use open_listener::*;
@@ -54,7 +52,7 @@ use std::{
 };
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
-use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
+use ui::{Navigable, NavigableEntry, TintColor, prelude::*};
 use util::markdown::MarkdownString;
 use util::rel_path::RelPath;
 use util::{ResultExt, asset_str};
@@ -413,39 +411,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             log::info!("Using GPU: {:?}", specs);
             show_software_emulation_warning_if_needed(specs.clone(), window, cx);
         }
-
-        let active_file_name = cx.new(|_| workspace::active_file_name::ActiveFileName::new());
-        let active_buffer_encoding =
-            cx.new(|_| encoding_selector::ActiveBufferEncoding::new(workspace));
-        let active_buffer_language =
-            cx.new(|_| language_selector::ActiveBufferLanguage::new(workspace));
-        let active_toolchain_language =
-            cx.new(|cx| toolchain_selector::ActiveToolchain::new(workspace, window, cx));
-        let image_info = cx.new(|_cx| ImageInfo::new(workspace));
-
-        let lsp_button_menu_handle = PopoverMenuHandle::default();
-        let lsp_button =
-            cx.new(|cx| LspButton::new(workspace, lsp_button_menu_handle.clone(), window, cx));
-        workspace.register_action({
-            move |_, _: &lsp_button::ToggleMenu, window, cx| {
-                lsp_button_menu_handle.toggle(window, cx);
-            }
-        });
-
-        let cursor_position =
-            cx.new(|_| go_to_line::cursor_position::CursorPosition::new(workspace));
-        let line_ending_indicator =
-            cx.new(|_| line_ending_selector::LineEndingIndicator::default());
-        workspace.status_bar().update(cx, |status_bar, cx| {
-            status_bar.add_left_item(lsp_button, window, cx);
-            status_bar.add_left_item(active_file_name, window, cx);
-            status_bar.add_right_item(active_buffer_encoding, window, cx);
-            status_bar.add_right_item(active_buffer_language, window, cx);
-            status_bar.add_right_item(active_toolchain_language, window, cx);
-            status_bar.add_right_item(line_ending_indicator, window, cx);
-            status_bar.add_right_item(cursor_position, window, cx);
-            status_bar.add_right_item(image_info, window, cx);
-        });
 
         let panels_task = Task::ready(anyhow::Ok(())); // VELIPSO: remove
         workspace.set_panels_task(panels_task);

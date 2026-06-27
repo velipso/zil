@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use editor::Editor;
 use gpui::{
-    App, AsyncWindowContext, Context, Entity, IntoElement, ParentElement, Render, Styled,
+    AsyncWindowContext, Context, Entity, IntoElement, ParentElement, Render, Styled,
     Subscription, Task, WeakEntity, Window, div,
 };
 use language::{Buffer, BufferEvent, LanguageName, Toolchain, ToolchainScope};
 use project::{Project, ProjectPath, Toolchains, WorktreeId, toolchain_store::ToolchainStoreEvent};
 use ui::{Button, ButtonCommon, Clickable, LabelSize, SharedString, Tooltip};
 use util::{maybe, rel_path::RelPath};
-use workspace::{HideStatusItem, StatusItemView, Workspace, item::ItemHandle};
+use workspace::Workspace;
 
 use crate::ToolchainSelector;
 
@@ -232,25 +232,5 @@ impl Render for ActiveToolchain {
                 }))
                 .tooltip(Tooltip::text(format!("Select {}", &self.term))),
         )
-    }
-}
-
-impl StatusItemView for ActiveToolchain {
-    fn set_active_pane_item(
-        &mut self,
-        active_pane_item: Option<&dyn ItemHandle>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
-            self.update_lister(editor, window, cx);
-        }
-        cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        // The toolchain selector only appears when the active buffer has a
-        // language with toolchain support.
-        None
     }
 }

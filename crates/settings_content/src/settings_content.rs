@@ -135,7 +135,6 @@ pub struct SettingsContent {
 
     pub tabs: Option<ItemSettingsContent>,
     pub tab_bar: Option<TabBarSettingsContent>,
-    pub status_bar: Option<StatusBarSettingsContent>,
 
     pub agent: Option<AgentSettingsContent>,
     pub agent_servers: Option<AllAgentServersSettings>,
@@ -165,9 +164,6 @@ pub struct SettingsContent {
 
     /// Common language server settings.
     pub global_lsp_settings: Option<GlobalLspSettingsContent>,
-
-    /// The settings for the image viewer.
-    pub image_viewer: Option<ImageViewerSettingsContent>,
 
     pub repl: Option<ReplSettingsContent>,
 
@@ -870,39 +866,6 @@ pub enum LineIndicatorFormat {
     Short,
     #[default]
     Long,
-}
-
-/// The settings for the image viewer.
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, Default, PartialEq)]
-pub struct ImageViewerSettingsContent {
-    /// The unit to use for displaying image file sizes.
-    ///
-    /// Default: "binary"
-    pub unit: Option<ImageFileSizeUnit>,
-}
-
-#[with_fallible_options]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Default,
-    PartialEq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ImageFileSizeUnit {
-    /// Displays file size in binary units (e.g., KiB, MiB).
-    #[default]
-    Binary,
-    /// Displays file size in decimal units (e.g., KB, MB).
-    Decimal,
 }
 
 #[with_fallible_options]

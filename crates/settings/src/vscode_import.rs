@@ -191,7 +191,6 @@ impl VsCodeSettings {
             }),
             helix_mode: None,
             hide_mouse: None,
-            image_viewer: None,
             journal: None,
             language_models: None,
             line_indicator_format: None,
@@ -205,7 +204,6 @@ impl VsCodeSettings {
             repl: None,
             server_url: None,
             session: None,
-            status_bar: self.status_bar_settings_content(),
             tab_bar: self.tab_bar_settings_content(),
             tabs: self.item_settings_content(),
             theme: Box::new(self.theme_settings_content()),
@@ -654,17 +652,6 @@ impl VsCodeSettings {
                 .read_str("workbench.editor.editorActionsLocation")
                 .and_then(|str| if str == "hidden" { Some(false) } else { None }),
             show_tab_bar_stacked: None,
-        })
-    }
-
-    fn status_bar_settings_content(&self) -> Option<StatusBarSettingsContent> {
-        skip_default(StatusBarSettingsContent {
-            show: self.read_bool("workbench.statusBar.visible"),
-            show_active_file: None,
-            active_language_button: None,
-            cursor_position_button: None,
-            line_endings_button: None,
-            active_encoding_button: None,
         })
     }
 

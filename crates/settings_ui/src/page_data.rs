@@ -2855,135 +2855,6 @@ fn search_and_files_page() -> SettingsPage {
 }
 
 fn window_and_layout_page() -> SettingsPage {
-    fn status_bar_section() -> [SettingsPageItem; 7] {
-        [
-            SettingsPageItem::SectionHeader("Status Bar"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Active Language Button",
-                description: "Show the active language button in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("status_bar.active_language_button"),
-                    pick: |settings_content| {
-                        settings_content
-                            .status_bar
-                            .as_ref()?
-                            .active_language_button
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .status_bar
-                            .get_or_insert_default()
-                            .active_language_button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Active Encoding Button",
-                description: "Control when to show the active encoding in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("status_bar.active_encoding_button"),
-                    pick: |settings_content| {
-                        settings_content
-                            .status_bar
-                            .as_ref()?
-                            .active_encoding_button
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .status_bar
-                            .get_or_insert_default()
-                            .active_encoding_button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Cursor Position Button",
-                description: "Show the cursor position button in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("status_bar.cursor_position_button"),
-                    pick: |settings_content| {
-                        settings_content
-                            .status_bar
-                            .as_ref()?
-                            .cursor_position_button
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .status_bar
-                            .get_or_insert_default()
-                            .cursor_position_button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Line Endings Button",
-                description: "Show the active line endings button in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("status_bar.line_endings_button"),
-                    pick: |settings_content| {
-                        settings_content
-                            .status_bar
-                            .as_ref()?
-                            .line_endings_button
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .status_bar
-                            .get_or_insert_default()
-                            .line_endings_button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Debugger Button",
-                description: "Show the debugger button in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("debugger.button"),
-                    pick: |settings_content| settings_content.debugger.as_ref()?.button.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.debugger.get_or_insert_default().button = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Active File Name",
-                description: "Show the name of the active file in the status bar.",
-                field: Box::new(SettingField {
-                    json_path: Some("status_bar.show_active_file"),
-                    pick: |settings_content| {
-                        settings_content
-                            .status_bar
-                            .as_ref()?
-                            .show_active_file
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .status_bar
-                            .get_or_insert_default()
-                            .show_active_file = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn title_bar_section() -> [SettingsPageItem; 10] {
         [
             SettingsPageItem::SectionHeader("Title Bar"),
@@ -3716,7 +3587,6 @@ fn window_and_layout_page() -> SettingsPage {
     SettingsPage {
         title: "Window & Layout",
         items: concat_sections![
-            status_bar_section(),
             title_bar_section(),
             tab_bar_section(),
             tab_settings_section(),
@@ -5135,26 +5005,8 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn global_only_miscellaneous_sub_section() -> [SettingsPageItem; 3] {
+    fn global_only_miscellaneous_sub_section() -> [SettingsPageItem; 2] {
         [
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Image Viewer",
-                description: "The unit for image file sizes.",
-                field: Box::new(SettingField {
-                    json_path: Some("image_viewer.unit"),
-                    pick: |settings_content| {
-                        settings_content
-                            .image_viewer
-                            .as_ref()
-                            .and_then(|image_viewer| image_viewer.unit.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.image_viewer.get_or_insert_default().unit = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Auto Replace Emoji Shortcode",
                 description: "Whether to automatically replace emoji shortcodes with emoji characters.",

@@ -2736,7 +2736,6 @@ dependencies = [
  "gpui",
  "language",
  "picker",
- "project",
  "ui",
  "util",
  "workspace",
@@ -5315,8 +5314,6 @@ dependencies = [
 name = "language_tools"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "client",
  "collections",
  "command_palette_hooks",
  "editor",
@@ -5332,7 +5329,6 @@ dependencies = [
  "semver",
  "serde_json",
  "settings",
- "sysinfo 0.37.2",
  "theme",
  "theme_settings",
  "tree-sitter",
@@ -6415,16 +6411,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "num-format"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
-dependencies = [
- "arrayvec",
- "itoa",
 ]
 
 [[package]]
@@ -10669,7 +10655,6 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "menu",
- "num-format",
  "serde",
  "smallvec",
  "strum",
@@ -11817,7 +11802,6 @@ dependencies = [
  "gpui",
  "serde",
  "settings",
- "theme_settings",
  "ui",
  "util",
  "workspace",
@@ -12697,7 +12681,6 @@ dependencies = [
  "session",
  "settings",
  "smallvec",
- "strum",
  "task",
  "tempfile",
  "theme",

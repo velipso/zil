@@ -1,4 +1,3 @@
-pub mod active_file_name;
 pub mod dock;
 pub mod history_manager;
 pub mod invalid_item_view;
@@ -17,7 +16,6 @@ pub mod security_modal;
 pub mod shared_screen;
 pub use shared_screen::SharedScreen;
 pub mod focus_follows_mouse;
-mod status_bar;
 mod toast_layer;
 mod toolbar;
 mod workspace_settings;
@@ -43,7 +41,7 @@ use client::{
     proto::{self, ErrorCode, PanelId, PeerId},
 };
 use collections::{HashMap, HashSet, hash_map};
-use dock::{Dock, DockPosition, PanelButtons, PanelHandle, RESIZE_HANDLE_SIZE};
+use dock::{Dock, DockPosition, PanelHandle, RESIZE_HANDLE_SIZE};
 use fs::Fs;
 use futures::{
     Future, FutureExt, StreamExt,
@@ -90,8 +88,6 @@ use serde::Deserialize;
 use session::AppSession;
 use settings::{CenteredPaddingSettings, Settings, SettingsLocation, SettingsStore};
 
-use status_bar::StatusBar;
-pub use status_bar::{HideStatusItem, StatusItemView, add_hide_button_entry};
 use std::{
     any::TypeId,
     borrow::Cow,
@@ -123,8 +119,8 @@ use util::{
 };
 use uuid::Uuid;
 pub use workspace_settings::{
-    AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, FocusFollowsMouse,
-    RestoreOnStartupBehavior, StatusBarSettings, TabBarSettings, WorkspaceSettings,
+    AutosaveSetting, BottomDockLayout, FocusFollowsMouse,
+    RestoreOnStartupBehavior, TabBarSettings, WorkspaceSettings,
 };
 use zed_actions::{theme::ToggleMode};
 
@@ -1165,7 +1161,6 @@ pub struct Workspace {
     active_pane: Entity<Pane>,
     last_active_center_pane: Option<WeakEntity<Pane>>,
     last_active_view_id: Option<proto::ViewId>,
-    status_bar: Entity<StatusBar>,
     pub(crate) modal_layer: Entity<ModalLayer>,
     toast_layer: Entity<ToastLayer>,
     titlebar_item: Option<AnyView>,
@@ -1448,21 +1443,10 @@ impl Workspace {
         let left_dock = Dock::new(DockPosition::Left, modal_layer.clone(), window, cx);
         let bottom_dock = Dock::new(DockPosition::Bottom, modal_layer.clone(), window, cx);
         let right_dock = Dock::new(DockPosition::Right, modal_layer.clone(), window, cx);
-        let left_dock_buttons = cx.new(|cx| PanelButtons::new(left_dock.clone(), cx));
-        let bottom_dock_buttons = cx.new(|cx| PanelButtons::new(bottom_dock.clone(), cx));
-        let right_dock_buttons = cx.new(|cx| PanelButtons::new(right_dock.clone(), cx));
         let multi_workspace = window
             .root::<MultiWorkspace>()
             .flatten()
             .map(|mw| mw.downgrade());
-        let status_bar = cx.new(|cx| {
-            let mut status_bar =
-                StatusBar::new(&center_pane.clone(), multi_workspace.clone(), window, cx);
-            status_bar.add_left_item(left_dock_buttons, window, cx);
-            status_bar.add_right_item(right_dock_buttons, window, cx);
-            status_bar.add_right_item(bottom_dock_buttons, window, cx);
-            status_bar
-        });
 
         let session_id = app_state.session.read(cx).id().to_owned();
 
@@ -1537,7 +1521,6 @@ impl Workspace {
             active_pane: center_pane.clone(),
             last_active_center_pane: Some(center_pane.downgrade()),
             last_active_view_id: None,
-            status_bar,
             modal_layer,
             toast_layer,
             titlebar_item: None,
@@ -2124,16 +2107,8 @@ impl Workspace {
         }
     }
 
-    pub fn status_bar(&self) -> &Entity<StatusBar> {
-        &self.status_bar
-    }
-
     pub fn set_sidebar_focus_handle(&mut self, handle: Option<FocusHandle>) {
         self.sidebar_focus_handle = handle;
-    }
-
-    pub fn status_bar_visible(&self, cx: &App) -> bool {
-        StatusBarSettings::get_global(cx).show
     }
 
     pub fn multi_workspace(&self) -> Option<&WeakEntity<MultiWorkspace>> {
@@ -2143,11 +2118,7 @@ impl Workspace {
     pub fn set_multi_workspace(
         &mut self,
         multi_workspace: WeakEntity<MultiWorkspace>,
-        cx: &mut App,
     ) {
-        self.status_bar.update(cx, |status_bar, cx| {
-            status_bar.set_multi_workspace(multi_workspace.clone(), cx);
-        });
         self.multi_workspace = Some(multi_workspace);
     }
 
@@ -4767,9 +4738,6 @@ impl Workspace {
 
         // This is explicitly hoisted out of the following check for pane identity as
         // terminal panel panes are not registered as a center panes.
-        self.status_bar.update(cx, |status_bar, cx| {
-            status_bar.set_active_pane(&pane, window, cx);
-        });
         if self.active_pane != pane {
             self.set_active_pane(&pane, window, cx);
         }
@@ -7507,9 +7475,6 @@ impl Render for Workspace {
                             }))
                             .children(self.render_notifications(window, cx)),
                     )
-                    .when(self.status_bar_visible(cx), |parent| {
-                        parent.child(self.status_bar.clone())
-                    })
                     .child(self.toast_layer.clone()),
             )
     }
@@ -13013,46 +12978,6 @@ mod tests {
                 .await;
             assert!(handle.is_err());
         }
-    }
-
-    #[gpui::test]
-    async fn test_status_bar_visibility(cx: &mut TestAppContext) {
-        init_test(cx);
-
-        let fs = FakeFs::new(cx.executor());
-        let project = Project::test(fs, [], cx).await;
-        let (workspace, _cx) =
-            cx.add_window_view(|window, cx| Workspace::test_new(project.clone(), window, cx));
-
-        // Test with status bar shown (default)
-        workspace.read_with(cx, |workspace, cx| {
-            let visible = workspace.status_bar_visible(cx);
-            assert!(visible, "Status bar should be visible by default");
-        });
-
-        // Test with status bar hidden
-        cx.update_global(|store: &mut SettingsStore, cx| {
-            store.update_user_settings(cx, |settings| {
-                settings.status_bar.get_or_insert_default().show = Some(false);
-            });
-        });
-
-        workspace.read_with(cx, |workspace, cx| {
-            let visible = workspace.status_bar_visible(cx);
-            assert!(!visible, "Status bar should be hidden when show is false");
-        });
-
-        // Test with status bar shown explicitly
-        cx.update_global(|store: &mut SettingsStore, cx| {
-            store.update_user_settings(cx, |settings| {
-                settings.status_bar.get_or_insert_default().show = Some(true);
-            });
-        });
-
-        workspace.read_with(cx, |workspace, cx| {
-            let visible = workspace.status_bar_visible(cx);
-            assert!(visible, "Status bar should be visible when show is true");
-        });
     }
 
     #[gpui::test]

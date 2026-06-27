@@ -3072,35 +3072,16 @@ async fn load_json_language(workspace: WeakEntity<Workspace>, cx: &mut AsyncApp)
 }
 
 async fn load_keybind_context_language(
-    workspace: WeakEntity<Workspace>,
-    cx: &mut AsyncApp,
+    _workspace: WeakEntity<Workspace>,
+    _cx: &mut AsyncApp,
 ) -> Arc<Language> {
-    let language_task = workspace
-        .read_with(cx, |workspace, cx| {
-            workspace
-                .project()
-                .read(cx)
-                .languages()
-                .language_for_name("Zed Keybind Context")
-        })
-        .context("Failed to load Zed Keybind Context language")
-        .log_err();
-    let language = match language_task {
-        Some(task) => task
-            .await
-            .context("Failed to load Zed Keybind Context language")
-            .log_err(),
-        None => None,
-    };
-    language.unwrap_or_else(|| {
-        Arc::new(Language::new(
-            LanguageConfig {
-                name: "Zed Keybind Context".into(),
-                ..Default::default()
-            },
-            Some(tree_sitter_rust::LANGUAGE.into()),
-        ))
-    })
+    Arc::new(Language::new(
+        LanguageConfig {
+            name: "Zed Keybind Context".into(),
+            ..Default::default()
+        },
+        Some(tree_sitter_rust::LANGUAGE.into()),
+    ))
 }
 
 async fn save_keybinding_update(

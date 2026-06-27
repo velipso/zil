@@ -3522,8 +3522,8 @@ impl LineEnding {
 
     pub fn label(&self) -> &'static str {
         match self {
-            LineEnding::Unix => "LF",
-            LineEnding::Windows => "CRLF",
+            LineEnding::Unix => "Unix (LF)",
+            LineEnding::Windows => "Windows (CRLF)",
         }
     }
 

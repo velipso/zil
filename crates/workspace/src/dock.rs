@@ -1,7 +1,6 @@
 use crate::focus_follows_mouse::FocusFollowsMouse as _;
-use crate::status_bar::HideStatusItem;
 use crate::{DraggedDock, DockData, Event, FocusFollowsMouse, ModalLayer, Pane, WorkspaceSettings};
-use crate::{Workspace, status_bar::StatusItemView};
+use crate::Workspace;
 use anyhow::Context as _;
 use client::proto;
 
@@ -85,12 +84,6 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     fn is_agent_panel(&self) -> bool {
         false
     }
-    /// Returns metadata describing how to hide this panel's button from the
-    /// status bar by writing to user settings. Implementors should return
-    /// `None` if the panel button cannot be hidden through settings.
-    fn hide_button_setting(&self, _: &App) -> Option<HideStatusItem> {
-        None
-    }
 }
 
 pub trait PanelHandle: Send + Sync {
@@ -121,7 +114,6 @@ pub trait PanelHandle: Send + Sync {
     fn activation_priority(&self, cx: &App) -> u32;
     fn enabled(&self, cx: &App) -> bool;
     fn is_agent_panel(&self, cx: &App) -> bool;
-    fn hide_button_setting(&self, cx: &App) -> Option<HideStatusItem>;
     fn move_to_next_position(&self, window: &mut Window, cx: &mut App) {
         let current_position = self.position(window, cx);
         let next_position = [
@@ -249,10 +241,6 @@ where
 
     fn is_agent_panel(&self, cx: &App) -> bool {
         self.read(cx).is_agent_panel()
-    }
-
-    fn hide_button_setting(&self, cx: &App) -> Option<HideStatusItem> {
-        self.read(cx).hide_button_setting(cx)
     }
 }
 
@@ -1188,7 +1176,6 @@ impl Render for PanelButtons {
                                 DockPosition::Bottom,
                             ];
 
-                            let panel_hide = panel.hide_button_setting(cx);
                             ContextMenu::build(window, cx, |mut menu, _, cx| {
                                 let mut has_position_entries = false;
                                 for position in POSITIONS {
@@ -1260,12 +1247,6 @@ impl Render for PanelButtons {
                                         },
                                     );
                                 }
-                                if let Some(hide) = panel_hide {
-                                    menu = crate::status_bar::add_hide_button_entry(
-                                        menu.separator(),
-                                        hide,
-                                    );
-                                }
                                 menu
                             })
                         })
@@ -1320,23 +1301,6 @@ impl Render for PanelButtons {
             .when(has_buttons && dock.position == DockPosition::Left, |this| {
                 this.child(Divider::vertical().color(DividerColor::Border))
             })
-    }
-}
-
-impl StatusItemView for PanelButtons {
-    fn set_active_pane_item(
-        &mut self,
-        _active_pane_item: Option<&dyn crate::ItemHandle>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        // Nothing to do, panel buttons don't depend on the active center item
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        // Panel buttons are hidden on a per-panel basis through each panel
-        // button's own context menu.
-        None
     }
 }
 

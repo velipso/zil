@@ -4,7 +4,7 @@ use crate::DockPosition;
 use collections::HashMap;
 use serde::Deserialize;
 pub use settings::{
-    ActionName, AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, InactiveOpacity,
+    ActionName, AutosaveSetting, BottomDockLayout, InactiveOpacity,
     PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
     RestoreOnStartupBehavior, Settings,
 };
@@ -148,30 +148,6 @@ impl Settings for TabBarSettings {
             show_nav_history_buttons: tab_bar.show_nav_history_buttons.unwrap(),
             show_tab_bar_buttons: tab_bar.show_tab_bar_buttons.unwrap(),
             show_tab_bar_stacked: tab_bar.show_tab_bar_stacked.unwrap(),
-        }
-    }
-}
-
-#[derive(Deserialize, RegisterSetting)]
-pub struct StatusBarSettings {
-    pub show: bool,
-    pub show_active_file: bool,
-    pub active_language_button: bool,
-    pub cursor_position_button: bool,
-    pub line_endings_button: bool,
-    pub active_encoding_button: EncodingDisplayOptions,
-}
-
-impl Settings for StatusBarSettings {
-    fn from_settings(content: &settings::SettingsContent) -> Self {
-        let status_bar = content.status_bar.clone().unwrap();
-        StatusBarSettings {
-            show: status_bar.show.unwrap(),
-            show_active_file: status_bar.show_active_file.unwrap(),
-            active_language_button: status_bar.active_language_button.unwrap(),
-            cursor_position_button: status_bar.cursor_position_button.unwrap(),
-            line_endings_button: status_bar.line_endings_button.unwrap(),
-            active_encoding_button: status_bar.active_encoding_button.unwrap(),
         }
     }
 }

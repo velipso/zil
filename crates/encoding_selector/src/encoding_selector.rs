@@ -1,6 +1,3 @@
-mod active_buffer_encoding;
-pub use active_buffer_encoding::ActiveBufferEncoding;
-
 use editor::Editor;
 use encoding_rs::Encoding;
 use fuzzy::{StringMatch, StringMatchCandidate, match_strings};

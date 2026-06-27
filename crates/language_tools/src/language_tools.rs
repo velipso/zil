@@ -1,6 +1,5 @@
 mod highlights_tree_view;
 mod key_context_view;
-pub mod lsp_button;
 pub mod lsp_log_view;
 mod syntax_tree_view;
 

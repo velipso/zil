@@ -267,8 +267,8 @@ impl MultiWorkspace {
     pub fn new(workspace: Entity<Workspace>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self::subscribe_to_workspace(&workspace, window, cx);
         let weak_self = cx.weak_entity();
-        workspace.update(cx, |workspace, cx| {
-            workspace.set_multi_workspace(weak_self, cx);
+        workspace.update(cx, |workspace, _cx| {
+            workspace.set_multi_workspace(weak_self);
         });
         Self {
             retained_workspaces: Vec::new(),
@@ -568,8 +568,8 @@ impl MultiWorkspace {
     ) {
         Self::subscribe_to_workspace(workspace, window, cx);
         let weak_self = cx.weak_entity();
-        workspace.update(cx, |workspace, cx| {
-            workspace.set_multi_workspace(weak_self, cx);
+        workspace.update(cx, |workspace, _| {
+            workspace.set_multi_workspace(weak_self);
         });
 
         let entity = cx.entity();

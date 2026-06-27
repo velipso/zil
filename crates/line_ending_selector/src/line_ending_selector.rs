@@ -1,15 +1,12 @@
-mod line_ending_indicator;
-
 use editor::Editor;
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Task, WeakEntity, actions};
 use language::{Buffer, LineEnding};
-pub use line_ending_indicator::LineEndingIndicator;
 use picker::{Picker, PickerDelegate};
 use project::Project;
 use std::sync::Arc;
 use ui::{ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
-use workspace::ModalView;
+use workspace::{Workspace, ModalView};
 
 actions!(
     line_ending_selector,
@@ -28,32 +25,32 @@ pub struct LineEndingSelector {
 }
 
 impl LineEndingSelector {
-    fn register(editor: &mut Editor, _window: Option<&mut Window>, cx: &mut Context<Editor>) {
-        let editor_handle = cx.weak_entity();
-        editor
-            .register_action(move |_: &Toggle, window, cx| {
-                Self::toggle(&editor_handle, window, cx);
-            })
-            .detach();
+    fn register(
+        workspace: &mut Workspace,
+        _window: Option<&mut Window>,
+        _: &mut Context<Workspace>,
+    ) {
+        workspace.register_action(move |workspace, _: &Toggle, window, cx| {
+            Self::toggle(workspace, window, cx);
+        });
     }
 
-    fn toggle(editor: &WeakEntity<Editor>, window: &mut Window, cx: &mut App) {
-        let Some((workspace, buffer)) = editor
-            .update(cx, |editor, cx| {
-                Some((editor.workspace()?, editor.active_buffer(cx)?))
-            })
-            .ok()
-            .flatten()
-        else {
-            return;
-        };
+    fn toggle(
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) -> Option<()> {
+        let buffer = workspace
+            .active_item(cx)?
+            .act_as::<Editor>(cx)?
+            .read(cx)
+            .active_buffer(cx)?;
+        let project = workspace.project().clone();
 
-        workspace.update(cx, |workspace, cx| {
-            let project = workspace.project().clone();
-            workspace.toggle_modal(window, cx, move |window, cx| {
-                LineEndingSelector::new(buffer, project, window, cx)
-            });
-        })
+        workspace.toggle_modal(window, cx, move |window, cx| {
+            LineEndingSelector::new(buffer, project, window, cx)
+        });
+        Some(())
     }
 
     fn new(

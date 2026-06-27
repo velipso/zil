@@ -1,6 +1,3 @@
-mod active_buffer_language;
-
-pub use active_buffer_language::ActiveBufferLanguage;
 use anyhow::Context as _;
 use editor::Editor;
 use fuzzy::{StringMatch, StringMatchCandidate, match_strings};

@@ -1,14 +1,14 @@
-use editor::{Editor, EditorEvent, MBTextSummary, MultiBufferSnapshot};
-use gpui::{App, Entity, FocusHandle, Focusable, Styled, Subscription, Task, WeakEntity};
+use editor::{Editor, MBTextSummary, MultiBufferSnapshot};
+use gpui::{App, FocusHandle, Subscription, WeakEntity};
 use settings::{RegisterSetting, Settings};
-use std::{fmt::Write, num::NonZeroU32, time::Duration};
+use std::{fmt::Write, num::NonZeroU32};
 use text::{Point, Selection};
 use ui::{
     Button, ButtonCommon, Clickable, Context, FluentBuilder, IntoElement, LabelSize, ParentElement,
     Render, Tooltip, Window, div,
 };
 use util::paths::FILE_ROW_COLUMN_DELIMITER;
-use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
+use workspace::Workspace;
 
 #[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq)]
 pub(crate) struct SelectionStats {
@@ -22,7 +22,6 @@ pub struct CursorPosition {
     selected_count: SelectionStats,
     context: Option<FocusHandle>,
     workspace: WeakEntity<Workspace>,
-    update_position: Task<()>,
     _observe_active_editor: Option<Subscription>,
 }
 
@@ -73,76 +72,8 @@ impl CursorPosition {
             context: None,
             selected_count: Default::default(),
             workspace: workspace.weak_handle(),
-            update_position: Task::ready(()),
             _observe_active_editor: None,
         }
-    }
-
-    fn update_position(
-        &mut self,
-        editor: &Entity<Editor>,
-        _debounce: Option<Duration>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let editor = editor.downgrade();
-        self.update_position = cx.spawn_in(window, async move |cursor_position, cx| {
-            editor
-                .update(cx, |editor, cx| {
-                    cursor_position.update(cx, |cursor_position, cx| {
-                        cursor_position.selected_count = SelectionStats::default();
-                        cursor_position.selected_count.selections = editor.selections.count();
-                        match editor.mode() {
-                            editor::EditorMode::AutoHeight { .. }
-                            | editor::EditorMode::SingleLine
-                            | editor::EditorMode::Minimap { .. } => {
-                                cursor_position.position = None;
-                                cursor_position.context = None;
-                            }
-                            editor::EditorMode::Full { .. } => {
-                                let mut last_selection = None::<Selection<Point>>;
-                                let snapshot = editor.display_snapshot(cx);
-                                if snapshot.buffer_snapshot().excerpts().count() > 0 {
-                                    for selection in editor.selections.all_adjusted(&snapshot) {
-                                        let selection_summary = snapshot
-                                            .buffer_snapshot()
-                                            .text_summary_for_range::<MBTextSummary, _>(
-                                            selection.start..selection.end,
-                                        );
-                                        cursor_position.selected_count.characters +=
-                                            selection_summary.chars;
-                                        if selection.end != selection.start {
-                                            cursor_position.selected_count.lines +=
-                                                (selection.end.row - selection.start.row) as usize;
-                                            if selection.end.column != 0 {
-                                                cursor_position.selected_count.lines += 1;
-                                            }
-                                        }
-                                        if last_selection.as_ref().is_none_or(|last_selection| {
-                                            selection.id > last_selection.id
-                                        }) {
-                                            last_selection = Some(selection);
-                                        }
-                                    }
-                                }
-                                cursor_position.position = last_selection.map(|s| {
-                                    UserCaretPosition::at_selection_end(
-                                        &s,
-                                        snapshot.buffer_snapshot(),
-                                    )
-                                });
-                                cursor_position.context = Some(editor.focus_handle(cx));
-                            }
-                        }
-
-                        cx.notify();
-                    })
-                })
-                .ok()
-                .transpose()
-                .ok()
-                .flatten();
-        });
     }
 
     fn write_position(&self, text: &mut String, cx: &App) {
@@ -200,10 +131,6 @@ impl CursorPosition {
 
 impl Render for CursorPosition {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !StatusBarSettings::get_global(cx).cursor_position_button {
-            return div().hidden();
-        }
-
         div().when_some(self.position, |el, position| {
             let mut text = format!(
                 "{}{FILE_ROW_COLUMN_DELIMITER}{}",
@@ -246,49 +173,6 @@ impl Render for CursorPosition {
                     }),
             )
         })
-    }
-}
-
-const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
-
-impl StatusItemView for CursorPosition {
-    fn set_active_pane_item(
-        &mut self,
-        active_pane_item: Option<&dyn ItemHandle>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = active_pane_item.and_then(|item| item.act_as::<Editor>(cx)) {
-            self._observe_active_editor = Some(cx.subscribe_in(
-                &editor,
-                window,
-                |cursor_position, editor, event, window, cx| match event {
-                    EditorEvent::SelectionsChanged { .. } => Self::update_position(
-                        cursor_position,
-                        editor,
-                        Some(UPDATE_DEBOUNCE),
-                        window,
-                        cx,
-                    ),
-                    _ => {}
-                },
-            ));
-            self.update_position(&editor, None, window, cx);
-        } else {
-            self.position = None;
-            self._observe_active_editor = None;
-        }
-
-        cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings
-                .status_bar
-                .get_or_insert_default()
-                .cursor_position_button = Some(false);
-        }))
     }
 }
 

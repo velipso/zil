@@ -1,9 +1,6 @@
-mod image_info;
-mod image_viewer_settings;
-
 use std::path::Path;
 
-use editor::{EditorSettings, items::entry_git_aware_label_color};
+use editor::items::entry_git_aware_label_color;
 use file_icons::FileIcons;
 use gpui::{
     AnyElement, App, Bounds, Context, DispatchPhase, Element, ElementId, Entity, EventEmitter,
@@ -24,9 +21,6 @@ use workspace::{
     invalid_item_view::InvalidItemView,
     item::{HighlightedText, Item, ItemHandle, ProjectItem, TabContentParams},
 };
-
-pub use crate::image_info::*;
-pub use crate::image_viewer_settings::*;
 
 actions!(
     image_viewer,
@@ -515,19 +509,14 @@ impl Item for ImageView {
             .map(Icon::from_path)
     }
 
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        let show_breadcrumb = EditorSettings::get_global(cx).toolbar.breadcrumbs;
-        if show_breadcrumb {
-            ToolbarItemLocation::PrimaryLeft
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+    fn breadcrumb_location(&self, _cx: &App) -> ToolbarItemLocation {
+        ToolbarItemLocation::PrimaryLeft
     }
 
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        let text = breadcrumbs_text_for_image(self.project.read(cx), self.image_item.read(cx), cx);
+        let text = self.image_item.read(cx).abs_path(cx)?;
+        let text = text.to_str()?;
         let font = ThemeSettings::get_global(cx).buffer_font.clone();
-
         Some((
             vec![HighlightedText {
                 text: text.into(),
@@ -568,17 +557,6 @@ impl Item for ImageView {
     fn buffer_kind(&self, _: &App) -> workspace::item::ItemBufferKind {
         workspace::item::ItemBufferKind::Singleton
     }
-}
-
-fn breadcrumbs_text_for_image(project: &Project, image: &ImageItem, cx: &App) -> String {
-    let mut path = image.file.path().clone();
-    if project.visible_worktrees(cx).count() > 1
-        && let Some(worktree) = project.worktree_for_id(image.project_path(cx).worktree_id, cx)
-    {
-        path = worktree.read(cx).root_name().join(&path);
-    }
-
-    path.display(project.path_style(cx)).to_string()
 }
 
 impl EventEmitter<()> for ImageView {}
@@ -677,9 +655,13 @@ impl Render for ImageViewToolbarControls {
 
         let zoom_level = image_view.read(cx).zoom_level;
         let zoom_percentage = format!("{}%", (zoom_level * 100.0).round() as i32);
+        let image_size = image_view.read(cx).image_size;
 
         h_flex()
             .gap_1()
+            .when_some(image_size, |this, (width, height)| {
+                this.child(ui::Label::new(format!("{width}x{height}")).mr_5())
+            })
             .child(
                 IconButton::new("zoom-out", IconName::Dash)
                     .icon_size(IconSize::Small)
