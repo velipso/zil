@@ -194,7 +194,19 @@ impl ImageView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if event.modifiers.control || event.modifiers.platform {
+        if event.modifiers.control || event.modifiers.platform || event.modifiers.shift {
+            let delta = match event.delta {
+                ScrollDelta::Pixels(pixels) => pixels,
+                ScrollDelta::Lines(lines) => lines.map(|d| px(d * SCROLL_LINE_MULTIPLIER)),
+            };
+            let delta = if delta.x.abs() > delta.y.abs() { delta.x } else { delta.y };
+            self.pan_offset += if event.modifiers.shift {
+                    Point::new(delta, px(0.))
+                } else {
+                    Point::new(px(0.), delta)
+                };
+            cx.notify();
+        } else {
             let delta: f32 = match event.delta {
                 ScrollDelta::Pixels(pixels) => pixels.y.into(),
                 ScrollDelta::Lines(lines) => lines.y * SCROLL_LINE_MULTIPLIER,
@@ -205,13 +217,6 @@ impl ImageView {
                 1.0 / (1.0 + delta.abs() * 0.01)
             };
             self.set_zoom(self.zoom_level * zoom_factor, Some(event.position), cx);
-        } else {
-            let delta = match event.delta {
-                ScrollDelta::Pixels(pixels) => pixels,
-                ScrollDelta::Lines(lines) => lines.map(|d| px(d * SCROLL_LINE_MULTIPLIER)),
-            };
-            self.pan_offset += delta;
-            cx.notify();
         }
     }
 
