@@ -1,12 +1,7 @@
-mod decorated_icon;
-mod icon_decoration;
-
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub use decorated_icon::*;
 use gpui::{AnimationElement, AnyElement, Hsla, IntoElement, Rems, Transformation, img, svg};
-pub use icon_decoration::*;
 pub use icons::*;
 
 use crate::traits::transformable::Transformable;

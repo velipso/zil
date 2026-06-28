@@ -571,13 +571,11 @@ impl VsCodeSettings {
 
     fn item_settings_content(&self) -> Option<ItemSettingsContent> {
         skip_default(ItemSettingsContent {
-            git_status: self.read_bool("git.decorations.enabled"),
             close_position: self.read_enum("workbench.editor.tabActionLocation", |s| match s {
                 "right" => Some(ClosePosition::Right),
                 "left" => Some(ClosePosition::Left),
                 _ => None,
             }),
-            file_icons: self.read_bool("workbench.editor.showIcons"),
             activate_on_close: self
                 .read_bool("workbench.editor.focusRecentEditorAfterClose")
                 .map(|b| {

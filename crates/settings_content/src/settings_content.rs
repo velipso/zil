@@ -405,10 +405,6 @@ pub enum StatusStyle {
 #[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct FileFinderSettingsContent {
-    /// Whether to show file icons in the file finder.
-    ///
-    /// Default: true
-    pub file_icons: Option<bool>,
     /// Determines how much space the file finder can take up in relation to the available window width.
     ///
     /// Default: small

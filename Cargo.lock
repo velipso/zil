@@ -2603,7 +2603,6 @@ dependencies = [
  "criterion",
  "ctor",
  "emojis",
- "file_icons",
  "fs",
  "futures",
  "futures-lite 1.13.0",
@@ -3005,16 +3004,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
-]
-
-[[package]]
-name = "file_icons"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "serde",
- "theme",
- "util",
 ]
 
 [[package]]
@@ -4710,8 +4699,6 @@ name = "image_viewer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "editor",
- "file_icons",
  "gpui",
  "language",
  "project",
@@ -5288,11 +5275,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "editor",
- "file_icons",
  "fuzzy",
  "gpui",
  "language",
- "open_path_prompt",
  "picker",
  "project",
  "serde_json",
@@ -6762,16 +6747,13 @@ name = "open_path_prompt"
 version = "0.1.0"
 dependencies = [
  "editor",
- "file_icons",
  "futures",
  "fuzzy",
  "gpui",
  "picker",
  "project",
- "schemars",
  "serde",
  "serde_json",
- "settings",
  "theme",
  "theme_settings",
  "ui",
@@ -9787,7 +9769,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "settings",
  "theme",
  "theme_settings",
  "ui",
@@ -9959,28 +9940,6 @@ dependencies = [
  "syntax_theme",
  "thiserror 2.0.17",
  "uuid",
-]
-
-[[package]]
-name = "theme_selector"
-version = "0.1.0"
-dependencies = [
- "editor",
- "fs",
- "fuzzy",
- "gpui",
- "log",
- "picker",
- "project",
- "serde",
- "serde_json",
- "settings",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -13111,7 +13070,6 @@ dependencies = [
  "task",
  "tempfile",
  "theme",
- "theme_selector",
  "theme_settings",
  "time",
  "title_bar",

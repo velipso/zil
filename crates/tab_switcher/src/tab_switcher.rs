@@ -2,7 +2,6 @@
 mod tab_switcher_tests;
 
 use collections::{HashMap, HashSet};
-use editor::items::{entry_git_aware_label_color};
 use fuzzy_nucleo::StringMatchCandidate;
 use gpui::{
     Action, AnyElement, App, Context, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle,
@@ -10,19 +9,14 @@ use gpui::{
     Render, Styled, Task, TaskExt, WeakEntity, Window, actions, rems,
 };
 use picker::{Picker, PickerDelegate};
-use project::Project;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use settings::Settings;
 use std::{cmp::Reverse, sync::Arc};
-use ui::{
-    DecoratedIcon, ListItem, ListItemSpacing, Tooltip,
-    prelude::*,
-};
+use ui::{ListItem, ListItemSpacing, Tooltip, prelude::*};
 use util::ResultExt;
 use workspace::{
     Event as WorkspaceEvent, ModalView, Pane, SaveIntent, Workspace,
-    item::{ItemHandle, ItemSettings, TabContentParams},
+    item::{ItemHandle, TabContentParams},
     pane::{render_item_indicator, tab_details},
 };
 
@@ -133,7 +127,6 @@ impl TabSwitcher {
 
         let weak_workspace = workspace.weak_handle();
 
-        let project = workspace.project().clone();
         let original_items: Vec<_> = workspace
             .panes()
             .iter()
@@ -141,7 +134,6 @@ impl TabSwitcher {
             .collect();
         workspace.toggle_modal(window, cx, |window, cx| {
             let delegate = TabSwitcherDelegate::new(
-                project,
                 select_last,
                 cx.entity().downgrade(),
                 weak_pane,
@@ -245,7 +237,6 @@ pub struct TabSwitcherDelegate {
     selected_index: usize,
     pane: WeakEntity<Pane>,
     workspace: WeakEntity<Workspace>,
-    project: Entity<Project>,
     matches: Vec<TabMatch>,
     original_items: Vec<(Entity<Pane>, usize)>,
     is_all_panes: bool,
@@ -253,43 +244,9 @@ pub struct TabSwitcherDelegate {
     restored_items: bool,
 }
 
-impl TabMatch {
-    fn icon(
-        &self,
-        project: &Entity<Project>,
-        selected: bool,
-        window: &Window,
-        cx: &App,
-    ) -> Option<DecoratedIcon> {
-        let icon = self.item.tab_icon(window, cx)?;
-        let item_settings = ItemSettings::get_global(cx);
-        let git_status_color = item_settings
-            .git_status
-            .then(|| {
-                let path = self.item.project_path(cx)?;
-                let project = project.read(cx);
-                let entry = project.entry_for_path(&path, cx)?;
-                let git_status = project
-                    .project_path_git_status(&path, cx)
-                    .map(|status| status.summary())
-                    .unwrap_or_default();
-                Some(entry_git_aware_label_color(
-                    git_status,
-                    entry.is_ignored,
-                    selected,
-                ))
-            })
-            .flatten();
-        let colored_icon = icon.color(git_status_color.unwrap_or_default());
-
-        Some(DecoratedIcon::new(colored_icon, None))
-    }
-}
-
 impl TabSwitcherDelegate {
     #[allow(clippy::complexity)]
     fn new(
-        project: Entity<Project>,
         select_last: bool,
         tab_switcher: WeakEntity<TabSwitcher>,
         pane: WeakEntity<Pane>,
@@ -307,7 +264,6 @@ impl TabSwitcherDelegate {
             selected_index: 0,
             pane,
             workspace,
-            project,
             matches: Vec::new(),
             is_all_panes,
             open_in_active_pane,
@@ -780,8 +736,6 @@ impl PickerDelegate for TabSwitcherDelegate {
         };
         let label = tab_match.item.tab_content(params, window, cx);
 
-        let icon = tab_match.icon(&self.project, selected, window, cx);
-
         let indicator = render_item_indicator(tab_match.item.boxed_clone(), cx);
         let indicator_color = if let Some(ref indicator) = indicator {
             indicator.color
@@ -822,7 +776,6 @@ impl PickerDelegate for TabSwitcherDelegate {
                 .inset(true)
                 .toggle_state(selected)
                 .child(h_flex().w_full().child(label))
-                .start_slot::<DecoratedIcon>(icon)
                 .map(|el| {
                     if self.selected_index == ix {
                         el.end_slot::<AnyElement>(close_button)

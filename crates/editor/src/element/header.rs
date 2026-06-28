@@ -2,7 +2,6 @@ use std::path::Path;
 use std::rc::Rc;
 
 use collections::HashMap;
-use file_icons::FileIcons;
 use gpui::{
     AnyElement, App, AvailableSpace, Bounds, ClickEvent, ClipboardItem, ContentMask,
     CursorStyle, DefiniteLength, Entity, Focusable as _, Hitbox, HitboxBehavior, Hsla, IntoElement,
@@ -22,7 +21,7 @@ use ui::{
     text_for_keystroke,
 };
 use util::ResultExt;
-use workspace::{ItemHandle, ItemSettings};
+use workspace::ItemHandle;
 
 use super::{
     BlockLayout, EditorElement, EditorLayout, LineWithInvisibles, layout_line,
@@ -688,8 +687,11 @@ pub(crate) fn render_buffer_header(
                 .map(|header| {
                     let editor = editor.clone();
                     let buffer_id = for_excerpt.buffer_id();
-                    let toggle_chevron_icon =
-                        FileIcons::get_chevron_icon(!is_folded, cx).map(Icon::from_path);
+                    let toggle_chevron_icon = if is_folded {
+                            Icon::new(IconName::ChevronRight)
+                        } else {
+                            Icon::new(IconName::ChevronDown)
+                        };
                     let button_size = rems_from_px(28.);
 
                     header.child(
@@ -701,7 +703,7 @@ pub(crate) fn render_buffer_header(
                                     .style(ButtonStyle::Transparent)
                                     .height(button_size.into())
                                     .width(button_size)
-                                    .children(toggle_chevron_icon)
+                                    .child(toggle_chevron_icon)
                                     .tooltip({
                                         let focus_handle = focus_handle.clone();
                                         let is_folded_for_tooltip = is_folded;
@@ -789,15 +791,6 @@ pub(crate) fn render_buffer_header(
                                 path_header
                                     .child(
                                         ButtonLike::new("filename-button")
-                                            .when(ItemSettings::get_global(cx).file_icons, |this| {
-                                                let path = std::path::Path::new(filename.as_str());
-                                                let icon = FileIcons::get_icon(path, cx)
-                                                    .unwrap_or_default();
-
-                                                this.child(
-                                                    Icon::from_path(icon).color(Color::Muted),
-                                                )
-                                            })
                                             .child(
                                                 Label::new(filename)
                                                     .single_line()

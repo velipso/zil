@@ -2363,7 +2363,7 @@ fn search_and_files_page() -> SettingsPage {
         ]
     }
 
-    fn file_finder_section() -> [SettingsPageItem; 5] {
+    fn file_finder_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader("File Finder"),
             // todo: null by default
@@ -2384,24 +2384,6 @@ fn search_and_files_page() -> SettingsPage {
                             .file_finder
                             .get_or_insert_default()
                             .include_ignored = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "File Icons",
-                description: "Show file icons in the file finder.",
-                field: Box::new(SettingField {
-                    json_path: Some("file_finder.file_icons"),
-                    pick: |settings_content| {
-                        settings_content.file_finder.as_ref()?.file_icons.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .file_finder
-                            .get_or_insert_default()
-                            .file_icons = value;
                     },
                 }),
                 metadata: None,
@@ -2842,7 +2824,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn tab_bar_section() -> [SettingsPageItem; 9] {
+    fn tab_bar_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader("Tab Bar"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2853,32 +2835,6 @@ fn window_and_layout_page() -> SettingsPage {
                     pick: |settings_content| settings_content.tab_bar.as_ref()?.show.as_ref(),
                     write: |settings_content, value, _| {
                         settings_content.tab_bar.get_or_insert_default().show = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Git Status In Tabs",
-                description: "Show the Git file status on a tab item.",
-                field: Box::new(SettingField {
-                    json_path: Some("tabs.git_status"),
-                    pick: |settings_content| settings_content.tabs.as_ref()?.git_status.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.tabs.get_or_insert_default().git_status = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show File Icons In Tabs",
-                description: "Show the file icon for a tab.",
-                field: Box::new(SettingField {
-                    json_path: Some("tabs.file_icons"),
-                    pick: |settings_content| settings_content.tabs.as_ref()?.file_icons.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.tabs.get_or_insert_default().file_icons = value;
                     },
                 }),
                 metadata: None,

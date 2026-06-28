@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use editor::items::entry_git_aware_label_color;
-use file_icons::FileIcons;
 use gpui::{
     AnyElement, App, Bounds, Context, DispatchPhase, Element, ElementId, Entity, EventEmitter,
     FocusHandle, Focusable, Font, GlobalElementId, InspectorElementId, InteractiveElement,
@@ -16,7 +14,7 @@ use theme_settings::ThemeSettings;
 use ui::{Tooltip, prelude::*};
 use util::paths::PathExt;
 use workspace::{
-    ItemSettings, Pane, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
+    Pane, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
     WorkspaceId,
     invalid_item_view::InvalidItemView,
     item::{HighlightedText, Item, ItemHandle, ProjectItem, TabContentParams},
@@ -469,26 +467,7 @@ impl Item for ImageView {
     }
 
     fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
-        let project_path = self.image_item.read(cx).project_path(cx);
-
-        let label_color = if ItemSettings::get_global(cx).git_status {
-            let git_status = self
-                .project
-                .read(cx)
-                .project_path_git_status(&project_path, cx)
-                .map(|status| status.summary())
-                .unwrap_or_default();
-
-            self.project
-                .read(cx)
-                .entry_for_path(&project_path, cx)
-                .map(|entry| {
-                    entry_git_aware_label_color(git_status, entry.is_ignored, params.selected)
-                })
-                .unwrap_or_else(|| params.text_color())
-        } else {
-            params.text_color()
-        };
+        let label_color = params.text_color();
 
         Label::new(self.tab_content_text(params.detail.unwrap_or_default(), cx))
             .single_line()
@@ -503,15 +482,6 @@ impl Item for ImageView {
             .file_name(cx)
             .to_string()
             .into()
-    }
-
-    fn tab_icon(&self, _: &Window, cx: &App) -> Option<Icon> {
-        let path = self.image_item.read(cx).abs_path(cx)?;
-        ItemSettings::get_global(cx)
-            .file_icons
-            .then(|| FileIcons::get_icon(&path, cx))
-            .flatten()
-            .map(Icon::from_path)
     }
 
     fn breadcrumb_location(&self, _cx: &App) -> ToolbarItemLocation {

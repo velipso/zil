@@ -20,7 +20,6 @@ members = [
     "crates/encoding_selector",
     "crates/env_var",
     "crates/explorer_command_injector",
-    "crates/file_icons",
     "crates/fs",
     "crates/fuzzy",
     "crates/fuzzy_nucleo",
@@ -88,7 +87,6 @@ members = [
     "crates/task",
     "crates/text",
     "crates/theme",
-    "crates/theme_selector",
     "crates/theme_settings",
     "crates/title_bar",
     "crates/toolchain_selector",
@@ -153,7 +151,6 @@ dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
-file_icons = { path = "crates/file_icons" }
 fs = { path = "crates/fs" }
 fuzzy = { path = "crates/fuzzy" }
 fuzzy_nucleo = { path = "crates/fuzzy_nucleo" }
@@ -223,7 +220,6 @@ tab_switcher = { path = "crates/tab_switcher" }
 task = { path = "crates/task" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }
-theme_selector = { path = "crates/theme_selector" }
 theme_settings = { path = "crates/theme_settings" }
 title_bar = { path = "crates/title_bar" }
 toolchain_selector = { path = "crates/toolchain_selector" }
@@ -604,7 +600,6 @@ breadcrumbs = { codegen-units = 1 }
 collections = { codegen-units = 1 }
 command_palette = { codegen-units = 1 }
 command_palette_hooks = { codegen-units = 1 }
-file_icons = { codegen-units = 1 }
 image_viewer = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }
@@ -613,7 +608,6 @@ refineable = { codegen-units = 1 }
 release_channel = { codegen-units = 1 }
 reqwest_client = { codegen-units = 1 }
 session = { codegen-units = 1 }
-theme_selector = { codegen-units = 1 }
 ui_input = { codegen-units = 1 }
 zed_actions = { codegen-units = 1 }
 

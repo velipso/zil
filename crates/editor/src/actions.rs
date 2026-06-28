@@ -578,12 +578,8 @@ actions!(
         OpenExcerpts,
         /// Opens excerpts in a split pane.
         OpenExcerptsSplit,
-        /// Opens the proposed changes editor.
-        OpenProposedChangesEditor,
         /// Opens documentation for the symbol at cursor.
         OpenDocs,
-        /// Opens a permalink to the current line.
-        OpenPermalinkToLine,
         /// Opens the file whose name is selected in the editor.
         #[action(deprecated_aliases = ["editor::OpenFile"])]
         OpenSelectedFilename,
@@ -591,8 +587,6 @@ actions!(
         OpenSelectionsInMultibuffer,
         /// Opens the URL at cursor position.
         OpenUrl,
-        /// Organizes import statements.
-        OrganizeImports,
         /// Decreases indentation of selected lines.
         Outdent,
         /// Automatically adjusts indentation based on context.
@@ -603,8 +597,6 @@ actions!(
         PageUp,
         /// Pastes from clipboard.
         Paste,
-        /// Navigates to the previous edit prediction.
-        PreviousEditPrediction,
         /// Redoes the last undone edit.
         Redo,
         /// Redoes the last selection change.

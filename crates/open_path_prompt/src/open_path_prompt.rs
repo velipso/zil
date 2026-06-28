@@ -1,18 +1,13 @@
-pub mod file_finder_settings;
-
 #[cfg(test)]
 mod open_path_prompt_tests;
 
-use file_finder_settings::FileFinderSettings;
-use file_icons::FileIcons;
 use futures::channel::oneshot;
 use fuzzy::{CharBag, StringMatch, StringMatchCandidate};
 use gpui::{HighlightStyle, StyledText, Task};
 use picker::{Picker, PickerDelegate};
 use project::{DirectoryItem, DirectoryLister};
-use settings::Settings;
 use std::{
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{self, AtomicBool},
@@ -700,7 +695,6 @@ impl PickerDelegate for OpenPathDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let settings = FileFinderSettings::get_global(cx);
         let candidate = self.get_entry(ix)?;
         let string_match = match &self.directory_state {
             DirectoryState::List { .. } => self.string_matches.get(ix),
@@ -735,21 +729,16 @@ impl PickerDelegate for OpenPathDelegate {
         let is_current_dir_candidate = candidate.path.string == self.current_dir();
 
         let file_icon = maybe!({
-            if !settings.file_icons {
-                return None;
-            }
-
-            let path = path::Path::new(&candidate.path.string);
             let icon = if candidate.is_dir {
                 if is_current_dir_candidate {
-                    return Some(Icon::new(IconName::ReplyArrowRight).color(Color::Muted));
+                    Icon::new(IconName::ReplyArrowRight)
                 } else {
-                    FileIcons::get_folder_icon(false, path, cx)?
+                    Icon::new(IconName::Folder)
                 }
             } else {
-                FileIcons::get_icon(path, cx)?
+                Icon::new(IconName::FileTextOutlined)
             };
-            Some(Icon::from_path(icon).color(Color::Muted))
+            Some(icon.color(Color::Muted))
         });
 
         match &self.directory_state {

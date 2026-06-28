@@ -65,15 +65,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                     MenuItem::action("Open Keymap", zed_actions::OpenKeymap),
                     MenuItem::action("Open Keymap File", zed_actions::OpenKeymapFile),
                     MenuItem::action("Open Default Key Bindings", zed_actions::OpenDefaultKeymap),
-                    MenuItem::separator(),
-                    MenuItem::action(
-                        "Select Theme...",
-                        zed_actions::theme_selector::Toggle::default(),
-                    ),
-                    MenuItem::action(
-                        "Select Icon Theme...",
-                        zed_actions::icon_theme_selector::Toggle::default(),
-                    ),
                 ])),
                 MenuItem::separator(),
                 #[cfg(target_os = "macos")]

@@ -124,7 +124,6 @@
       "cmd-a": "editor::SelectAll",
       "cmd-l": "editor::SelectLine",
       "cmd-shift-i": "editor::Format",
-      "alt-shift-o": "editor::OrganizeImports",
       "cmd-shift-left": ["editor::SelectToBeginningOfLine", { "stop_at_soft_wraps": true, "stop_at_indent": true }],
       "shift-home": ["editor::SelectToBeginningOfLine", { "stop_at_soft_wraps": true, "stop_at_indent": true }],
       "ctrl-shift-a": ["editor::SelectToBeginningOfLine", { "stop_at_soft_wraps": true, "stop_at_indent": true }],
@@ -366,7 +365,6 @@
       "cmd-shift-h": ["pane::DeploySearch", { "replace_enabled": true }],
       "cmd-shift-t": "pane::ReopenClosedItem",
       "cmd-k cmd-s": "zed::OpenKeymap",
-      "cmd-k cmd-t": "theme_selector::Toggle",
       "cmd-k cmd-shift-t": "theme::ToggleMode",
       "ctrl-alt-cmd-p": "settings_profile_selector::Toggle",
       "ctrl-shift-tab": ["tab_switcher::Toggle", { "select_last": true }],
@@ -506,37 +504,6 @@
       "ctrl-up": "menu::SelectPrevious",
       "ctrl-down": "menu::SelectNext",
       "ctrl-backspace": "tab_switcher::CloseSelectedItem",
-    },
-  },
-  {
-    "context": "ConfigureContextServerModal > Editor",
-    "use_key_equivalents": true,
-    "bindings": {
-      "escape": "menu::Cancel",
-      "enter": "editor::Newline",
-      "cmd-enter": "menu::Confirm",
-    },
-  },
-  {
-    "context": "ContextServerToolsModal",
-    "use_key_equivalents": true,
-    "bindings": {
-      "escape": "menu::Cancel",
-    },
-  },
-  {
-    "context": "OnboardingAiConfigurationModal",
-    "use_key_equivalents": true,
-    "bindings": {
-      "escape": "menu::Cancel",
-    },
-  },
-  {
-    "context": "RunModal",
-    "use_key_equivalents": true,
-    "bindings": {
-      "ctrl-tab": "pane::ActivateNextItem",
-      "ctrl-shift-tab": "pane::ActivatePreviousItem",
     },
   },
   {

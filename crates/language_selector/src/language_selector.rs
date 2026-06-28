@@ -5,12 +5,10 @@ use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ParentElement,
     Render, Styled, TaskExt, WeakEntity, Window, actions,
 };
-use language::{Buffer, LanguageMatcher, LanguageName, LanguageRegistry};
-use open_path_prompt::file_finder_settings::FileFinderSettings;
+use language::{Buffer, LanguageRegistry};
 use picker::{Picker, PickerDelegate};
 use project::Project;
-use settings::Settings;
-use std::{ops::Not as _, path::Path, sync::Arc};
+use std::{ops::Not as _, sync::Arc};
 use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
 use workspace::{ModalView, Workspace};
@@ -154,41 +152,16 @@ impl LanguageSelectorDelegate {
         }
     }
 
-    fn language_data_for_match(&self, mat: &StringMatch, cx: &App) -> (String, Option<Icon>) {
+    fn language_data_for_match(&self, mat: &StringMatch, cx: &App) -> String {
         let mut label = mat.string.clone();
         let buffer_language = self.buffer.read(cx).language();
-        let need_icon = FileFinderSettings::get_global(cx).file_icons;
 
         if let Some(buffer_language) = buffer_language
-            .filter(|buffer_language| buffer_language.name().as_ref() == mat.string.as_str())
+            && buffer_language.name().as_ref() == mat.string.as_str()
         {
             label.push_str(" (current)");
-            let icon = need_icon
-                .then(|| self.language_icon(&buffer_language.config().matcher, cx))
-                .flatten();
-            (label, icon)
-        } else {
-            let icon = need_icon
-                .then(|| {
-                    let language_name = LanguageName::new(mat.string.as_str());
-                    self.language_registry
-                        .available_language_for_name(language_name.as_ref())
-                        .and_then(|available_language| {
-                            self.language_icon(available_language.matcher(), cx)
-                        })
-                })
-                .flatten();
-            (label, icon)
         }
-    }
-
-    fn language_icon(&self, matcher: &LanguageMatcher, cx: &App) -> Option<Icon> {
-        matcher
-            .path_suffixes
-            .iter()
-            .find_map(|extension| file_icons::FileIcons::get_icon(Path::new(extension), cx))
-            .map(Icon::from_path)
-            .map(|icon| icon.color(Color::Muted))
+        label
     }
 }
 
@@ -313,13 +286,12 @@ impl PickerDelegate for LanguageSelectorDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         let mat = &self.matches.get(ix)?;
-        let (label, language_icon) = self.language_data_for_match(mat, cx);
+        let label = self.language_data_for_match(mat, cx);
         Some(
             ListItem::new(ix)
                 .inset(true)
                 .spacing(ListItemSpacing::Sparse)
                 .toggle_state(selected)
-                .start_slot::<Icon>(language_icon)
                 .child(HighlightedLabel::new(label, mat.positions.clone())),
         )
     }

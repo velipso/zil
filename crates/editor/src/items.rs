@@ -8,9 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use collections::{HashMap, HashSet};
-use file_icons::FileIcons;
 use futures::{channel::oneshot, future::try_join_all};
-use git::status::GitSummary;
 use gpui::{
     AnyElement, App, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, Font,
     IntoElement, ParentElement, Pixels, SharedString, Styled, Task, WeakEntity, Window, point,
@@ -39,7 +37,7 @@ use std::{
 use text::{BufferId, BufferSnapshot, OffsetRangeExt, Selection};
 use ui::{prelude::*};
 use util::{ResultExt, TryFutureExt, paths::PathExt, rel_path::RelPath};
-use workspace::item::{Dedup, ItemSettings, TabContentParams};
+use workspace::item::{Dedup, TabContentParams};
 use workspace::{
     CollaboratorId, ItemNavHistory, ToolbarItemLocation, ViewId, Workspace, WorkspaceId,
     invalid_item_view::InvalidItemView,
@@ -707,42 +705,8 @@ impl Item for Editor {
         self.buffer.read(cx).title(cx).to_string().into()
     }
 
-    fn tab_icon(&self, _: &Window, cx: &App) -> Option<Icon> {
-        ItemSettings::get_global(cx)
-            .file_icons
-            .then(|| {
-                path_for_buffer(&self.buffer, 0, true, cx)
-                    .and_then(|path| FileIcons::get_icon(Path::new(&*path), cx))
-            })
-            .flatten()
-            .map(Icon::from_path)
-    }
-
     fn tab_content(&self, params: TabContentParams, _: &Window, cx: &App) -> AnyElement {
-        let label_color = if ItemSettings::get_global(cx).git_status {
-            (|| {
-                let buffer = self.buffer().read(cx).as_singleton();
-                let buffer = buffer.read(cx);
-                let path = buffer.project_path(cx)?;
-                let buffer_id = buffer.remote_id();
-                let project = self.project()?.read(cx);
-                let entry = project.entry_for_path(&path, cx)?;
-                let (repo, repo_path) = project
-                    .git_store()
-                    .read(cx)
-                    .repository_and_path_for_buffer_id(buffer_id, cx)?;
-                let status = repo.read(cx).status_for_path(&repo_path)?.status;
-
-                Some(entry_git_aware_label_color(
-                    status.summary(),
-                    entry.is_ignored,
-                    params.selected,
-                ))
-            })()
-            .unwrap_or_else(|| entry_label_color(params.selected))
-        } else {
-            entry_label_color(params.selected)
-        };
+        let label_color = entry_label_color(params.selected);
 
         let description = params.detail.and_then(|detail| {
             let path = path_for_buffer(&self.buffer, detail, false, cx)?;
@@ -1608,23 +1572,6 @@ pub fn entry_label_color(selected: bool) -> Color {
         Color::Default
     } else {
         Color::Muted
-    }
-}
-
-pub fn entry_git_aware_label_color(git_status: GitSummary, ignored: bool, selected: bool) -> Color {
-    let tracked = git_status.index + git_status.worktree;
-    if git_status.conflict > 0 {
-        Color::Conflict
-    } else if tracked.deleted > 0 {
-        Color::Deleted
-    } else if tracked.modified > 0 {
-        Color::Modified
-    } else if tracked.added > 0 || git_status.untracked > 0 {
-        Color::Created
-    } else if ignored {
-        Color::Ignored
-    } else {
-        entry_label_color(selected)
     }
 }
 
