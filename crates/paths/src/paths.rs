@@ -8,9 +8,6 @@ use util::paths::SanitizedPath;
 pub use util::paths::home_dir;
 use util::rel_path::RelPath;
 
-/// A default editorconfig file name to use when resolving project settings.
-pub const EDITORCONFIG_NAME: &str = ".editorconfig";
-
 /// The application name, used to derive platform-specific data, config, cache,
 /// and state directory paths.
 ///

@@ -1,5 +1,4 @@
 {
-  "$schema": "zed://schemas/settings",
   // The name of the Zed theme to use for the UI.
   //
   // `mode` is one of:
@@ -1444,11 +1443,10 @@
   // The column at which to soft-wrap lines, for buffers where soft-wrap
   // is enabled.
   "preferred_line_length": 80,
-  // Whether to indent lines using tab characters, as opposed to multiple
-  // spaces.
-  "hard_tabs": false,
-  // How many columns a tab should occupy.
-  "tab_size": 4,
+  // How many columns a tab should occupy for new files or when detection fails.
+  "default_tab_size": 2,
+  // Default to hard tabs for new files or when indentation cannot be detected.
+  "default_hard_tabs": false,
   // Number of lines to search for modelines at the beginning and end of files.
   // Modelines contain editor directives (e.g., vim/emacs settings) that configure
   // the editor behavior for specific files.

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, ops::Range, time::Duration};
+use std::{cmp::Ordering, num::NonZeroU32, ops::Range, time::Duration};
 
 use collections::HashSet;
 use gpui::{App, AppContext as _, Context, Task, Window};
@@ -50,6 +50,7 @@ impl Editor {
             self,
             visible_buffer_range,
             self.should_show_indent_guides() == Some(true),
+            self.buffer.read_with(cx, |mb, cx| mb.tab_size(cx)),
             snapshot,
             cx,
         ))
@@ -144,6 +145,7 @@ pub fn indent_guides_in_range(
     editor: &Editor,
     visible_buffer_range: Range<MultiBufferRow>,
     ignore_disabled_for_language: bool,
+    tab_size: NonZeroU32,
     snapshot: &DisplaySnapshot,
     cx: &App,
 ) -> Vec<IndentGuide> {
@@ -172,7 +174,12 @@ pub fn indent_guides_in_range(
 
     snapshot
         .buffer_snapshot()
-        .indent_guides_in_range(start_anchor..end_anchor, ignore_disabled_for_language, cx)
+        .indent_guides_in_range(
+            start_anchor..end_anchor,
+            ignore_disabled_for_language,
+            tab_size,
+            cx
+        )
         .filter(|indent_guide| {
             if editor.has_indent_guides_disabled_for_buffer(indent_guide.buffer_id) {
                 return false;

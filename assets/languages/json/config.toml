@@ -2,7 +2,6 @@ name = "JSON"
 grammar = "json"
 path_suffixes = ["json", "flake.lock", "geojson", "topojson", "prettierrc", "json.dist"]
 line_comments = ["// "]
-tab_size = 2
 auto_indent_strings = ["{", "[", "("]
 auto_outdent_strings = ["}", "]", ")"]
 debuggers = ["JavaScript"]

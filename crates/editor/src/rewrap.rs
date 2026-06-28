@@ -232,7 +232,7 @@ impl Editor {
                 continue;
             }
 
-            let tab_size = language_settings.tab_size;
+            let tab_size = self.buffer.read_with(cx, |mb, cx| mb.tab_size(cx));
 
             let (line_prefix, inside_comment) = match &comment_prefix {
                 Some(CommentFormat::Line(prefix) | CommentFormat::BlockLine(prefix)) => {

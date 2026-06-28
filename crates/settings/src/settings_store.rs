@@ -7,7 +7,7 @@ use futures::{
     future::LocalBoxFuture,
 };
 use gpui::{
-    App, AppContext, AsyncApp, BorrowAppContext, Entity, Global, SharedString, Task, UpdateGlobal,
+    App, AsyncApp, BorrowAppContext, Global, SharedString, Task, UpdateGlobal,
 };
 
 use paths::{local_settings_file_relative_path, task_file_name};
@@ -28,8 +28,6 @@ use util::{
     rel_path::RelPath,
     schemars::{AllowTrailingCommas, DefaultDenyUnknownFields, replace_subschema},
 };
-
-use crate::editorconfig_store::EditorconfigStore;
 
 use crate::{
     ActiveSettingsProfileName, FontFamilyName, IconThemeName, LanguageSettingsContent,
@@ -158,7 +156,6 @@ pub struct SettingsStore {
     last_user_settings_content: Option<String>,
     last_global_settings_content: Option<String>,
     local_settings: BTreeMap<(WorktreeId, Arc<RelPath>), SettingsContent>,
-    pub editorconfig_store: Entity<EditorconfigStore>,
 
     _settings_files_watcher: Option<Task<()>>,
     _setting_file_updates: Task<()>,
@@ -211,7 +208,6 @@ impl Ord for SettingsFile {
 pub enum LocalSettingsKind {
     Settings,
     Tasks,
-    Editorconfig,
     Debug,
 }
 
@@ -311,7 +307,6 @@ impl SettingsStore {
             last_user_settings_content: None,
             last_global_settings_content: None,
             local_settings: BTreeMap::default(),
-            editorconfig_store: cx.new(|_| EditorconfigStore::default()),
             _settings_files_watcher: None,
             setting_file_updates_tx,
             _setting_file_updates: cx.spawn(async move |cx| {
@@ -1081,14 +1076,9 @@ impl SettingsStore {
                     }
                 }
             }
-            (directory_path, LocalSettingsKind::Editorconfig, editorconfig_contents) => {
-                self.editorconfig_store.update(cx, |store, _| {
-                    store.set_configs(root_id, directory_path, editorconfig_contents)
-                })?;
-            }
             (LocalSettingsPath::OutsideWorktree(path), kind, _) => {
                 log::error!(
-                    "OutsideWorktree path {:?} with kind {:?} is only supported by editorconfig",
+                    "OutsideWorktree path {:?} with kind {:?}",
                     path,
                     kind
                 );
@@ -1123,9 +1113,6 @@ impl SettingsStore {
     pub fn clear_local_settings(&mut self, root_id: WorktreeId, cx: &mut App) -> Result<()> {
         self.local_settings
             .retain(|(worktree_id, _), _| worktree_id != &root_id);
-
-        self.editorconfig_store
-            .update(cx, |store, _cx| store.remove_for_worktree(root_id));
 
         for setting_value in self.setting_values.values_mut() {
             setting_value.clear_local_values(root_id);
@@ -1432,10 +1419,6 @@ pub enum InvalidSettingsError {
     DefaultSettings {
         message: String,
     },
-    Editorconfig {
-        path: LocalSettingsPath,
-        message: String,
-    },
     Tasks {
         path: PathBuf,
         message: String,
@@ -1454,7 +1437,6 @@ impl std::fmt::Display for InvalidSettingsError {
             | InvalidSettingsError::ServerSettings { message }
             | InvalidSettingsError::DefaultSettings { message }
             | InvalidSettingsError::Tasks { message, .. }
-            | InvalidSettingsError::Editorconfig { message, .. }
             | InvalidSettingsError::Debug { message, .. } => write!(f, "{message}"),
         }
     }

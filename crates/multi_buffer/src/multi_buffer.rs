@@ -44,6 +44,7 @@ use std::{
     io,
     iter::{self, FromIterator},
     mem,
+    num::NonZeroU32,
     ops::{self, Add, AddAssign, ControlFlow, Range, Sub, SubAssign},
     rc::Rc,
     str,
@@ -1170,6 +1171,34 @@ impl MultiBuffer {
 
     pub fn subscribe(&mut self) -> Subscription<MultiBufferOffset> {
         self.subscriptions.subscribe()
+    }
+
+    pub fn tab_size(&self, cx: &App) -> NonZeroU32 {
+        if let Some(state) = &self.state {
+            state.buffer.read(cx).tab_size()
+        } else {
+            NonZeroU32::new(2).unwrap()
+        }
+    }
+
+    pub fn set_tab_size(&mut self, tab_size: NonZeroU32, cx: &mut App) {
+        self.as_singleton().update(cx, |buffer, _cx| {
+            buffer.set_tab_size(tab_size);
+        });
+    }
+
+    pub fn hard_tabs(&self, cx: &App) -> bool {
+        if let Some(state) = &self.state {
+            state.buffer.read(cx).hard_tabs()
+        } else {
+            false
+        }
+    }
+
+    pub fn set_hard_tabs(&mut self, hard_tabs: bool, cx: &mut App) {
+        self.as_singleton().update(cx, |buffer, _cx| {
+            buffer.set_hard_tabs(hard_tabs);
+        });
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
@@ -4900,8 +4929,10 @@ impl MultiBufferSnapshot {
         &self,
         range: Range<T>,
         ignore_disabled_for_language: bool,
+        tab_size: NonZeroU32,
         cx: &App,
     ) -> impl Iterator<Item = IndentGuide> {
+        let tab_size = tab_size.get();
         let range = range.start.to_point(self)..range.end.to_point(self);
         let start_row = MultiBufferRow(range.start.row);
         let end_row = MultiBufferRow(range.end.row);
@@ -4935,7 +4966,6 @@ impl MultiBufferSnapshot {
                     )
                 })
                 .1;
-            let tab_size = settings.tab_size.get();
 
             // When encountering empty, continue until found useful line indent
             // then add to the indent stack with the depth found

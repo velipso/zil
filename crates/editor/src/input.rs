@@ -289,7 +289,7 @@ impl Editor {
                             NewlineConfig::UnindentCurrentLine { continuation } => {
                                 let row_start =
                                     buffer.point_to_offset(Point::new(start_point.row, 0));
-                                let tab_size = buffer.language_settings_at(start, cx).tab_size;
+                                let tab_size = this.buffer.read_with(cx, |mb, cx| mb.tab_size(cx));
                                 existing_indent.len = existing_indent
                                     .len
                                     .saturating_sub(existing_indent.outdent_len(tab_size));
@@ -1514,72 +1514,6 @@ impl Editor {
         chars.reverse();
         Some(chars.iter().collect())
     }
-}
-
-pub(super) fn is_list_prefix_row(
-    row: MultiBufferRow,
-    buffer: &MultiBufferSnapshot,
-    language: &LanguageScope,
-) -> bool {
-    let Some((snapshot, range)) = buffer.buffer_line_for_row(row) else {
-        return false;
-    };
-
-    let num_of_whitespaces = snapshot
-        .chars_for_range(range.clone())
-        .take_while(|c| c.is_whitespace())
-        .count();
-
-    let task_list_prefixes: Vec<_> = language
-        .task_list()
-        .into_iter()
-        .flat_map(|config| {
-            config
-                .prefixes
-                .iter()
-                .map(|p| p.as_ref())
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    let unordered_list_markers: Vec<_> = language
-        .unordered_list()
-        .iter()
-        .map(|marker| marker.as_ref())
-        .collect();
-    let all_prefixes: Vec<_> = task_list_prefixes
-        .into_iter()
-        .chain(unordered_list_markers)
-        .collect();
-    if let Some(max_prefix_len) = all_prefixes.iter().map(|p| p.len()).max() {
-        let candidate: String = snapshot
-            .chars_for_range(range.clone())
-            .skip(num_of_whitespaces)
-            .take(max_prefix_len)
-            .collect();
-        if all_prefixes
-            .iter()
-            .any(|prefix| candidate.starts_with(*prefix))
-        {
-            return true;
-        }
-    }
-
-    let ordered_list_candidate: String = snapshot
-        .chars_for_range(range)
-        .skip(num_of_whitespaces)
-        .take(ORDERED_LIST_MAX_MARKER_LEN)
-        .collect();
-    for ordered_config in language.ordered_list() {
-        let regex = match Regex::new(&ordered_config.pattern) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        if let Some(captures) = regex.captures(&ordered_list_candidate) {
-            return captures.get(0).is_some();
-        }
-    }
-
-    false
 }
 
 #[derive(Debug)]

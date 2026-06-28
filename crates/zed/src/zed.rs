@@ -385,8 +385,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             show_software_emulation_warning_if_needed(specs.clone(), window, cx);
         }
 
-        let panels_task = Task::ready(anyhow::Ok(())); // VELIPSO: remove
-        workspace.set_panels_task(panels_task);
         register_actions(app_state.clone(), workspace, window, cx);
 
         if !workspace.has_active_modal(window, cx) {

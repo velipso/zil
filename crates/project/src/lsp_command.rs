@@ -13,7 +13,6 @@ use gpui::{App, AsyncApp, Entity, SharedString, Task, TaskExt, prelude::FluentBu
 use language::{
     Anchor, Bias, Buffer, CachedLspAdapter,
     PointUtf16, ToPointUtf16, Unclipped,
-    language_settings::{LanguageSettings},
     point_from_lsp, point_to_lsp,
     proto::{
         deserialize_anchor, deserialize_anchor_range, deserialize_version, serialize_anchor,
@@ -31,17 +30,6 @@ use std::{
     cmp::Reverse, mem, ops::Range, path::Path, sync::Arc,
 };
 use text::{BufferId};
-
-pub fn lsp_formatting_options(settings: &LanguageSettings) -> lsp::FormattingOptions {
-    lsp::FormattingOptions {
-        tab_size: settings.tab_size.into(),
-        insert_spaces: !settings.hard_tabs,
-        trim_trailing_whitespace: Some(settings.remove_trailing_whitespace_on_save),
-        trim_final_newlines: Some(settings.ensure_final_newline_on_save),
-        insert_final_newline: Some(settings.ensure_final_newline_on_save),
-        ..lsp::FormattingOptions::default()
-    }
-}
 
 pub fn file_path_to_lsp_url(path: &Path) -> Result<lsp::Uri> {
     match lsp::Uri::from_file_path(path) {

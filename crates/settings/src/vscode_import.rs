@@ -466,7 +466,6 @@ impl VsCodeSettings {
             }),
             extend_list_on_newline: None,
             indent_list_on_tab: None,
-            hard_tabs: self.read_bool("editor.insertSpaces").map(|v| !v),
             indent_guides: skip_default(IndentGuideSettingsContent {
                 enabled: self.read_bool("editor.guides.indentation"),
                 ..Default::default()
@@ -502,9 +501,6 @@ impl VsCodeSettings {
                 "off" => Some(SoftWrap::None),
                 _ => None,
             }),
-            tab_size: self
-                .read_u32("editor.tabSize")
-                .and_then(|n| NonZeroU32::new(n)),
             tasks: None,
             whitespace_map: None,
             wrap_guides: self
@@ -705,6 +701,8 @@ impl VsCodeSettings {
             }),
             zoomed_padding: None,
             focus_follows_mouse: None,
+            default_tab_size: None,
+            default_hard_tabs: None,
         }
     }
 

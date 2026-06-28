@@ -97,6 +97,7 @@ use std::{
     collections::BTreeMap,
     ffi::OsString,
     future::Future,
+    num::NonZeroU32,
     ops::{Not as _, Range},
     path::{Path, PathBuf},
     pin::pin,
@@ -1593,6 +1594,17 @@ impl Project {
                     .is_some_and(|e| e.id == entry_id)
             })
             .unwrap_or(false)
+    }
+
+    pub fn on_update_default_tab_settings(
+        &mut self,
+        default_tab_size: NonZeroU32,
+        default_hard_tabs: bool,
+        cx: &mut App
+    ) {
+        self.lsp_store.update(cx, |lsp_store, cx| {
+            lsp_store.on_update_default_tab_settings(default_tab_size, default_hard_tabs, cx);
+        });
     }
 
     #[inline]

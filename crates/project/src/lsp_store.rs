@@ -99,6 +99,7 @@ use std::{
     convert::TryInto,
     ffi::OsStr,
     mem,
+    num::NonZeroU32,
     ops::{ControlFlow, Range},
     path::{self, Path, PathBuf},
     sync::{
@@ -2369,6 +2370,7 @@ pub struct LspStore {
     semantic_token_config: SemanticTokenConfig,
     lsp_data: HashMap<BufferId, BufferLspData>,
     buffer_reload_tasks: HashMap<BufferId, Task<anyhow::Result<()>>>,
+    default_tab_settings: Option<(NonZeroU32, bool)>, // (default_tab_size, default_hard_tabs)
 }
 
 #[derive(Debug)]
@@ -2627,6 +2629,7 @@ impl LspStore {
             lsp_data: HashMap::default(),
             buffer_reload_tasks: HashMap::default(),
             active_entry: None,
+            default_tab_settings: None,
             _maintain_workspace_config,
             _maintain_buffer_languages: Self::maintain_buffer_languages(languages, cx),
         }
@@ -2686,7 +2689,7 @@ impl LspStore {
             lsp_data: HashMap::default(),
             buffer_reload_tasks: HashMap::default(),
             active_entry: None,
-
+            default_tab_settings: None,
             _maintain_workspace_config,
             _maintain_buffer_languages: Self::maintain_buffer_languages(languages.clone(), cx),
         }
@@ -2809,6 +2812,9 @@ impl LspStore {
 
         self.parse_modeline(buffer, cx);
         self.detect_language_for_buffer(buffer, cx);
+        if let Some((default_tab_size, default_hard_tabs)) = self.default_tab_settings {
+            Self::detect_tab_settings(&buffer, default_tab_size, default_hard_tabs, cx);
+        }
         if let Some(local) = self.as_local_mut() {
             local.initialize_buffer(buffer, cx);
         }
@@ -2819,6 +2825,38 @@ impl LspStore {
     fn on_buffer_reloaded(&mut self, buffer: Entity<Buffer>, cx: &mut Context<Self>) {
         if self.parse_modeline(&buffer, cx) {
             self.detect_language_for_buffer(&buffer, cx);
+            if let Some((default_tab_size, default_hard_tabs)) = self.default_tab_settings {
+                Self::detect_tab_settings(&buffer, default_tab_size, default_hard_tabs, cx);
+            }
+        }
+    }
+
+    fn detect_tab_settings(
+        buffer: &Entity<Buffer>,
+        default_tab_size: NonZeroU32,
+        default_hard_tabs: bool,
+        cx: &mut App,
+    ) {
+        buffer.update(cx, |buffer, _cx| {
+            buffer.detect_tab_settings(default_tab_size, default_hard_tabs);
+        });
+    }
+
+    pub fn on_update_default_tab_settings(
+        &mut self,
+        default_tab_size: NonZeroU32,
+        default_hard_tabs: bool,
+        cx: &mut App
+    ) {
+        let was_none = self.default_tab_settings.is_none();
+        self.default_tab_settings = Some((default_tab_size, default_hard_tabs));
+        if was_none {
+            // if this is our first load of the settings, then re-detect open buffers
+            self.buffer_store.update(cx, |buffer_store, cx| {
+                for buffer in buffer_store.buffers() {
+                    Self::detect_tab_settings(&buffer, default_tab_size, default_hard_tabs, cx);
+                }
+            });
         }
     }
 

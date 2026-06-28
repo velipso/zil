@@ -1,4 +1,4 @@
-use std::num::NonZeroUsize;
+use std::num::{NonZeroUsize, NonZeroU32};
 
 use collections::HashMap;
 use schemars::JsonSchema;
@@ -130,6 +130,12 @@ pub struct WorkspaceSettingsContent {
     /// Whether the focused panel follows the mouse location
     /// Default: false
     pub focus_follows_mouse: Option<FocusFollowsMouse>,
+    /// Tab size to use for new files or where detection fails.
+    /// Default: 2
+    pub default_tab_size: Option<NonZeroU32>,
+    /// Hard tabs to use for new files or where detection fails.
+    /// Default: false
+    pub default_hard_tabs: Option<bool>,
 }
 
 #[with_fallible_options]

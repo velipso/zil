@@ -1,6 +1,5 @@
 mod content_into_gpui;
 mod editable_setting_control;
-mod editorconfig_store;
 mod keymap_file;
 mod settings_file;
 mod settings_store;
@@ -32,9 +31,6 @@ use util::asset_str;
 pub use ::settings_content::*;
 pub use content_into_gpui::IntoGpui;
 pub use editable_setting_control::*;
-pub use editorconfig_store::{
-    Editorconfig, EditorconfigEvent, EditorconfigProperties, EditorconfigStore,
-};
 pub use keymap_file::{
     KeyBindingValidator, KeyBindingValidatorRegistration, KeybindSource, KeybindUpdateOperation,
     KeybindUpdateTarget, KeymapFile, KeymapFileLoadResult,

@@ -15,7 +15,7 @@ use any_vec::AnyVec;
 use collections::HashMap;
 use editor::{
     Editor, EditorSettings, MultiBufferOffset,
-    actions::{Backtab, FoldAll, Tab, ToggleFoldAll, UnfoldAll},
+    actions::{FoldAll, ToggleFoldAll, UnfoldAll, Indent, Outdent},
     scroll::Autoscroll,
 };
 use futures::channel::oneshot;
@@ -367,8 +367,8 @@ impl Render for BufferSearchBar {
             .w_full()
             .track_scroll(&self.scroll_handle)
             .key_context(key_context)
-            .capture_action(cx.listener(Self::tab))
-            .capture_action(cx.listener(Self::backtab))
+            .capture_action(cx.listener(Self::indent))
+            .capture_action(cx.listener(Self::outdent))
             .capture_action(cx.listener(Self::toggle_fold_all))
             .on_action(cx.listener(Self::previous_history_query))
             .on_action(cx.listener(Self::next_history_query))
@@ -1441,13 +1441,14 @@ impl BufferSearchBar {
         }
     }
 
-    fn tab(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
+    fn indent(&mut self, _: &Indent, window: &mut Window, cx: &mut Context<Self>) {
         self.cycle_field(Direction::Next, window, cx);
     }
 
-    fn backtab(&mut self, _: &Backtab, window: &mut Window, cx: &mut Context<Self>) {
+    fn outdent(&mut self, _: &Outdent, window: &mut Window, cx: &mut Context<Self>) {
         self.cycle_field(Direction::Prev, window, cx);
     }
+
     fn cycle_field(&mut self, direction: Direction, window: &mut Window, cx: &mut Context<Self>) {
         let mut handles = vec![self.query_editor.focus_handle(cx)];
         if self.replace_enabled {

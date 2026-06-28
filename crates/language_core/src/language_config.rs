@@ -5,7 +5,7 @@ use lsp::LanguageServerName;
 use regex::Regex;
 use schemars::{JsonSchema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use std::{num::NonZeroU32, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 /// Controls the soft-wrapping behavior in the editor.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -85,14 +85,6 @@ pub struct LanguageConfig {
     /// or a whole-word search in buffer search.
     #[serde(default)]
     pub word_characters: HashSet<char>,
-    /// Whether to indent lines using tab characters, as opposed to multiple
-    /// spaces.
-    #[serde(default)]
-    pub hard_tabs: Option<bool>,
-    /// How many columns a tab should occupy.
-    #[serde(default)]
-    #[schemars(range(min = 1, max = 128))]
-    pub tab_size: Option<NonZeroU32>,
     /// How to soft-wrap long lines of text.
     #[serde(default)]
     pub soft_wrap: Option<SoftWrap>,
@@ -136,8 +128,6 @@ impl Default for LanguageConfig {
             overrides: Default::default(),
             word_characters: Default::default(),
             collapsed_placeholder: Default::default(),
-            hard_tabs: None,
-            tab_size: None,
             soft_wrap: None,
             wrap_characters: None,
             hidden: false,

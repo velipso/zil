@@ -9,7 +9,6 @@ block_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
 documentation_comment = { start = "/**", prefix = "* ", end = "*/", tab_size = 1 }
 wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", end_suffix = ">" }
 word_characters = ["$", "#"]
-tab_size = 2
 auto_indent_strings = ["{", "[", "("]
 auto_outdent_strings = ["}", "]", ")"]
 scope_opt_in_language_servers = ["tailwindcss-language-server", "emmet-language-server"]

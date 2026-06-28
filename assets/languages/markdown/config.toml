@@ -13,6 +13,4 @@ rewrap_prefixes = [
 unordered_list = ["- ", "* ", "+ "]
 ordered_list = [{ pattern = "(\\d+)\\. ", format = "{1}. " }]
 task_list = { prefixes = ["- [ ] ", "- [x] ", "- [X] "], continuation = "- [ ] " }
-
 auto_indent_on_paste = false
-tab_size = 2

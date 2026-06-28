@@ -2,12 +2,6 @@
 
 use crate::{Buffer, BufferSnapshot, File, LanguageName, LanguageServerName, ModelineSettings};
 use collections::{FxHashMap, HashMap, HashSet};
-use ec4rs::{
-    Properties as EditorconfigProperties,
-    property::{
-        EndOfLine, FinalNewline, IndentSize, IndentStyle, MaxLineLen, TabWidth, TrimTrailingWs,
-    },
-};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use gpui::{App, Modifiers, SharedString};
 use itertools::{Either, Itertools};
@@ -18,8 +12,8 @@ pub use settings::{
     InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode, RewrapBehavior,
     ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
-use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};
-use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
+use settings::{RegisterSetting, Settings, SettingsLocation, merge_from::MergeFrom};
+use std::{borrow::Cow, sync::Arc};
 use text::ToOffset;
 
 /// Returns the settings for all languages from the provided file.
@@ -52,11 +46,6 @@ pub struct WhitespaceMap {
 /// The settings for a particular language.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LanguageSettings {
-    /// How many columns a tab should occupy.
-    pub tab_size: NonZeroU32,
-    /// Whether to indent lines using tab characters, as opposed to multiple
-    /// spaces.
-    pub hard_tabs: bool,
     /// How to soft-wrap long lines of text.
     pub soft_wrap: settings::SoftWrap,
     /// The column at which to soft-wrap lines, for buffers where soft-wrap
@@ -368,27 +357,15 @@ impl AllLanguageSettings {
     /// Returns the [`LanguageSettings`] for the language with the specified name.
     pub fn language<'a>(
         &'a self,
-        location: Option<SettingsLocation<'a>>,
+        _: Option<SettingsLocation<'a>>,
         language_name: Option<&LanguageName>,
-        cx: &'a App,
+        _: &'a App,
     ) -> Cow<'a, LanguageSettings> {
         let settings = language_name
             .and_then(|name| self.languages.get(name))
             .unwrap_or(&self.defaults);
 
-        let editorconfig_properties = location.and_then(|location| {
-            cx.global::<SettingsStore>()
-                .editorconfig_store
-                .read(cx)
-                .properties(location.worktree_id, location.path)
-        });
-        if let Some(editorconfig_properties) = editorconfig_properties {
-            let mut settings = settings.clone();
-            merge_with_editorconfig(&mut settings, &editorconfig_properties);
-            Cow::Owned(settings)
-        } else {
-            Cow::Borrowed(settings)
-        }
+        Cow::Borrowed(settings)
     }
 }
 
@@ -401,12 +378,6 @@ fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSetti
         }
     });
 
-    settings
-        .tab_size
-        .merge_from_option(modeline.tab_size.as_ref());
-    settings
-        .hard_tabs
-        .merge_from_option(modeline.hard_tabs.as_ref());
     settings
         .preferred_line_length
         .merge_from_option(modeline.preferred_line_length.map(u32::from).as_ref());
@@ -428,53 +399,6 @@ fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSetti
         .merge_from_option(modeline.ensure_final_newline.as_ref());
 }
 
-fn merge_with_editorconfig(settings: &mut LanguageSettings, cfg: &EditorconfigProperties) {
-    let preferred_line_length = cfg.get::<MaxLineLen>().ok().and_then(|v| match v {
-        MaxLineLen::Value(u) => Some(u as u32),
-        MaxLineLen::Off => None,
-    });
-    let tab_size = cfg.get::<IndentSize>().ok().and_then(|v| match v {
-        IndentSize::Value(u) => NonZeroU32::new(u as u32),
-        IndentSize::UseTabWidth => cfg.get::<TabWidth>().ok().and_then(|w| match w {
-            TabWidth::Value(u) => NonZeroU32::new(u as u32),
-        }),
-    });
-    let hard_tabs = cfg
-        .get::<IndentStyle>()
-        .map(|v| v.eq(&IndentStyle::Tabs))
-        .ok();
-    let ensure_final_newline_on_save = cfg
-        .get::<FinalNewline>()
-        .map(|v| match v {
-            FinalNewline::Value(b) => b,
-        })
-        .ok();
-    let remove_trailing_whitespace_on_save = cfg
-        .get::<TrimTrailingWs>()
-        .map(|v| match v {
-            TrimTrailingWs::Value(b) => b,
-        })
-        .ok();
-    let line_ending = cfg.get::<EndOfLine>().ok().and_then(|v| match v {
-        EndOfLine::Lf => Some(LineEndingSetting::EnforceLf),
-        EndOfLine::CrLf => Some(LineEndingSetting::EnforceCrlf),
-        EndOfLine::Cr => None,
-    });
-
-    settings
-        .preferred_line_length
-        .merge_from_option(preferred_line_length.as_ref());
-    settings.tab_size.merge_from_option(tab_size.as_ref());
-    settings.hard_tabs.merge_from_option(hard_tabs.as_ref());
-    settings
-        .remove_trailing_whitespace_on_save
-        .merge_from_option(remove_trailing_whitespace_on_save.as_ref());
-    settings
-        .ensure_final_newline_on_save
-        .merge_from_option(ensure_final_newline_on_save.as_ref());
-    settings.line_ending.merge_from_option(line_ending.as_ref());
-}
-
 impl settings::Settings for AllLanguageSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let all_languages = &content.project.all_languages;
@@ -485,8 +409,6 @@ impl settings::Settings for AllLanguageSettings {
             let whitespace_map = settings.whitespace_map.unwrap();
 
             LanguageSettings {
-                tab_size: settings.tab_size.unwrap(),
-                hard_tabs: settings.hard_tabs.unwrap(),
                 soft_wrap: settings.soft_wrap.unwrap(),
                 preferred_line_length: settings.preferred_line_length.unwrap(),
                 show_wrap_guides: settings.show_wrap_guides.unwrap(),

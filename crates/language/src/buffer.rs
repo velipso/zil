@@ -132,6 +132,8 @@ pub struct Buffer {
     tree_sitter_data: Arc<TreeSitterData>,
     encoding: &'static Encoding,
     has_bom: bool,
+    tab_size: NonZeroU32,
+    hard_tabs: bool,
     reload_with_encoding_txns: HashMap<TransactionId, (&'static Encoding, bool)>,
 }
 
@@ -189,6 +191,7 @@ pub struct BufferSnapshot {
     non_text_state_update_count: usize,
     pub capability: Capability,
     modeline: Option<Arc<ModelineSettings>>,
+    indent_size: IndentSize,
 }
 
 /// The kind and amount of indentation in a particular line. For now,
@@ -1107,6 +1110,8 @@ impl Buffer {
             _subscriptions: Vec::new(),
             encoding: encoding_rs::UTF_8,
             has_bom: false,
+            tab_size: NonZeroU32::new(2).unwrap(),
+            hard_tabs: false,
             reload_with_encoding_txns: HashMap::default(),
         }
     }
@@ -1142,64 +1147,8 @@ impl Buffer {
                 non_text_state_update_count: 0,
                 capability: Capability::ReadOnly,
                 modeline,
+                indent_size: IndentSize::spaces(2)
             }
-        }
-    }
-
-    pub fn build_empty_snapshot(cx: &mut App) -> BufferSnapshot {
-        let entity_id = cx.reserve_entity::<Self>().entity_id();
-        let buffer_id = entity_id.as_non_zero_u64().into();
-        let text = TextBuffer::new_normalized(
-            ReplicaId::LOCAL,
-            buffer_id,
-            Default::default(),
-            Rope::new(),
-        );
-        let text = text.into_snapshot();
-        let syntax = SyntaxMap::new(&text).snapshot();
-        let tree_sitter_data = TreeSitterData::new(&text);
-        BufferSnapshot {
-            text,
-            syntax,
-            tree_sitter_data: Arc::new(tree_sitter_data),
-            file: None,
-            diagnostics: Default::default(),
-            remote_selections: Default::default(),
-            language: None,
-            non_text_state_update_count: 0,
-            capability: Capability::ReadOnly,
-            modeline: None,
-        }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn build_snapshot_sync(
-        text: Rope,
-        language: Option<Arc<Language>>,
-        language_registry: Option<Arc<LanguageRegistry>>,
-        cx: &mut App,
-    ) -> BufferSnapshot {
-        let entity_id = cx.reserve_entity::<Self>().entity_id();
-        let buffer_id = entity_id.as_non_zero_u64().into();
-        let text =
-            TextBuffer::new_normalized(ReplicaId::LOCAL, buffer_id, Default::default(), text)
-                .into_snapshot();
-        let mut syntax = SyntaxMap::new(&text).snapshot();
-        if let Some(language) = language.clone() {
-            syntax.reparse(&text, language_registry, language);
-        }
-        let tree_sitter_data = TreeSitterData::new(&text);
-        BufferSnapshot {
-            text,
-            syntax,
-            tree_sitter_data: Arc::new(tree_sitter_data),
-            file: None,
-            diagnostics: Default::default(),
-            remote_selections: Default::default(),
-            language,
-            non_text_state_update_count: 0,
-            capability: Capability::ReadOnly,
-            modeline: None,
         }
     }
 
@@ -1231,6 +1180,7 @@ impl Buffer {
             non_text_state_update_count: self.non_text_state_update_count,
             capability: self.capability,
             modeline: self.modeline.clone(),
+            indent_size: self.indent_size(),
         }
     }
 
@@ -1424,6 +1374,118 @@ impl Buffer {
     /// Sets whether the buffer has a Byte Order Mark.
     pub fn set_has_bom(&mut self, has_bom: bool) {
         self.has_bom = has_bom;
+    }
+
+    pub fn tab_size(&self) -> NonZeroU32 {
+        self.tab_size
+    }
+
+    pub fn set_tab_size(&mut self, tab_size: NonZeroU32) {
+        self.tab_size = tab_size;
+    }
+
+    pub fn hard_tabs(&self) -> bool {
+        self.hard_tabs
+    }
+
+    pub fn set_hard_tabs(&mut self, hard_tabs: bool) {
+        self.hard_tabs = hard_tabs;
+    }
+
+    pub fn indent_size(&self) -> IndentSize {
+        if self.hard_tabs {
+            IndentSize::tab()
+        } else {
+            IndentSize::spaces(self.tab_size.get())
+        }
+    }
+
+    pub fn detect_tab_settings(
+        &mut self,
+        default_tab_size: NonZeroU32,
+        default_hard_tabs: bool,
+    ) {
+        let mut tab_size = default_tab_size;
+        let mut hard_tabs = default_hard_tabs;
+
+        // scan through the buffer and collect evidence for tab_size and hard_tabs
+        let max_scan_size = 10000;
+        let mut start_of_line = true;
+        let mut space_count = 0;
+        let mut tab_count = 0;
+        let mut tab_size_evidence = vec![0, 0, 0, 0, 0, 0, 0]; // index X -> tab size X+2
+        let mut hard_tab_evidence = 0;
+
+        for (i, ch) in self.text.snapshot().chars().enumerate() {
+            if start_of_line {
+                if ch == ' ' {
+                    space_count += 1;
+                } else if ch == '\t' {
+                    tab_count += 1;
+                } else if ch != '\r' && ch != '\n' {
+                    if space_count > 0 {
+                        for (i, value) in tab_size_evidence.iter_mut().enumerate() {
+                            if space_count % (i + 2) == 0 {
+                                *value += 1;
+                            }
+                        }
+                    }
+
+                    if space_count > 0 || tab_count > 0 {
+                        hard_tab_evidence += if space_count > tab_count { -1 } else { 1 };
+                    }
+
+                    space_count = 0;
+                    tab_count = 0;
+                    start_of_line = false;
+                }
+            } else if ch == '\r' || ch == '\n' {
+                start_of_line = true;
+            }
+            if i >= max_scan_size {
+                break;
+            }
+        }
+
+        let tab_size_guess = tab_size_evidence
+            .iter()
+            .enumerate()
+            .filter(|&(_, &value)| value > 0)
+            .fold(None, |best: Option<(NonZeroU32, u32)>, (i, &value)| {
+                let best_value = best.map_or(0, |(_, value)| value);
+                let threshold = ((best_value as f32) * 0.95) as u32;
+
+                if value >= threshold {
+                    Some((NonZeroU32::new((i + 2) as u32).unwrap(), value))
+                } else {
+                    best
+                }
+            });
+        let hard_tabs_guess: Option<bool> =
+            if hard_tab_evidence == 0 {
+                None
+            } else {
+                Some(hard_tab_evidence > 0)
+            };
+
+        if let Some((ts, _)) = tab_size_guess {
+            tab_size = ts;
+        }
+        if let Some(ht) = hard_tabs_guess {
+            hard_tabs = ht;
+        }
+
+        if let Some(modeline) = &self.modeline {
+            if let Some(ts) = modeline.tab_size {
+                tab_size = ts;
+            }
+            if let Some(ht) = modeline.hard_tabs {
+                hard_tabs = ht;
+            }
+        }
+
+        self.set_tab_size(tab_size);
+        self.set_hard_tabs(hard_tabs);
     }
 
     /// Assign a language to the buffer.
@@ -3384,13 +3446,8 @@ impl BufferSnapshot {
 
     /// Returns [`IndentSize`] for a given position that respects user settings
     /// and language preferences.
-    pub fn language_indent_size_at<T: ToOffset>(&self, position: T, cx: &App) -> IndentSize {
-        let settings = self.settings_at(position, cx);
-        if settings.hard_tabs {
-            IndentSize::tab()
-        } else {
-            IndentSize::spaces(settings.tab_size.get())
-        }
+    pub fn language_indent_size_at<T: ToOffset>(&self, _position: T, _cx: &App) -> IndentSize {
+        self.indent_size
     }
 
     /// Retrieve the suggested indent size for all of the given rows. The unit of indentation
@@ -4868,6 +4925,7 @@ impl Clone for BufferSnapshot {
             non_text_state_update_count: self.non_text_state_update_count,
             capability: self.capability,
             modeline: self.modeline.clone(),
+            indent_size: self.indent_size.clone(),
         }
     }
 }

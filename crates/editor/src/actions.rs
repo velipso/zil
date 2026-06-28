@@ -709,10 +709,24 @@ actions!(
         StopLanguageServer,
         /// Switches between source and header files.
         SwitchSourceHeader,
-        /// Inserts a tab character or indents.
-        Tab,
-        /// Removes a tab character or outdents.
-        Backtab,
+        /// Always inserts a hard tab character.
+        InsertTab,
+        /// Set tab width to 1.
+        TabWidth1,
+        /// Set tab width to 2.
+        TabWidth2,
+        /// Set tab width to 3.
+        TabWidth3,
+        /// Set tab width to 4.
+        TabWidth4,
+        /// Set tab width to 5.
+        TabWidth5,
+        /// Set tab width to 6.
+        TabWidth6,
+        /// Set tab width to 7.
+        TabWidth7,
+        /// Set tab width to 8.
+        TabWidth8,
         /// Toggles the case of selected text.
         ToggleCase,
         /// Toggles indent guides display.
@@ -760,6 +774,10 @@ actions!(
         UniqueLinesCaseInsensitive,
         /// Removes duplicate lines (case-sensitive).
         UniqueLinesCaseSensitive,
+        /// Use tabs in the buffer.
+        UseTabs,
+        /// Use spaces in the buffer.
+        UseSpaces,
         /// Removes the surrounding syntax node (for example brackets, or closures)
         /// from the current selections.
         UnwrapSyntaxNode,

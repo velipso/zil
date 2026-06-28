@@ -3,8 +3,6 @@ grammar = "json"
 path_suffixes = ["jsonc", "bun.lock", "devcontainer.json", "pyrightconfig.json", "tsconfig.json", "luaurc", "swcrc", "babelrc", "eslintrc", "stylelintrc", "jshintrc"]
 line_comments = ["// "]
 block_comment = { start = "/*", prefix = "", end = "*/", tab_size = 1 }
-tab_size = 2
-prettier_parser_name = "jsonc"
 
 [overrides.string]
 completion_query_characters = [":", " "]

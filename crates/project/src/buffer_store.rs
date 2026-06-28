@@ -654,7 +654,7 @@ impl LocalBufferStore {
                             text::Buffer::new(ReplicaId::LOCAL, buffer_id, loaded.text)
                         })
                         .await;
-                    cx.insert_entity(reservation, |_| {
+                    cx.insert_entity(reservation, |_cx| {
                         let mut buffer =
                             Buffer::build(text_buffer, Some(loaded.file), Capability::ReadWrite);
                         buffer.set_encoding(loaded.encoding);

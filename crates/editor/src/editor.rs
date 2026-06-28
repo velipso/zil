@@ -3126,13 +3126,10 @@ impl Editor {
                     {
                         let indent_size = buffer.indent_size_for_line(line_buffer_range.start.row);
                         let indent_len = match indent_size.kind {
-                            IndentKind::Space => {
-                                buffer.settings_at(line_buffer_range.start, cx).tab_size
-                            }
-                            IndentKind::Tab => NonZeroU32::new(1).unwrap(),
+                            IndentKind::Space => this.tab_size(cx),
+                            IndentKind::Tab => 1,
                         };
                         if old_head.column <= indent_size.len && old_head.column > 0 {
-                            let indent_len = indent_len.get();
                             new_head = cmp::min(
                                 new_head,
                                 MultiBufferPoint::new(
@@ -3171,147 +3168,11 @@ impl Editor {
         });
     }
 
-    pub fn backtab(&mut self, _: &Backtab, window: &mut Window, cx: &mut Context<Self>) {
-        if self.mode.is_single_line() {
-            cx.propagate();
-            return;
-        }
-
-        self.outdent(&Outdent, window, cx);
-    }
-
-    pub fn tab(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
-        if self.mode.is_single_line() {
-            cx.propagate();
-            return;
-        }
-
+    pub fn insert_tab(&mut self, _: &InsertTab, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
-        let mut selections = self.selections.all_adjusted(&self.display_snapshot(cx));
-        let buffer = self.buffer.read(cx);
-        let snapshot = buffer.snapshot(cx);
-        let rows_iter = selections.iter().map(|s| s.head().row);
-        let suggested_indents = snapshot.suggested_indents(rows_iter, cx);
-
-        let has_some_cursor_in_whitespace = selections
-            .iter()
-            .filter(|selection| selection.is_empty())
-            .any(|selection| {
-                let cursor = selection.head();
-                let current_indent = snapshot.indent_size_for_line(MultiBufferRow(cursor.row));
-                cursor.column < current_indent.len
-            });
-
-        let mut edits = Vec::new();
-        let mut prev_edited_row = 0;
-        let mut row_delta = 0;
-        for selection in &mut selections {
-            if selection.start.row != prev_edited_row {
-                row_delta = 0;
-            }
-            prev_edited_row = selection.end.row;
-
-            // If cursor is after a list prefix, make selection non-empty to trigger line indent
-            if selection.is_empty() {
-                let cursor = selection.head();
-                let settings = buffer.language_settings_at(cursor, cx);
-                if settings.indent_list_on_tab {
-                    if let Some(language) = snapshot.language_scope_at(Point::new(cursor.row, 0)) {
-                        if input::is_list_prefix_row(
-                            MultiBufferRow(cursor.row),
-                            &snapshot,
-                            &language,
-                        ) {
-                            row_delta = Self::indent_selection(
-                                buffer, &snapshot, selection, &mut edits, row_delta, cx,
-                            );
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            // If the selection is non-empty, then increase the indentation of the selected lines.
-            if !selection.is_empty() {
-                row_delta =
-                    Self::indent_selection(buffer, &snapshot, selection, &mut edits, row_delta, cx);
-                continue;
-            }
-
-            let cursor = selection.head();
-            let current_indent = snapshot.indent_size_for_line(MultiBufferRow(cursor.row));
-            if let Some(suggested_indent) =
-                suggested_indents.get(&MultiBufferRow(cursor.row)).copied()
-            {
-                // Don't do anything if already at suggested indent
-                // and there is any other cursor which is not
-                if has_some_cursor_in_whitespace
-                    && cursor.column == current_indent.len
-                    && current_indent.len == suggested_indent.len
-                {
-                    continue;
-                }
-
-                // Adjust line and move cursor to suggested indent
-                // if cursor is not at suggested indent
-                if cursor.column < suggested_indent.len
-                    && cursor.column <= current_indent.len
-                    && current_indent.len <= suggested_indent.len
-                {
-                    selection.start = Point::new(cursor.row, suggested_indent.len);
-                    selection.end = selection.start;
-                    if row_delta == 0 {
-                        edits.extend(Buffer::edit_for_indent_size_adjustment(
-                            cursor.row,
-                            current_indent,
-                            suggested_indent,
-                        ));
-                        row_delta = suggested_indent.len - current_indent.len;
-                    }
-                    continue;
-                }
-
-                // If current indent is more than suggested indent
-                // only move cursor to current indent and skip indent
-                if cursor.column < current_indent.len && current_indent.len > suggested_indent.len {
-                    selection.start = Point::new(cursor.row, current_indent.len);
-                    selection.end = selection.start;
-                    continue;
-                }
-            }
-
-            // Otherwise, insert a hard or soft tab.
-            let settings = buffer.language_settings_at(cursor, cx);
-            let tab_size = if settings.hard_tabs {
-                IndentSize::tab()
-            } else {
-                let tab_size = settings.tab_size.get();
-                let indent_remainder = snapshot
-                    .text_for_range(Point::new(cursor.row, 0)..cursor)
-                    .flat_map(str::chars)
-                    .fold(row_delta % tab_size, |counter: u32, c| {
-                        if c == '\t' {
-                            0
-                        } else {
-                            (counter + 1) % tab_size
-                        }
-                    });
-
-                let chars_to_next_tab_stop = tab_size - indent_remainder;
-                IndentSize::spaces(chars_to_next_tab_stop)
-            };
-            selection.start = Point::new(cursor.row, cursor.column + row_delta + tab_size.len);
-            selection.end = selection.start;
-            edits.push((cursor..cursor, tab_size.chars().collect::<String>()));
-            row_delta += tab_size.len;
-        }
-
-        self.transact(window, cx, |this, window, cx| {
-            this.buffer.update(cx, |b, cx| b.edit(edits, None, cx));
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
-        });
+        self.handle_input("\t", window, cx);
     }
 
     pub fn indent(&mut self, _: &Indent, window: &mut Window, cx: &mut Context<Self>) {
@@ -3353,9 +3214,8 @@ impl Editor {
         delta_for_start_row: u32,
         cx: &App,
     ) -> u32 {
-        let settings = buffer.language_settings_at(selection.start, cx);
-        let tab_size = settings.tab_size.get();
-        let indent_kind = if settings.hard_tabs {
+        let tab_size = buffer.tab_size(cx).get();
+        let indent_kind = if buffer.hard_tabs(cx) {
             IndentKind::Tab
         } else {
             IndentKind::Space
@@ -3438,8 +3298,7 @@ impl Editor {
             let buffer = self.buffer.read(cx);
             let snapshot = buffer.snapshot(cx);
             for selection in &selections {
-                let settings = buffer.language_settings_at(selection.start, cx);
-                let tab_size = settings.tab_size;
+                let tab_size = buffer.tab_size(cx);
                 let mut rows = selection.spanned_rows(false, &display_map);
 
                 // Avoid re-outdenting a row that has already been outdented by a
@@ -4291,26 +4150,112 @@ impl Editor {
         });
     }
 
-    fn manipulate_mutable_lines<Fn>(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        mut callback: Fn,
-    ) where
-        Fn: FnMut(&mut Vec<Cow<'_, str>>),
-    {
-        self.manipulate_lines(window, cx, |text| {
-            let mut lines: Vec<Cow<str>> = text.split('\n').map(Cow::from).collect();
-            let line_count_before = lines.len();
-
-            callback(&mut lines);
-
-            LineManipulationResult {
-                new_text: lines.join("\n"),
-                line_count_before,
-                line_count_after: lines.len(),
-            }
+    pub fn set_tab_size(&mut self, tab_size: NonZeroU32, cx: &mut Context<Self>) {
+        self.buffer.update(cx, |buffer, cx| {
+            buffer.set_tab_size(tab_size, cx);
         });
+    }
+
+    pub fn tab_width_1(
+        &mut self,
+        _: &TabWidth1,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(1).unwrap(), cx);
+    }
+
+    pub fn tab_width_2(
+        &mut self,
+        _: &TabWidth2,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(2).unwrap(), cx);
+    }
+
+    pub fn tab_width_3(
+        &mut self,
+        _: &TabWidth3,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(3).unwrap(), cx);
+    }
+
+    pub fn tab_width_4(
+        &mut self,
+        _: &TabWidth4,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(4).unwrap(), cx);
+    }
+
+    pub fn tab_width_5(
+        &mut self,
+        _: &TabWidth5,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(5).unwrap(), cx);
+    }
+
+    pub fn tab_width_6(
+        &mut self,
+        _: &TabWidth6,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(6).unwrap(), cx);
+    }
+
+    pub fn tab_width_7(
+        &mut self,
+        _: &TabWidth7,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(7).unwrap(), cx);
+    }
+
+    pub fn tab_width_8(
+        &mut self,
+        _: &TabWidth8,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.set_tab_size(NonZeroU32::new(8).unwrap(), cx);
+    }
+
+    pub fn use_tabs(
+        &mut self,
+        _: &UseTabs,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.buffer.update(cx, |buffer, cx| {
+            buffer.set_hard_tabs(true, cx);
+        });
+    }
+
+    pub fn use_spaces(
+        &mut self,
+        _: &UseSpaces,
+        _: &mut Window,
+        cx: &mut Context<Self>
+    ) {
+        self.buffer.update(cx, |buffer, cx| {
+            buffer.set_hard_tabs(false, cx);
+        });
+    }
+
+    pub fn tab_size(&self, cx: &App) -> u32 {
+        self.buffer.read_with(cx, |mb, cx| mb.tab_size(cx).get())
+    }
+
+    pub fn hard_tabs(&self, cx: &App) -> bool {
+        self.buffer.read_with(cx, |mb, cx| mb.hard_tabs(cx))
     }
 
     pub fn convert_indentation_to_spaces(
@@ -4319,52 +4264,68 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings = self.buffer.read(cx).language_settings(cx);
-        let tab_size = settings.tab_size.get() as usize;
+        if self.read_only(cx) {
+            return;
+        }
 
-        self.manipulate_mutable_lines(window, cx, |lines| {
-            // Allocates a reasonably sized scratch buffer once for the whole loop
-            let mut reindented_line = String::with_capacity(MAX_LINE_LEN);
-            // Avoids recomputing spaces that could be inserted many times
-            let space_cache: Vec<Vec<char>> = (1..=tab_size)
-                .map(|n| IndentSize::spaces(n as u32).chars().collect())
-                .collect();
+        self.use_spaces(&UseSpaces, window, cx);
 
-            for line in lines.iter_mut().filter(|line| !line.is_empty()) {
-                let mut chars = line.as_ref().chars();
-                let mut col = 0;
-                let mut changed = false;
+        let tab_size = self.tab_size(cx) as usize;
+        let buffer = self.buffer.read(cx).snapshot(cx);
+        let max_point = buffer.max_point();
 
-                for ch in chars.by_ref() {
-                    match ch {
-                        ' ' => {
-                            reindented_line.push(' ');
-                            col += 1;
-                        }
-                        '\t' => {
-                            // \t are converted to spaces depending on the current column
-                            let spaces_len = tab_size - (col % tab_size);
-                            reindented_line.extend(&space_cache[spaces_len - 1]);
-                            col += spaces_len;
-                            changed = true;
-                        }
-                        _ => {
-                            // If we dont append before break, the character is consumed
-                            reindented_line.push(ch);
-                            break;
-                        }
-                    }
-                }
+        let mut edits = Vec::new();
 
-                if !changed {
-                    reindented_line.clear();
-                    continue;
-                }
-                // Append the rest of the line and replace old reference with new one
-                reindented_line.extend(chars);
-                *line = Cow::Owned(reindented_line.clone());
-                reindented_line.clear();
+        for row in 0..=max_point.row {
+            let row = MultiBufferRow(row);
+            let line_len = buffer.line_len(row);
+
+            if line_len == 0 {
+                continue;
             }
+
+            let line_start = Point::new(row.0, 0);
+            let line_end = Point::new(row.0, line_len);
+            let line = buffer.text_for_range(line_start..line_end).collect::<String>();
+
+            let mut old_indent_len = 0;
+            let mut col = 0usize;
+
+            for ch in line.chars() {
+                match ch {
+                    ' ' => {
+                        old_indent_len += 1;
+                        col += 1;
+                    }
+                    '\t' => {
+                        old_indent_len += 1;
+
+                        let spaces_len = tab_size - (col % tab_size);
+                        col += spaces_len;
+                    }
+                    _ => break,
+                }
+            }
+
+            let old_indent = &line[..old_indent_len];
+            let new_indent = " ".repeat(col);
+
+            if old_indent != new_indent {
+                edits.push((
+                    Point::new(row.0, 0)..Point::new(row.0, old_indent_len as u32),
+                    new_indent,
+                ));
+            }
+        }
+
+        if edits.is_empty() {
+            return;
+        }
+
+        self.transact(window, cx, |this, _window, cx| {
+            this.buffer.update(cx, |buffer, cx| {
+                buffer.edit(edits, None, cx);
+            });
         });
     }
 
@@ -4374,63 +4335,80 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings = self.buffer.read(cx).language_settings(cx);
-        let tab_size = settings.tab_size.get() as usize;
+        if self.read_only(cx) {
+            return;
+        }
 
-        self.manipulate_mutable_lines(window, cx, |lines| {
-            // Allocates a reasonably sized buffer once for the whole loop
-            let mut reindented_line = String::with_capacity(MAX_LINE_LEN);
-            // Avoids recomputing spaces that could be inserted many times
-            let space_cache: Vec<Vec<char>> = (1..=tab_size)
-                .map(|n| IndentSize::spaces(n as u32).chars().collect())
-                .collect();
+        self.use_tabs(&UseTabs, window, cx);
 
-            for line in lines.iter_mut().filter(|line| !line.is_empty()) {
-                let mut chars = line.chars();
-                let mut spaces_count = 0;
-                let mut first_non_indent_char = None;
-                let mut changed = false;
+        let tab_size = self.tab_size(cx) as usize;
+        let buffer = self.buffer.read(cx).snapshot(cx);
+        let max_point = buffer.max_point();
 
-                for ch in chars.by_ref() {
-                    match ch {
-                        ' ' => {
-                            // Keep track of spaces. Append \t when we reach tab_size
-                            spaces_count += 1;
-                            changed = true;
-                            if spaces_count == tab_size {
-                                reindented_line.push('\t');
-                                spaces_count = 0;
-                            }
-                        }
-                        '\t' => {
-                            reindented_line.push('\t');
-                            spaces_count = 0;
-                        }
-                        _ => {
-                            // Dont append it yet, we might have remaining spaces
-                            first_non_indent_char = Some(ch);
-                            break;
-                        }
-                    }
-                }
+        let mut edits = Vec::new();
 
-                if !changed {
-                    reindented_line.clear();
-                    continue;
-                }
-                // Remaining spaces that didn't make a full tab stop
-                if spaces_count > 0 {
-                    reindented_line.extend(&space_cache[spaces_count - 1]);
-                }
-                // If we consume an extra character that was not indentation, add it back
-                if let Some(extra_char) = first_non_indent_char {
-                    reindented_line.push(extra_char);
-                }
-                // Append the rest of the line and replace old reference with new one
-                reindented_line.extend(chars);
-                *line = Cow::Owned(reindented_line.clone());
-                reindented_line.clear();
+        for row in 0..=max_point.row {
+            let row = MultiBufferRow(row);
+            let line_len = buffer.line_len(row);
+
+            if line_len == 0 {
+                continue;
             }
+
+            let line_start = Point::new(row.0, 0);
+            let line_end = Point::new(row.0, line_len);
+            let line = buffer.text_for_range(line_start..line_end).collect::<String>();
+
+            let mut old_indent_len = 0;
+            let mut col = 0usize;
+
+            for ch in line.chars() {
+                match ch {
+                    ' ' => {
+                        old_indent_len += 1;
+                        col += 1;
+                    }
+                    '\t' => {
+                        old_indent_len += 1;
+                        col += tab_size - (col % tab_size);
+                    }
+                    _ => break,
+                }
+            }
+
+            if old_indent_len == 0 {
+                continue;
+            }
+
+            let tab_count = col / tab_size;
+            let space_count = col % tab_size;
+
+            let mut new_indent = String::with_capacity(tab_count + space_count);
+            if tab_count > 0 {
+                new_indent.push_str(&"\t".repeat(tab_count));
+            }
+            if space_count > 0 {
+                new_indent.push_str(&" ".repeat(space_count));
+            }
+
+            let old_indent = &line[..old_indent_len];
+
+            if old_indent != new_indent {
+                edits.push((
+                    Point::new(row.0, 0)..Point::new(row.0, old_indent_len as u32),
+                    new_indent,
+                ));
+            }
+        }
+
+        if edits.is_empty() {
+            return;
+        }
+
+        self.transact(window, cx, |this, _window, cx| {
+            this.buffer.update(cx, |buffer, cx| {
+                buffer.edit(edits, None, cx);
+            });
         });
     }
 

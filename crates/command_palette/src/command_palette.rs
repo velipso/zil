@@ -672,6 +672,7 @@ pub fn humanize_action_name(name: &str) -> String {
     let capacity = name.len() + chars.iter().filter(|c| c.is_uppercase()).count();
     let mut result = String::with_capacity(capacity);
     let mut index = 0;
+    let mut was_numeric = false;
 
     while index < chars.len() {
         let char = chars[index];
@@ -725,10 +726,17 @@ pub fn humanize_action_name(name: &str) -> String {
                 }
                 result.extend(char.to_lowercase());
             }
+        } else if char.is_numeric() {
+            if result.len() > 0 && !was_numeric {
+                result.push(' ');
+            }
+            result.push(char);
+            index += 1;
         } else {
             result.push(char);
             index += 1;
         }
+        was_numeric = char.is_numeric();
     }
 
     result

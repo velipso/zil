@@ -1,4 +1,4 @@
-use std::{num::NonZeroUsize, time::Duration};
+use std::{num::{NonZeroUsize, NonZeroU32}, time::Duration};
 
 use crate::DockPosition;
 use collections::HashMap;
@@ -37,6 +37,8 @@ pub struct WorkspaceSettings {
     pub zoomed_padding: bool,
     pub window_decorations: settings::WindowDecorations,
     pub focus_follows_mouse: FocusFollowsMouse,
+    pub default_tab_size: NonZeroU32,
+    pub default_hard_tabs: bool,
 }
 
 #[derive(Copy, Clone, Deserialize)]
@@ -136,6 +138,8 @@ impl Settings for WorkspaceSettings {
                         .unwrap_or(250),
                 ),
             },
+            default_tab_size: workspace.default_tab_size.unwrap(),
+            default_hard_tabs: workspace.default_hard_tabs.unwrap(),
         }
     }
 }

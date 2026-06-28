@@ -1,4 +1,3 @@
-use std::num::NonZeroU32;
 
 use collections::{HashMap, HashSet};
 use schemars::JsonSchema;
@@ -153,16 +152,6 @@ pub enum SoftWrap {
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LanguageSettingsContent {
-    /// How many columns a tab should occupy.
-    ///
-    /// Default: 4
-    #[schemars(range(min = 1, max = 128))]
-    pub tab_size: Option<NonZeroU32>,
-    /// Whether to indent lines using tab characters, as opposed to multiple
-    /// spaces.
-    ///
-    /// Default: false
-    pub hard_tabs: Option<bool>,
     /// How to soft-wrap long lines of text.
     ///
     /// Default: none

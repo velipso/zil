@@ -6,7 +6,7 @@ use git::repository::DEFAULT_WORKTREE_DIRECTORY;
 use gpui::{AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, Subscription, Task};
 use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT_SECS, LanguageServerName};
 use paths::{
-    EDITORCONFIG_NAME, local_debug_file_relative_path, local_settings_file_relative_path,
+    local_debug_file_relative_path, local_settings_file_relative_path,
     local_tasks_file_relative_path, local_vscode_launch_file_relative_path,
     local_vscode_tasks_file_relative_path, task_file_name,
 };
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 pub use settings::BinarySettings;
 pub use settings::LspSettings;
 use settings::{
-    EditorconfigEvent, InvalidSettingsError, LocalSettingsKind,
+    InvalidSettingsError, LocalSettingsKind,
     LocalSettingsPath, RegisterSetting, SemanticTokenRules, Settings, SettingsLocation,
     SettingsStore, parse_json_with_comments, watch_config_file,
 };
@@ -512,7 +512,6 @@ pub struct SettingsObserver {
         HashMap<PathTrust, BTreeMap<(WorktreeId, Arc<RelPath>), Option<String>>>,
     _trusted_worktrees_watcher: Option<Subscription>,
     _user_settings_watcher: Option<Subscription>,
-    _editorconfig_watcher: Option<Subscription>,
     _global_task_config_watcher: Task<()>,
     _global_debug_config_watcher: Task<()>,
 }
@@ -589,36 +588,6 @@ impl SettingsObserver {
                 )
             });
 
-        let editorconfig_store = cx.global::<SettingsStore>().editorconfig_store.clone();
-        let _editorconfig_watcher = cx.subscribe(
-            &editorconfig_store,
-            |this, _, event: &EditorconfigEvent, cx| {
-                let EditorconfigEvent::ExternalConfigChanged {
-                    path,
-                    content,
-                    affected_worktree_ids,
-                } = event;
-                for worktree_id in affected_worktree_ids {
-                    if let Some(worktree) = this
-                        .worktree_store
-                        .read(cx)
-                        .worktree_for_id(*worktree_id, cx)
-                    {
-                        this.update_settings(
-                            worktree,
-                            [(
-                                path.clone(),
-                                LocalSettingsKind::Editorconfig,
-                                content.clone(),
-                            )],
-                            false,
-                            cx,
-                        );
-                    }
-                }
-            },
-        );
-
         Self {
             worktree_store,
             task_store,
@@ -627,7 +596,6 @@ impl SettingsObserver {
             _trusted_worktrees_watcher,
             pending_local_settings: HashMap::default(),
             _user_settings_watcher: None,
-            _editorconfig_watcher: Some(_editorconfig_watcher),
             project_id: REMOTE_SERVER_PROJECT_ID,
             _global_task_config_watcher: if watch_global_configs {
                 Self::subscribe_to_global_task_file_changes(
@@ -691,7 +659,6 @@ impl SettingsObserver {
             _trusted_worktrees_watcher: None,
             pending_local_settings: HashMap::default(),
             _user_settings_watcher: user_settings_watcher,
-            _editorconfig_watcher: None,
             _global_task_config_watcher: Self::subscribe_to_global_task_file_changes(
                 fs.clone(),
                 paths::tasks_file().clone(),
@@ -729,24 +696,6 @@ impl SettingsObserver {
                             local_settings_kind_to_proto(LocalSettingsKind::Settings).into(),
                         ),
                         outside_worktree: Some(false),
-                    })
-                    .log_err();
-            }
-            for (path, content, _) in store
-                .editorconfig_store
-                .read(cx)
-                .local_editorconfig_settings(worktree.read(cx).id())
-            {
-                downstream_client
-                    .send(proto::UpdateWorktreeSettings {
-                        project_id,
-                        worktree_id,
-                        path: path.to_proto(),
-                        content: Some(content.to_owned()),
-                        kind: Some(
-                            local_settings_kind_to_proto(LocalSettingsKind::Editorconfig).into(),
-                        ),
-                        outside_worktree: Some(path.is_outside_worktree()),
                     })
                     .log_err();
             }
@@ -906,28 +855,6 @@ impl SettingsObserver {
                     .unwrap()
                     .into();
                 (settings_dir, LocalSettingsKind::Debug)
-            } else if path.ends_with(RelPath::unix(EDITORCONFIG_NAME).unwrap()) {
-                let Some(settings_dir) = path.parent().map(Arc::from) else {
-                    continue;
-                };
-                if matches!(change, PathChange::Loaded) || matches!(change, PathChange::Added) {
-                    let worktree_id = worktree.read(cx).id();
-                    let worktree_path = worktree.read(cx).abs_path();
-                    let fs = fs.clone();
-                    cx.update_global::<SettingsStore, _>(|store, cx| {
-                        store
-                            .editorconfig_store
-                            .update(cx, |editorconfig_store, cx| {
-                                editorconfig_store.discover_local_external_configs_chain(
-                                    worktree_id,
-                                    worktree_path,
-                                    fs,
-                                    cx,
-                                );
-                            });
-                    });
-                }
-                (settings_dir, LocalSettingsKind::Editorconfig)
             } else {
                 continue;
             };
@@ -1123,12 +1050,9 @@ impl SettingsObserver {
                         }
                     }
                 }
-                (directory, LocalSettingsKind::Editorconfig) => {
-                    apply_local_settings(worktree_id, directory.clone(), kind, &file_content, cx);
-                }
                 (LocalSettingsPath::OutsideWorktree(path), kind) => {
                     log::error!(
-                        "OutsideWorktree path {:?} with kind {:?} is only supported by editorconfig",
+                        "OutsideWorktree path {:?} with kind {:?}",
                         path,
                         kind
                     );
@@ -1303,7 +1227,6 @@ pub fn local_settings_kind_from_proto(kind: proto::LocalSettingsKind) -> LocalSe
     match kind {
         proto::LocalSettingsKind::Settings => LocalSettingsKind::Settings,
         proto::LocalSettingsKind::Tasks => LocalSettingsKind::Tasks,
-        proto::LocalSettingsKind::Editorconfig => LocalSettingsKind::Editorconfig,
         proto::LocalSettingsKind::Debug => LocalSettingsKind::Debug,
     }
 }
@@ -1312,7 +1235,6 @@ pub fn local_settings_kind_to_proto(kind: LocalSettingsKind) -> proto::LocalSett
     match kind {
         LocalSettingsKind::Settings => proto::LocalSettingsKind::Settings,
         LocalSettingsKind::Tasks => proto::LocalSettingsKind::Tasks,
-        LocalSettingsKind::Editorconfig => proto::LocalSettingsKind::Editorconfig,
         LocalSettingsKind::Debug => proto::LocalSettingsKind::Debug,
     }
 }

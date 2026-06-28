@@ -4,4 +4,3 @@ path_suffixes = ["yml", "yaml", "pixi.lock", "clang-format", "clangd", "bst"]
 modeline_aliases = ["yml"]
 line_comments = ["# "]
 auto_indent_on_paste = false
-tab_size = 2

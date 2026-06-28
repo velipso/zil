@@ -95,6 +95,7 @@ use std::{
     collections::VecDeque,
     env,
     hash::Hash,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
@@ -1192,7 +1193,6 @@ pub struct Workspace {
     session_id: Option<String>,
     last_open_dock_positions: Vec<DockPosition>,
     removing: bool,
-    _panels_task: Option<Task<Result<()>>>,
     sidebar_focus_handle: Option<FocusHandle>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
     active_worktree_creation: ActiveWorktreeCreation,
@@ -1263,6 +1263,16 @@ impl Workspace {
             })
             .detach();
         }
+
+        cx.observe_global::<SettingsStore>(|workspace, cx| {
+            let settings = WorkspaceSettings::get_global(cx);
+            workspace.on_update_default_tab_settings(
+                settings.default_tab_size,
+                settings.default_hard_tabs,
+                cx
+            );
+        })
+        .detach();
 
         cx.subscribe_in(&project, window, move |this, _, event, window, cx| {
             match event {
@@ -1528,7 +1538,6 @@ impl Workspace {
             left_dock,
             bottom_dock,
             right_dock,
-            _panels_task: None,
             project: project.clone(),
             follower_states: Default::default(),
             last_leaders_by_pane: Default::default(),
@@ -1740,6 +1749,17 @@ impl Workspace {
                 opened_items,
             })
         })
+    }
+
+    pub fn on_update_default_tab_settings(
+        &self,
+        default_tab_size: NonZeroU32,
+        default_hard_tabs: bool,
+        cx: &mut App
+    ) {
+        self.project.update(cx, |project, cx| {
+            project.on_update_default_tab_settings(default_tab_size, default_hard_tabs, cx);
+        });
     }
 
     pub fn project_group_key(&self, cx: &App) -> ProjectGroupKey {
@@ -2123,14 +2143,6 @@ impl Workspace {
 
     pub fn app_state(&self) -> &Arc<AppState> {
         &self.app_state
-    }
-
-    pub fn set_panels_task(&mut self, task: Task<Result<()>>) {
-        self._panels_task = Some(task);
-    }
-
-    pub fn take_panels_task(&mut self) -> Option<Task<Result<()>>> {
-        self._panels_task.take()
     }
 
     pub fn user_store(&self) -> &Entity<UserStore> {

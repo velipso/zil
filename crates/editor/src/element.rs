@@ -197,6 +197,16 @@ impl EditorElement {
             }
         });
 
+        register_action(editor, window, Editor::tab_width_1);
+        register_action(editor, window, Editor::tab_width_2);
+        register_action(editor, window, Editor::tab_width_3);
+        register_action(editor, window, Editor::tab_width_4);
+        register_action(editor, window, Editor::tab_width_5);
+        register_action(editor, window, Editor::tab_width_6);
+        register_action(editor, window, Editor::tab_width_7);
+        register_action(editor, window, Editor::tab_width_8);
+        register_action(editor, window, Editor::use_tabs);
+        register_action(editor, window, Editor::use_spaces);
         register_action(editor, window, Editor::open_context_menu);
         register_action(editor, window, Editor::move_left);
         register_action(editor, window, Editor::move_right);
@@ -368,8 +378,7 @@ impl EditorElement {
             register_action(editor, window, Editor::newline_below);
             register_action(editor, window, Editor::backspace);
             register_action(editor, window, Editor::delete);
-            register_action(editor, window, Editor::tab);
-            register_action(editor, window, Editor::backtab);
+            register_action(editor, window, Editor::insert_tab);
             register_action(editor, window, Editor::indent);
             register_action(editor, window, Editor::outdent);
             register_action(editor, window, Editor::autoindent);

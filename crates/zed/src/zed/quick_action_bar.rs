@@ -82,6 +82,9 @@ impl Render for QuickActionBar {
             });
         let show_line_numbers = editor_value.line_numbers_enabled(cx);
 
+        let tab_size = editor_value.tab_size(cx);
+        let hard_tabs = editor_value.hard_tabs(cx);
+
         let language =
             editor.read_with(cx, |editor, cx| {
                 if let Some(buffer) = editor.active_buffer(cx)
@@ -113,11 +116,10 @@ impl Render for QuickActionBar {
         let buffer_search_bar = self.buffer_search_bar.clone();
 
         let editor_focus_handle = editor.focus_handle(cx);
-        let editor = editor.downgrade();
         let editor_settings_dropdown = {
             PopoverMenu::new("editor-settings")
                 .trigger(
-                    IconButton::new("toggle_editor_settings_icon", IconName::Sliders)
+                    IconButton::new("toggle_editor_settings_icon", IconName::ListTodo)
                         .icon_size(IconSize::Small)
                         .style(ButtonStyle::Subtle)
                         .toggle_state(self.toggle_settings_handle.is_deployed())
@@ -136,17 +138,13 @@ impl Render for QuickActionBar {
                                     IconPosition::Start,
                                     Some(Box::new(editor::actions::ToggleMinimap)),
                                     {
-                                        let editor = editor.clone();
+                                        let editor_focus_handle = editor_focus_handle.clone();
                                         move |window, cx| {
-                                            editor
-                                                .update(cx, |editor, cx| {
-                                                    editor.toggle_minimap(
-                                                        &editor::actions::ToggleMinimap,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .ok();
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::ToggleMinimap,
+                                                window,
+                                                cx,
+                                            );
                                         }
                                     }
                                 )
@@ -155,21 +153,11 @@ impl Render for QuickActionBar {
                                     stacked_tabs,
                                     IconPosition::Start,
                                     Some(Box::new(workspace::ToggleStackedTabs)),
-                                    {
-                                        let editor = editor.clone();
-                                        move |window, cx| {
-                                            let _ = editor.update(cx, |editor, cx| {
-                                                if let Some(ws) = editor.workspace() {
-                                                    ws.update(cx, |ws, cx| {
-                                                        ws.toggle_stacked_tabs(
-                                                            &workspace::ToggleStackedTabs,
-                                                            window,
-                                                            cx
-                                                        );
-                                                    });
-                                                }
-                                            });
-                                        }
+                                    |window, cx| {
+                                        window.dispatch_action(
+                                            Box::new(workspace::ToggleStackedTabs),
+                                            cx
+                                        );
                                     }
                                 )
                                 .toggleable_entry(
@@ -178,45 +166,21 @@ impl Render for QuickActionBar {
                                     IconPosition::Start,
                                     Some(Box::new(editor::actions::ToggleLineNumbers)),
                                     {
-                                        let editor = editor.clone();
+                                        let editor_focus_handle = editor_focus_handle.clone();
                                         move |window, cx| {
-                                            editor
-                                                .update(cx, |editor, cx| {
-                                                    editor.toggle_line_numbers(
-                                                        &editor::actions::ToggleLineNumbers,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .ok();
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::ToggleLineNumbers,
+                                                window,
+                                                cx,
+                                            );
                                         }
                                     },
                                 )
                                 .separator()
-                                .entry(
-                                    language,
-                                    Some(Box::new(language_selector::Toggle)),
-                                    |window, cx| {
-                                        window.dispatch_action(Box::new(language_selector::Toggle), cx);
-                                    }
-                                )
-                                .entry(
-                                    encoding,
-                                    Some(Box::new(encoding_selector::Toggle)),
-                                    |window, cx| {
-                                        window.dispatch_action(Box::new(encoding_selector::Toggle), cx);
-                                    }
-                                )
-                                .entry(
-                                    line_ending,
-                                    Some(Box::new(line_ending_selector::Toggle)),
-                                    |window, cx| {
-                                        window.dispatch_action(Box::new(line_ending_selector::Toggle), cx);
-                                    }
-                                )
-                                .separator()
-                                .entry(
+                                .toggleable_entry(
                                     "Search",
+                                    false,
+                                    IconPosition::Start,
                                     Some(Box::new(search::buffer_search::Deploy::find())),
                                     {
                                         let buffer_search_bar = buffer_search_bar.clone();
@@ -227,14 +191,175 @@ impl Render for QuickActionBar {
                                         }
                                     }
                                 )
-                                .entry(
+                                .toggleable_entry(
                                     "Go To Line",
+                                    false,
+                                    IconPosition::Start,
                                     Some(Box::new(editor::actions::ToggleGoToLine)),
                                     {
                                         let editor_focus_handle = editor_focus_handle.clone();
                                         move |window, cx| {
                                             editor_focus_handle.dispatch_action(
                                                 &editor::actions::ToggleGoToLine,
+                                                window,
+                                                cx
+                                            );
+                                        }
+                                    }
+                                )
+                                .separator()
+                                .toggleable_entry(
+                                    language,
+                                    false,
+                                    IconPosition::Start,
+                                    Some(Box::new(language_selector::Toggle)),
+                                    |window, cx| {
+                                        window.dispatch_action(Box::new(language_selector::Toggle), cx);
+                                    }
+                                )
+                                .toggleable_entry(
+                                    encoding,
+                                    false,
+                                    IconPosition::Start,
+                                    Some(Box::new(encoding_selector::Toggle)),
+                                    |window, cx| {
+                                        window.dispatch_action(Box::new(encoding_selector::Toggle), cx);
+                                    }
+                                )
+                                .toggleable_entry(
+                                    line_ending,
+                                    false,
+                                    IconPosition::Start,
+                                    Some(Box::new(line_ending_selector::Toggle)),
+                                    |window, cx| {
+                                        window.dispatch_action(Box::new(line_ending_selector::Toggle), cx);
+                                    }
+                                )
+                                .separator()
+                                .toggleable_entry(
+                                    "Tabs",
+                                    hard_tabs,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::UseTabs)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::UseTabs,
+                                                window,
+                                                cx
+                                            );
+                                        }
+                                    }
+                                )
+                                .toggleable_entry(
+                                    "Spaces",
+                                    !hard_tabs,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::UseSpaces)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::UseSpaces,
+                                                window,
+                                                cx
+                                            );
+                                        }
+                                    }
+                                )
+                                .separator()
+                                .toggleable_entry(
+                                    "Tab Width: 2",
+                                    tab_size == 2,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::TabWidth2)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::TabWidth2,
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .toggleable_entry(
+                                    "Tab Width: 3",
+                                    tab_size == 3,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::TabWidth2)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::TabWidth3,
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .toggleable_entry(
+                                    "Tab Width: 4",
+                                    tab_size == 4,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::TabWidth2)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::TabWidth4,
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .toggleable_entry(
+                                    "Tab Width: 8",
+                                    tab_size == 8,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::TabWidth2)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::TabWidth8,
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .separator()
+                                .toggleable_entry(
+                                    "Convert Spaces to Tabs",
+                                    false,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::ConvertIndentationToTabs)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::ConvertIndentationToTabs,
+                                                window,
+                                                cx
+                                            );
+                                        }
+                                    }
+                                )
+                                .toggleable_entry(
+                                    "Convert Tabs to Spaces",
+                                    false,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::ConvertIndentationToSpaces)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::ConvertIndentationToSpaces,
                                                 window,
                                                 cx
                                             );

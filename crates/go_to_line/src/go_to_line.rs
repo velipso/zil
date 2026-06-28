@@ -1,7 +1,7 @@
 use editor::{
     Anchor, Editor, RowHighlightOptions, SelectionEffects, ToPoint, MBTextSummary,
     MultiBufferSnapshot,
-    actions::Tab,
+    actions::Indent,
     scroll::{Autoscroll, ScrollOffset},
 };
 use gpui::{
@@ -148,7 +148,7 @@ impl GoToLine {
             let mut editor = Editor::single_line(window, cx);
             let editor_handle = cx.entity().downgrade();
             editor
-                .register_action::<Tab>({
+                .register_action::<Indent>({
                     move |_, window, cx| {
                         let Some(editor) = editor_handle.upgrade() else {
                             return;
