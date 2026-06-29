@@ -10,82 +10,205 @@ fn dumb_innermost_enclosing_bracket_ranges(
     range: Range<MultiBufferOffset>,
 ) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
     // VELIPSO: check language settings somehow for which brackets to enable
-    fn is_open(c: char) -> bool {
-        matches!(c, '{' | '[' | '(')
+    let mut curly_count = 0;
+    let mut square_count = 0;
+    let mut paren_count = 0;
+
+    let mut offset = range.start.0;
+    let mut curly_start: Option<usize> = None;
+    let mut square_start: Option<usize> = None;
+    let mut paren_start: Option<usize> = None;
+
+    for c in buffer_snapshot.reversed_chars_at(range.start) {
+        offset = offset.saturating_sub(c.len_utf8());
+
+        if curly_start.is_none() {
+            if c == '{' {
+                if curly_count == 0 {
+                    curly_start = Some(offset);
+                } else {
+                    curly_count -= 1;
+                }
+            } else if c == '}' {
+                curly_count += 1;
+            }
+        }
+
+        if square_start.is_none() {
+            if c == '[' {
+                if square_count == 0 {
+                    square_start = Some(offset);
+                } else {
+                    square_count -= 1;
+                }
+            } else if c == ']' {
+                square_count += 1;
+            }
+        }
+
+        if paren_start.is_none() {
+            if c == '(' {
+                if paren_count == 0 {
+                    paren_start = Some(offset);
+                } else {
+                    paren_count -= 1;
+                }
+            } else if c == ')' {
+                paren_count += 1;
+            }
+        }
+
+        if curly_start.is_some()
+            && square_start.is_some()
+            && paren_start.is_some()
+        {
+            break;
+        }
     }
 
-    fn is_close(c: char) -> bool {
-        matches!(c, '}' | ']' | ')')
+    if curly_start.is_none()
+        && square_start.is_none()
+        && paren_start.is_none()
+    {
+        return None;
     }
 
-    fn is_pair(open: char, close: char) -> bool {
-        matches!(
-            (open, close),
-            ('{', '}') | ('[', ']') | ('(', ')')
-        )
+    let mut curly_count = 0;
+    let mut square_count = 0;
+    let mut paren_count = 0;
+
+    let mut offset = range.end.0;
+    let mut curly_end: Option<usize> = None;
+    let mut square_end: Option<usize> = None;
+    let mut paren_end: Option<usize> = None;
+
+    for c in buffer_snapshot.chars_at(range.end) {
+        if curly_end.is_none() {
+            if c == '}' {
+                if curly_count == 0 {
+                    curly_end = Some(offset);
+                } else {
+                    curly_count -= 1;
+                }
+            } else if c == '{' {
+                curly_count += 1;
+            }
+        }
+
+        if square_end.is_none() {
+            if c == ']' {
+                if square_count == 0 {
+                    square_end = Some(offset);
+                } else {
+                    square_count -= 1;
+                }
+            } else if c == '[' {
+                square_count += 1;
+            }
+        }
+
+        if paren_end.is_none() {
+            if c == ')' {
+                if paren_count == 0 {
+                    paren_end = Some(offset);
+                } else {
+                    paren_count -= 1;
+                }
+            } else if c == '(' {
+                paren_count += 1;
+            }
+        }
+
+        if curly_end.is_some()
+            && square_end.is_some()
+            && paren_end.is_some()
+        {
+            break;
+        }
+        offset += c.len_utf8();
     }
 
-    let mut stack = Vec::<char>::new();
-    let mut open_offset = range.start.0;
+    if curly_end.is_none()
+        && square_end.is_none()
+        && paren_end.is_none()
+    {
+        return None;
+    }
 
-    let pair = buffer_snapshot
-        .reversed_chars_at(range.start)
-        .find_map(|c| {
-            open_offset = open_offset.checked_sub(c.len_utf8())?;
+    // score each entry based on how far they are from the cursor
+    // math cannot panic because range.start.0 >= start and range.end.0 <= end
+    let curly = if let Some(start) = curly_start && let Some(end) = curly_end {
+        Some((start, end, range.start.0 - start + end - range.end.0))
+    } else {
+        None
+    };
+    let square = if let Some(start) = square_start && let Some(end) = square_end {
+        Some((start, end, range.start.0 - start + end - range.end.0))
+    } else {
+        None
+    };
+    let paren = if let Some(start) = paren_start && let Some(end) = paren_end {
+        Some((start, end, range.start.0 - start + end - range.end.0))
+    } else {
+        None
+    };
 
-            if is_open(c) {
-                loop {
-                    if let Some(d) = stack.pop() {
-                        if is_pair(c, d) {
-                            return None;
-                        }
-                    } else {
-                        return Some(c);
-                    }
+    fn result(
+        start: usize,
+        end: usize
+    ) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
+        Some((
+            MultiBufferOffset(start)..MultiBufferOffset(start + 1),
+            MultiBufferOffset(end)..MultiBufferOffset(end + 1),
+        ))
+    }
+
+    // find the best match (lowest score)
+    if let Some(curly) = curly {
+        if let Some(square) = square {
+            if let Some(paren) = paren {
+                // three-way sort
+                if curly.2 <= square.2 && curly.2 <= paren.2 {
+                    result(curly.0, curly.1)
+                } else if square.2 <= paren.2 {
+                    result(square.0, square.1)
+                } else {
+                    result(paren.0, paren.1)
+                }
+            } else {
+                // two-way sort
+                if curly.2 <= square.2 {
+                    result(curly.0, curly.1)
+                } else {
+                    result(square.0, square.1)
                 }
             }
-
-            if is_close(c) {
-                stack.push(c);
+        } else if let Some(paren) = paren {
+            // two-way sort
+            if curly.2 <= paren.2 {
+                result(curly.0, curly.1)
+            } else {
+                result(paren.0, paren.1)
             }
-
-            None
-        })?;
-
-    let mut stack = Vec::<char>::new();
-    let mut close_offset = range.end.0;
-
-    let close_brace = buffer_snapshot
-        .chars_at(range.end)
-        .find_map(|c| {
-            let this_offset = close_offset;
-            close_offset += c.len_utf8();
-
-            if is_close(c) {
-                loop {
-                    if let Some(d) = stack.pop() {
-                        if is_pair(d, c) {
-                            return None;
-                        }
-                    } else if is_pair(pair, c) {
-                        return Some(this_offset);
-                    } else {
-                        return None;
-                    }
-                }
+        } else {
+            result(curly.0, curly.1)
+        }
+    } else if let Some(square) = square {
+        if let Some(paren) = paren {
+            // two-way sort
+            if square.2 <= paren.2 {
+                result(square.0, square.1)
+            } else {
+                result(paren.0, paren.1)
             }
-
-            if is_open(c) {
-                stack.push(c);
-            }
-
-            None
-        })?;
-
-    Some((
-        MultiBufferOffset(open_offset)..MultiBufferOffset(open_offset + 1),
-        MultiBufferOffset(close_brace)..MultiBufferOffset(close_brace + 1),
-    ))
+        } else {
+            result(square.0, square.1)
+        }
+    } else if let Some(paren) = paren {
+        result(paren.0, paren.1)
+    } else {
+        None
+    }
 }
 
 impl Editor {
