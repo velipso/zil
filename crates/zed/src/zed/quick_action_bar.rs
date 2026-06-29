@@ -114,6 +114,7 @@ impl Render for QuickActionBar {
             });
 
         let buffer_search_bar = self.buffer_search_bar.clone();
+        let buffer_search_visible = !buffer_search_bar.read(cx).is_dismissed();
 
         let editor_focus_handle = editor.focus_handle(cx);
         let editor_settings_dropdown = {
@@ -179,7 +180,7 @@ impl Render for QuickActionBar {
                                 .separator()
                                 .toggleable_entry(
                                     "Search",
-                                    false,
+                                    buffer_search_visible,
                                     IconPosition::Start,
                                     Some(Box::new(search::buffer_search::Deploy::find())),
                                     {

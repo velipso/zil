@@ -6,11 +6,86 @@ use theme::ActiveTheme;
 use std::ops::Range;
 
 fn dumb_innermost_enclosing_bracket_ranges(
-    _buffer_snapshot: &MultiBufferSnapshot,
-    _range: Range<MultiBufferOffset>,
+    buffer_snapshot: &MultiBufferSnapshot,
+    range: Range<MultiBufferOffset>,
 ) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
-    // VELIPSO: dumb scan for (), [], {}
-    None
+    // VELIPSO: check language settings somehow for which brackets to enable
+    fn is_open(c: char) -> bool {
+        matches!(c, '{' | '[' | '(')
+    }
+
+    fn is_close(c: char) -> bool {
+        matches!(c, '}' | ']' | ')')
+    }
+
+    fn is_pair(open: char, close: char) -> bool {
+        matches!(
+            (open, close),
+            ('{', '}') | ('[', ']') | ('(', ')')
+        )
+    }
+
+    let mut stack = Vec::<char>::new();
+    let mut open_offset = range.start.0;
+
+    let pair = buffer_snapshot
+        .reversed_chars_at(range.start)
+        .find_map(|c| {
+            open_offset = open_offset.checked_sub(c.len_utf8())?;
+
+            if is_open(c) {
+                loop {
+                    if let Some(d) = stack.pop() {
+                        if is_pair(c, d) {
+                            return None;
+                        }
+                    } else {
+                        return Some(c);
+                    }
+                }
+            }
+
+            if is_close(c) {
+                stack.push(c);
+            }
+
+            None
+        })?;
+
+    let mut stack = Vec::<char>::new();
+    let mut close_offset = range.end.0;
+
+    let close_brace = buffer_snapshot
+        .chars_at(range.end)
+        .find_map(|c| {
+            let this_offset = close_offset;
+            close_offset += c.len_utf8();
+
+            if is_close(c) {
+                loop {
+                    if let Some(d) = stack.pop() {
+                        if is_pair(d, c) {
+                            return None;
+                        }
+                    } else if is_pair(pair, c) {
+                        return Some(this_offset);
+                    } else {
+                        return None;
+                    }
+                }
+            }
+
+            if is_open(c) {
+                stack.push(c);
+            }
+
+            None
+        })?;
+
+    Some((
+        MultiBufferOffset(open_offset)..MultiBufferOffset(open_offset + 1),
+        MultiBufferOffset(close_brace)..MultiBufferOffset(close_brace + 1),
+    ))
 }
 
 impl Editor {
