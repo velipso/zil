@@ -948,6 +948,11 @@ pub fn build_highlight_map(capture_names: &[&str], theme: &SyntaxTheme) -> Highl
 }
 
 impl LanguageScope {
+    pub fn auto_indent_outdent_settings(&self) -> (Vec<Arc<str>>, Vec<Arc<str>>) {
+        let config = self.language.as_ref().config();
+        (config.auto_indent_strings.clone(), config.auto_outdent_strings.clone())
+    }
+
     pub fn path_suffixes(&self) -> &[String] {
         self.language.path_suffixes()
     }

@@ -244,8 +244,19 @@ impl Editor {
                         let selection_is_empty = start == end;
                         let language_scope = buffer.language_scope_at(start);
                         let (delimiter, newline_config) = if let Some(language) = &language_scope {
+                            let needs_extra_newline = insert_extra_newline_brackets(
+                                &language,
+                                &buffer,
+                                start..end
+                            );
+
                             let mut newline_config = NewlineConfig::Newline {
                                 additional_indent: IndentSize::spaces(0),
+                                extra_line_additional_indent: if needs_extra_newline {
+                                    Some(IndentSize::spaces(0))
+                                } else {
+                                    None
+                                },
                                 prevent_auto_indent: false,
                             };
 
@@ -275,6 +286,7 @@ impl Editor {
                                 None,
                                 NewlineConfig::Newline {
                                     additional_indent: IndentSize::spaces(0),
+                                    extra_line_additional_indent: None,
                                     prevent_auto_indent: false,
                                 },
                             )
@@ -300,6 +312,7 @@ impl Editor {
                             }
                             NewlineConfig::Newline {
                                 additional_indent,
+                                extra_line_additional_indent,
                                 prevent_auto_indent,
                             } => {
                                 let auto_indent_mode =
@@ -315,10 +328,14 @@ impl Editor {
                                 } else {
                                     0
                                 };
+                                let extra_line_len = extra_line_additional_indent
+                                    .map(|i| 1 + existing_indent_len + i.len as usize)
+                                    .unwrap_or(0);
                                 let mut new_text = String::with_capacity(
                                     1 + capacity_for_delimiter
                                         + existing_indent_len
-                                        + additional_indent.len as usize,
+                                        + additional_indent.len as usize
+                                        + extra_line_len,
                                 );
                                 new_text.push('\n');
                                 if preserve_indent {
@@ -327,6 +344,13 @@ impl Editor {
                                 new_text.extend(additional_indent.chars());
                                 if let Some(delimiter) = &delimiter {
                                     new_text.push_str(delimiter);
+                                }
+                                if let Some(extra_indent) = extra_line_additional_indent {
+                                    new_text.push('\n');
+                                    if preserve_indent {
+                                        new_text.extend(existing_indent.chars());
+                                    }
+                                    new_text.extend(extra_indent.chars());
                                 }
                                 // Extend the edit to the beginning of the line
                                 // to clear auto-indent whitespace that would
@@ -353,7 +377,7 @@ impl Editor {
                         let new_selection = selection.map(|_| anchor);
                         (
                             ((edit_start..end, new_text), prevent_auto_indent),
-                            new_selection,
+                            (newline_config.has_extra_line(), new_selection),
                         )
                     })
                     .unzip()
@@ -378,8 +402,12 @@ impl Editor {
             let buffer = this.buffer.read(cx).snapshot(cx);
             let new_selections = selection_info
                 .into_iter()
-                .map(|new_selection| {
-                    let cursor = new_selection.end.to_point(&buffer);
+                .map(|(extra_newline_inserted, new_selection)| {
+                    let mut cursor = new_selection.end.to_point(&buffer);
+                    if extra_newline_inserted {
+                        cursor.row -= 1;
+                        cursor.column = buffer.line_len(MultiBufferRow(cursor.row));
+                    }
                     new_selection.map(|_| cursor)
                 })
                 .collect();
@@ -1521,12 +1549,25 @@ enum NewlineConfig {
     /// Insert newline with optional additional indent and optional extra blank line
     Newline {
         additional_indent: IndentSize,
+        extra_line_additional_indent: Option<IndentSize>,
         prevent_auto_indent: bool,
     },
     /// Clear the current line
     ClearCurrentLine,
     /// Unindent the current line and add continuation
     UnindentCurrentLine { continuation: Arc<str> },
+}
+
+impl NewlineConfig {
+    fn has_extra_line(&self) -> bool {
+        matches!(
+            self,
+            Self::Newline {
+                extra_line_additional_indent: Some(_),
+                ..
+            }
+        )
+    }
 }
 
 fn list_delimiter_for_newline(
@@ -1987,4 +2028,14 @@ impl EntityInputHandler for Editor {
     fn accepts_text_input(&self, _window: &mut Window, _cx: &mut Context<Self>) -> bool {
         self.expects_character_input
     }
+}
+
+fn insert_extra_newline_brackets(
+    language: &LanguageScope,
+    buffer: &MultiBufferSnapshot,
+    range: Range<MultiBufferOffset>
+) -> bool {
+    let (indent, outdent) = language.auto_indent_outdent_settings();
+    return indent.iter().any(|c| buffer.contains_str_at(range.start - 1, c))
+        && outdent.iter().any(|c| buffer.contains_str_at(range.end, c));
 }

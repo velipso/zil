@@ -502,7 +502,6 @@ struct AutoindentRequestEntry {
 struct IndentSuggestion {
     basis_row: u32,
     delta: Ordering,
-    within_error: bool,
 }
 
 struct BufferChunkHighlights<'a> {
@@ -2066,7 +2065,7 @@ impl Buffer {
                 // Build a map containing the suggested indentation for each of the edited lines
                 // with respect to the state of the buffer before these edits. This map is keyed
                 // by the rows for these lines in the current state of the buffer.
-                let mut old_suggestions = BTreeMap::<u32, (IndentSize, bool)>::default();
+                let mut old_suggestions = BTreeMap::<u32, IndentSize>::default();
                 let old_edited_ranges =
                     contiguous_ranges(old_to_new_rows.keys().copied(), max_rows_between_yields);
                 let mut language_indent_sizes = language_indent_sizes_by_new_row.iter().peekable();
@@ -2093,7 +2092,7 @@ impl Buffer {
                             let suggested_indent = old_to_new_rows
                                 .get(&suggestion.basis_row)
                                 .and_then(|from_row| {
-                                    Some(old_suggestions.get(from_row).copied()?.0)
+                                    Some(old_suggestions.get(from_row).copied()?)
                                 })
                                 .unwrap_or_else(|| {
                                     request
@@ -2102,7 +2101,7 @@ impl Buffer {
                                 })
                                 .with_delta(suggestion.delta, language_indent_size);
                             old_suggestions
-                                .insert(new_row, (suggested_indent, suggestion.within_error));
+                                .insert(new_row, suggested_indent);
                         }
                     }
                     yield_now().await;
@@ -2144,10 +2143,7 @@ impl Buffer {
                                 .with_delta(suggestion.delta, language_indent_size);
 
                             if old_suggestions.get(&new_row).is_none_or(
-                                |(old_indentation, was_within_error)| {
-                                    suggested_indent != *old_indentation
-                                        && (!suggestion.within_error || *was_within_error)
-                                },
+                                |old_indentation| suggested_indent != *old_indentation
                             ) {
                                 indent_sizes.insert(
                                     new_row,
@@ -3536,7 +3532,7 @@ impl BufferSnapshot {
             let outdent = this_language
                 .map(|language| language.config().auto_outdent_strings.clone());
 
-            let delta =
+            let indent =
                 if let Some(indent) = indent {
                     if indent.iter().any(|open| prev_line.ends_with(open.as_ref())) {
                         1
@@ -3545,7 +3541,8 @@ impl BufferSnapshot {
                     }
                 } else {
                     0
-                } +
+                };
+            let outdent = 
                 if let Some(outdent) = outdent {
                     if outdent.iter().any(|close| this_line.starts_with(close.as_ref())) {
                         -1
@@ -3556,10 +3553,11 @@ impl BufferSnapshot {
                     0
                 };
 
+            let delta = indent + outdent;
+
             let result = Some(IndentSuggestion {
                 basis_row: prev_row,
                 delta: delta.cmp(&0),
-                within_error: false,
             });
 
             if !this_line.is_empty() {
