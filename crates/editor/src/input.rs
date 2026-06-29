@@ -2036,6 +2036,7 @@ fn insert_extra_newline_brackets(
     range: Range<MultiBufferOffset>
 ) -> bool {
     let (indent, outdent) = language.auto_indent_outdent_settings();
-    return indent.iter().any(|c| buffer.contains_str_at(range.start - 1, c))
-        && outdent.iter().any(|c| buffer.contains_str_at(range.end, c));
+    return indent.iter().any(|c| {
+            range.start.0 >= c.len() && buffer.contains_str_at(range.start - c.len(), c)
+        }) && outdent.iter().any(|c| buffer.contains_str_at(range.end, c));
 }
