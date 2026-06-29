@@ -58,6 +58,11 @@ use zed::{
 
 use crate::zed::OpenRequestKind;
 
+#[cfg(debug_assertions)]
+use ui::prelude::IconName;
+#[cfg(debug_assertions)]
+use strum::IntoEnumIterator;
+
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -254,6 +259,24 @@ fn main() {
             .as_deref()
             .unwrap_or("unknown"),
     );
+
+    #[cfg(debug_assertions)]
+    {
+        // verify that IconName <-> Asset mapping is one to one
+        for name in IconName::iter() {
+            Assets.assert_exists(&name.path());
+        }
+        for asset_name in Assets.list("icons/").unwrap().iter() {
+            let mut found = false;
+            for name in IconName::iter() {
+                if name.path().as_ref() == asset_name.as_ref() {
+                    found = true;
+                    break;
+                }
+            }
+            assert!(found, "Unknown icon: {asset_name}");
+        }
+    }
 
     #[cfg(windows)]
     check_for_conpty_dll();

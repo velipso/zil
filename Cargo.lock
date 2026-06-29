@@ -13065,6 +13065,7 @@ dependencies = [
  "settings",
  "settings_profile_selector",
  "settings_ui",
+ "strum",
  "sysinfo 0.37.2",
  "tab_switcher",
  "task",

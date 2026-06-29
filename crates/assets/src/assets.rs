@@ -14,6 +14,7 @@ use rust_embed::RustEmbed;
 #[include = "themes/**/*"]
 #[include = "licenses.txt"]
 #[exclude = "*.DS_Store"]
+#[exclude = "icons/LICENSES"]
 pub struct Assets;
 
 impl AssetSource for Assets {
@@ -60,5 +61,9 @@ impl Assets {
                 self.load("fonts/lilex/Lilex-Regular.ttf").unwrap().unwrap(),
             ])
             .unwrap()
+    }
+
+    pub fn assert_exists(&self, path: &str) {
+        assert!(Self::get(path).is_some(), "Icon is missing: {path}");
     }
 }
