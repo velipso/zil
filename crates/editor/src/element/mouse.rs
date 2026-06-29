@@ -17,7 +17,7 @@ use util::{RangeExt, debug_panic, post_inc};
 
 use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap, SplitSide};
 use crate::{
-    CURSORS_VISIBLE_FOR, ColumnarMode, DisplayPoint, DisplayRow, Editor,
+    CURSORS_VISIBLE_FOR, DisplayPoint, DisplayRow, Editor,
     EditorSettings, EditorSnapshot, GutterHoverButton, HoveredCursor,
     SelectPhase, Selection, SelectionDragState,
     display_map::ToDisplayPoint,
@@ -478,14 +478,15 @@ impl EditorElement {
         }
 
         let position = point_for_position.nearest_valid;
+        let goal_column = point_for_position.exact_unclipped.column();
         if modifiers.shift {
             if modifiers.alt {
                 editor.select(
                     SelectPhase::BeginColumnar {
                         position,
+                        display_point: None,
                         reset: false,
-                        mode: ColumnarMode::FromMouse,
-                        goal_column: point_for_position.exact_unclipped.column(),
+                        goal_column,
                     },
                     window,
                     cx,
@@ -504,6 +505,7 @@ impl EditorElement {
             editor.select(
                 SelectPhase::Begin {
                     position,
+                    display_point: DisplayPoint::new(position.row(), goal_column),
                     add: modifiers.alt,
                     click_count,
                 },
@@ -553,13 +555,14 @@ impl EditorElement {
 
         let point_for_position = position_map.point_for_position(event.position);
         let position = point_for_position.nearest_valid;
+        let goal_column = point_for_position.exact_unclipped.column();
 
         editor.select(
             SelectPhase::BeginColumnar {
                 position,
+                display_point: Some(DisplayPoint::new(position.row(), goal_column)),
                 reset: true,
-                mode: ColumnarMode::FromMouse,
-                goal_column: point_for_position.exact_unclipped.column(),
+                goal_column,
             },
             window,
             cx,
@@ -577,6 +580,9 @@ impl EditorElement {
         let end_selection = editor.has_pending_selection();
         let pending_nonempty_selections = editor.has_pending_nonempty_selection();
         let point_for_position = position_map.point_for_position(event.position);
+        let position = point_for_position.nearest_valid;
+        let goal_column = point_for_position.exact_unclipped.column();
+        let display_point = DisplayPoint::new(position.row(), goal_column);
 
         match editor.selection_drag_state {
             SelectionDragState::ReadyToDrag {
@@ -587,7 +593,8 @@ impl EditorElement {
                 if event.position == *click_position {
                     editor.select(
                         SelectPhase::Begin {
-                            position: point_for_position.nearest_valid,
+                            position,
+                            display_point,
                             add: false,
                             click_count: 1, // ready to drag state only occurs on click count 1
                         },
@@ -611,7 +618,7 @@ impl EditorElement {
                         || cfg!(not(target_os = "macos")) && event.modifiers.control);
                     editor.move_selection_on_drop(
                         &selection.clone(),
-                        point_for_position.nearest_valid,
+                        position,
                         is_cut,
                         window,
                         cx,
@@ -646,12 +653,10 @@ impl EditorElement {
             #[cfg(any(target_os = "linux", target_os = "freebsd"))]
             if EditorSettings::get_global(cx).middle_click_paste {
                 if let Some(text) = cx.read_from_primary().and_then(|item| item.text()) {
-                    let point_for_position = position_map.point_for_position(event.position);
-                    let position = point_for_position.nearest_valid;
-
                     editor.select(
                         SelectPhase::Begin {
                             position,
+                            display_point,
                             add: false,
                             click_count: 1,
                         },
@@ -817,10 +822,14 @@ impl EditorElement {
                         cx.notify();
                     } else {
                         let click_point = position_map.point_for_position(*click_position);
+                        let click_position = click_point.nearest_valid;
+                        let click_goal_column = click_point.exact_unclipped.column();
+                        let display_point = DisplayPoint::new(click_position.row(), click_goal_column);
                         editor.selection_drag_state = SelectionDragState::None;
                         editor.select(
                             SelectPhase::Begin {
-                                position: click_point.nearest_valid,
+                                position: click_position,
+                                display_point,
                                 add: false,
                                 click_count: 1,
                             },

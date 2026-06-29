@@ -1024,15 +1024,24 @@ impl Editor {
         match phase {
             SelectPhase::Begin {
                 position,
+                display_point,
                 add,
                 click_count,
-            } => self.begin_selection(position, add, click_count, window, cx),
+            } => self.begin_selection(position, Some(display_point), add, click_count, window, cx),
             SelectPhase::BeginColumnar {
                 position,
                 goal_column,
+                display_point,
                 reset,
-                mode,
-            } => self.begin_columnar_selection(position, goal_column, reset, mode, window, cx),
+            } =>
+                self.begin_columnar_selection(
+                    position, 
+                    goal_column, 
+                    display_point, 
+                    reset, 
+                    window, 
+                    cx
+                ),
             SelectPhase::Extend {
                 position,
                 click_count,
@@ -1064,7 +1073,7 @@ impl Editor {
             SelectMode::Line(_) => 3,
             SelectMode::All => 4,
         });
-        self.begin_selection(position, false, click_count, window, cx);
+        self.begin_selection(position, None, false, click_count, window, cx);
 
         let tail_anchor = display_map.buffer_snapshot().anchor_before(tail);
 
@@ -1115,11 +1124,16 @@ impl Editor {
     pub(super) fn begin_selection(
         &mut self,
         position: DisplayPoint,
+        display_point: Option<DisplayPoint>,
         add: bool,
         click_count: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if display_point.is_some() {
+            self.columnar_display_point = display_point;
+        }
+
         if !self.focus_handle.is_focused(window) {
             self.last_focused_descendant = None;
             window.focus(&self.focus_handle, cx);
@@ -1232,8 +1246,8 @@ impl Editor {
                 self.select(
                     SelectPhase::BeginColumnar {
                         position,
-                        reset: false,
-                        mode: ColumnarMode::FromMouse,
+                        display_point: Some(DisplayPoint::new(position.row(), goal_column)),
+                        reset: true,
                         goal_column,
                     },
                     window,
@@ -1352,8 +1366,8 @@ impl Editor {
         &mut self,
         position: DisplayPoint,
         goal_column: u32,
+        display_point: Option<DisplayPoint>,
         reset: bool,
-        mode: ColumnarMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1385,23 +1399,10 @@ impl Editor {
 
         let tail = self.selections.newest::<Point>(&display_map).tail();
         let selection_anchor = display_map.buffer_snapshot().anchor_before(tail);
-        self.columnar_selection_state = match mode {
-            ColumnarMode::FromMouse => Some(ColumnarSelectionState::FromMouse {
-                selection_tail: selection_anchor,
-                display_point: if reset {
-                    if position.column() != goal_column {
-                        Some(DisplayPoint::new(position.row(), goal_column))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
-            }),
-            ColumnarMode::FromSelection => Some(ColumnarSelectionState::FromSelection {
-                selection_tail: selection_anchor,
-            }),
-        };
+        self.columnar_selection_state = Some(ColumnarSelectionState {
+            selection_tail: selection_anchor,
+            display_point: display_point.or(self.columnar_display_point),
+        });
 
         if !reset {
             self.select_columns(position, goal_column, &display_map, window, cx);
@@ -1553,15 +1554,8 @@ impl Editor {
             return;
         };
 
-        let tail = match columnar_state {
-            ColumnarSelectionState::FromMouse {
-                selection_tail,
-                display_point,
-            } => display_point.unwrap_or_else(|| selection_tail.to_display_point(display_map)),
-            ColumnarSelectionState::FromSelection { selection_tail } => {
-                selection_tail.to_display_point(display_map)
-            }
-        };
+        let tail = columnar_state.display_point
+            .unwrap_or_else(|| columnar_state.selection_tail.to_display_point(display_map));
 
         let start_row = cmp::min(tail.row(), head.row());
         let end_row = cmp::max(tail.row(), head.row());
@@ -1572,10 +1566,7 @@ impl Editor {
         let selection_ranges = (start_row.0..=end_row.0)
             .map(DisplayRow)
             .filter_map(|row| {
-                if (matches!(columnar_state, ColumnarSelectionState::FromMouse { .. })
-                    || start_column <= display_map.line_len(row))
-                    && !display_map.is_block_line(row)
-                {
+                if !display_map.is_block_line(row) {
                     let start = display_map
                         .clip_point(DisplayPoint::new(row, start_column), Bias::Left)
                         .to_point(display_map);
@@ -1596,19 +1587,16 @@ impl Editor {
             return;
         }
 
-        let ranges = match columnar_state {
-            ColumnarSelectionState::FromMouse { .. } => {
-                let mut non_empty_ranges = selection_ranges
-                    .iter()
-                    .filter(|selection_range| selection_range.start != selection_range.end)
-                    .peekable();
-                if non_empty_ranges.peek().is_some() {
-                    non_empty_ranges.cloned().collect()
-                } else {
-                    selection_ranges
-                }
+        let ranges = {
+            let mut non_empty_ranges = selection_ranges
+                .iter()
+                .filter(|selection_range| selection_range.start != selection_range.end)
+                .peekable();
+            if non_empty_ranges.peek().is_some() {
+                non_empty_ranges.cloned().collect()
+            } else {
+                selection_ranges
             }
-            _ => selection_ranges,
         };
 
         self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {

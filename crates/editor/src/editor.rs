@@ -268,13 +268,14 @@ pub struct SearchWithinRange;
 pub enum SelectPhase {
     Begin {
         position: DisplayPoint,
+        display_point: DisplayPoint,
         add: bool,
         click_count: usize,
     },
     BeginColumnar {
         position: DisplayPoint,
+        display_point: Option<DisplayPoint>,
         reset: bool,
-        mode: ColumnarMode,
         goal_column: u32,
     },
     Extend {
@@ -287,12 +288,6 @@ pub enum SelectPhase {
         scroll_delta: gpui::Point<f32>,
     },
     End,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ColumnarMode {
-    FromMouse,
-    FromSelection,
 }
 
 #[derive(Clone, Debug)]
@@ -716,14 +711,9 @@ enum SelectionDragState {
     },
 }
 
-enum ColumnarSelectionState {
-    FromMouse {
-        selection_tail: Anchor,
-        display_point: Option<DisplayPoint>,
-    },
-    FromSelection {
-        selection_tail: Anchor,
-    },
+struct ColumnarSelectionState {
+    selection_tail: Anchor,
+    display_point: Option<DisplayPoint>,
 }
 
 /// Represents a button that shows up when hovering over lines in the gutter that don't have
@@ -758,6 +748,7 @@ pub struct Editor {
     /// When inline assist editors are linked, they all render cursors because
     /// typing enters text into each of them, even the ones that aren't focused.
     pub(crate) show_cursor_when_unfocused: bool,
+    columnar_display_point: Option<DisplayPoint>,
     columnar_selection_state: Option<ColumnarSelectionState>,
     add_selections_state: Option<AddSelectionsState>,
     select_next_state: Option<SelectNextState>,
@@ -1749,6 +1740,7 @@ impl Editor {
             placeholder_display_map: None,
             selections,
             scroll_manager: ScrollManager::new(cx),
+            columnar_display_point: None,
             columnar_selection_state: None,
             add_selections_state: None,
             select_next_state: None,
@@ -3081,8 +3073,8 @@ impl Editor {
             self.select(
                 SelectPhase::BeginColumnar {
                     position,
+                    display_point: None,
                     reset: false,
-                    mode: ColumnarMode::FromMouse,
                     goal_column: point_for_position.exact_unclipped.column(),
                 },
                 window,
