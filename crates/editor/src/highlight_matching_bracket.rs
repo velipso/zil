@@ -1,5 +1,5 @@
 use crate::{Editor, HighlightKey, RangeToAnchorExt, display_map::DisplaySnapshot};
-use gpui::{AppContext, Context, HighlightStyle};
+use gpui::{AppContext, Context, HighlightStyle, FontWeight};
 use language::CursorShape;
 use multi_buffer::{MultiBufferOffset, MultiBufferSnapshot};
 use theme::ActiveTheme;
@@ -10,6 +10,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
     range: Range<MultiBufferOffset>,
 ) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
     // VELIPSO: check language settings somehow for which brackets to enable
+    let curly_enable = true;
+    let square_enable = true;
+    let paren_enable = true;
+
+    if !curly_enable && !square_enable && !paren_enable {
+        return None;
+    }
+
     let mut curly_count = 0;
     let mut square_count = 0;
     let mut paren_count = 0;
@@ -22,7 +30,7 @@ fn dumb_innermost_enclosing_bracket_ranges(
     for c in buffer_snapshot.reversed_chars_at(range.start) {
         offset = offset.saturating_sub(c.len_utf8());
 
-        if curly_start.is_none() {
+        if curly_enable && curly_start.is_none() {
             if c == '{' {
                 if curly_count == 0 {
                     curly_start = Some(offset);
@@ -34,7 +42,7 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if square_start.is_none() {
+        if square_enable && square_start.is_none() {
             if c == '[' {
                 if square_count == 0 {
                     square_start = Some(offset);
@@ -46,7 +54,7 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if paren_start.is_none() {
+        if paren_enable && paren_start.is_none() {
             if c == '(' {
                 if paren_count == 0 {
                     paren_start = Some(offset);
@@ -58,18 +66,15 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if curly_start.is_some()
-            && square_start.is_some()
-            && paren_start.is_some()
+        if (!curly_enable || curly_start.is_some())
+            && (!square_enable || square_start.is_some())
+            && (!paren_enable || paren_start.is_some())
         {
             break;
         }
     }
 
-    if curly_start.is_none()
-        && square_start.is_none()
-        && paren_start.is_none()
-    {
+    if curly_start.is_none() && square_start.is_none() && paren_start.is_none() {
         return None;
     }
 
@@ -83,7 +88,7 @@ fn dumb_innermost_enclosing_bracket_ranges(
     let mut paren_end: Option<usize> = None;
 
     for c in buffer_snapshot.chars_at(range.end) {
-        if curly_end.is_none() {
+        if curly_enable && curly_end.is_none() {
             if c == '}' {
                 if curly_count == 0 {
                     curly_end = Some(offset);
@@ -95,7 +100,7 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if square_end.is_none() {
+        if square_enable && square_end.is_none() {
             if c == ']' {
                 if square_count == 0 {
                     square_end = Some(offset);
@@ -107,7 +112,7 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if paren_end.is_none() {
+        if paren_enable && paren_end.is_none() {
             if c == ')' {
                 if paren_count == 0 {
                     paren_end = Some(offset);
@@ -119,9 +124,9 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if curly_end.is_some()
-            && square_end.is_some()
-            && paren_end.is_some()
+        if (!curly_enable || curly_start.is_some())
+            && (!square_enable || square_start.is_some())
+            && (!paren_enable || paren_start.is_some())
         {
             break;
         }
@@ -138,17 +143,17 @@ fn dumb_innermost_enclosing_bracket_ranges(
     // score each entry based on how far they are from the cursor
     // math cannot panic because range.start.0 >= start and range.end.0 <= end
     let curly = if let Some(start) = curly_start && let Some(end) = curly_end {
-        Some((start, end, range.start.0 - start + end - range.end.0))
+        Some((start, end, (range.start.0 - start) + (end - range.end.0)))
     } else {
         None
     };
     let square = if let Some(start) = square_start && let Some(end) = square_end {
-        Some((start, end, range.start.0 - start + end - range.end.0))
+        Some((start, end, (range.start.0 - start) + (end - range.end.0)))
     } else {
         None
     };
     let paren = if let Some(start) = paren_start && let Some(end) = paren_end {
-        Some((start, end, range.start.0 - start + end - range.end.0))
+        Some((start, end, (range.start.0 - start) + (end - range.end.0)))
     } else {
         None
     };
@@ -278,6 +283,7 @@ impl Editor {
                                             .colors()
                                             .editor_document_highlight_bracket_background,
                                     ),
+                                    font_weight: Some(FontWeight::from(700.)),
                                     ..Default::default()
                                 },
                                 cx,
