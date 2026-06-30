@@ -10,10 +10,10 @@ use gpui::{
 use refineable::Refineable;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-pub use settings::{FontFamilyName, IconThemeName, ThemeAppearanceMode, ThemeName};
+pub use settings::{FontFamilyName, ThemeAppearanceMode, ThemeName};
 use settings::{IntoGpui, RegisterSetting, Settings, SettingsContent};
 use std::sync::Arc;
-use theme::{Appearance, DEFAULT_ICON_THEME_NAME, SyntaxTheme, Theme, UiDensity};
+use theme::{Appearance, SyntaxTheme, Theme, UiDensity};
 
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
@@ -80,8 +80,6 @@ pub struct ThemeSettings {
     pub experimental_theme_overrides: Option<settings::ThemeStyleContent>,
     /// Manual overrides per theme
     pub theme_overrides: HashMap<String, settings::ThemeStyleContent>,
-    /// The current icon theme selection.
-    pub icon_theme: IconThemeSelection,
     /// The density of the UI.
     /// Note: This setting is still experimental. See [this tracking issue](
     pub ui_density: UiDensity,
@@ -178,58 +176,6 @@ impl ThemeSelection {
     }
 }
 
-/// Represents the selection of an icon theme, which can be either static or dynamic.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum IconThemeSelection {
-    /// A static icon theme selection, represented by a single icon theme name.
-    Static(IconThemeName),
-    /// A dynamic icon theme selection, which can change based on the [`ThemeMode`].
-    Dynamic {
-        /// The mode used to determine which theme to use.
-        mode: ThemeAppearanceMode,
-        /// The icon theme to use for light mode.
-        light: IconThemeName,
-        /// The icon theme to use for dark mode.
-        dark: IconThemeName,
-    },
-}
-
-impl From<settings::IconThemeSelection> for IconThemeSelection {
-    fn from(selection: settings::IconThemeSelection) -> Self {
-        match selection {
-            settings::IconThemeSelection::Static(theme) => IconThemeSelection::Static(theme),
-            settings::IconThemeSelection::Dynamic { mode, light, dark } => {
-                IconThemeSelection::Dynamic { mode, light, dark }
-            }
-        }
-    }
-}
-
-impl IconThemeSelection {
-    /// Returns the icon theme name based on the given [`Appearance`].
-    pub fn name(&self, system_appearance: Appearance) -> IconThemeName {
-        match self {
-            Self::Static(theme) => theme.clone(),
-            Self::Dynamic { mode, light, dark } => match mode {
-                ThemeAppearanceMode::Light => light.clone(),
-                ThemeAppearanceMode::Dark => dark.clone(),
-                ThemeAppearanceMode::System => match system_appearance {
-                    Appearance::Light => light.clone(),
-                    Appearance::Dark => dark.clone(),
-                },
-            },
-        }
-    }
-
-    /// Returns the [`ThemeMode`] for the [`IconThemeSelection`].
-    pub fn mode(&self) -> Option<ThemeAppearanceMode> {
-        match self {
-            IconThemeSelection::Static(_) => None,
-            IconThemeSelection::Dynamic { mode, .. } => Some(*mode),
-        }
-    }
-}
-
 /// Sets the theme for the given appearance to the theme with the specified name.
 ///
 /// The caller should make sure that the [`Appearance`] matches the theme associated with the name.
@@ -272,31 +218,6 @@ pub fn set_theme(
     }
 }
 
-/// Sets the icon theme for the given appearance to the icon theme with the specified name.
-pub fn set_icon_theme(
-    current: &mut SettingsContent,
-    icon_theme_name: IconThemeName,
-    appearance: Appearance,
-) {
-    if let Some(selection) = current.theme.icon_theme.as_mut() {
-        let icon_theme_to_update = match selection {
-            settings::IconThemeSelection::Static(theme) => theme,
-            settings::IconThemeSelection::Dynamic { mode, light, dark } => match mode {
-                ThemeAppearanceMode::Light => light,
-                ThemeAppearanceMode::Dark => dark,
-                ThemeAppearanceMode::System => match appearance {
-                    Appearance::Light => light,
-                    Appearance::Dark => dark,
-                },
-            },
-        };
-
-        *icon_theme_to_update = icon_theme_name;
-    } else {
-        current.theme.icon_theme = Some(settings::IconThemeSelection::Static(icon_theme_name));
-    }
-}
-
 /// Sets the mode for the theme.
 pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
     let theme = content.theme.as_mut();
@@ -321,26 +242,6 @@ pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
             light: ThemeName(settings::DEFAULT_LIGHT_THEME.into()),
             dark: ThemeName(settings::DEFAULT_DARK_THEME.into()),
         });
-    }
-
-    if let Some(selection) = theme.icon_theme.as_mut() {
-        match selection {
-            settings::IconThemeSelection::Static(icon_theme) => {
-                *selection = settings::IconThemeSelection::Dynamic {
-                    mode,
-                    light: icon_theme.clone(),
-                    dark: icon_theme.clone(),
-                };
-            }
-            settings::IconThemeSelection::Dynamic {
-                mode: mode_to_update,
-                ..
-            } => *mode_to_update = mode,
-        }
-    } else {
-        theme.icon_theme = Some(settings::IconThemeSelection::Static(IconThemeName(
-            DEFAULT_ICON_THEME_NAME.into(),
-        )));
     }
 }
 
@@ -665,7 +566,6 @@ impl settings::Settings for ThemeSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let content = &content.theme;
         let theme_selection: ThemeSelection = content.theme.clone().unwrap().into();
-        let icon_theme_selection: IconThemeSelection = content.icon_theme.clone().unwrap().into();
         Self {
             ui_font_size: clamp_font_size(content.ui_font_size.unwrap().into_gpui()),
             ui_font: Font {
@@ -708,7 +608,6 @@ impl settings::Settings for ThemeSettings {
             theme: theme_selection,
             experimental_theme_overrides: content.experimental_theme_overrides.clone(),
             theme_overrides: content.theme_overrides.clone(),
-            icon_theme: icon_theme_selection,
             ui_density: ui_density_from_settings(content.ui_density.unwrap_or_default()),
             unnecessary_code_fade: content.unnecessary_code_fade.unwrap().0.clamp(0.0, 0.9),
         }

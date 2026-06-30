@@ -30,7 +30,7 @@ use util::{
 };
 
 use crate::{
-    ActiveSettingsProfileName, FontFamilyName, IconThemeName, LanguageSettingsContent,
+    ActiveSettingsProfileName, FontFamilyName, LanguageSettingsContent,
     LanguageToSettingsMap, LspSettings, LspSettingsMap, SemanticTokenRules, ThemeName,
     UserSettingsContentExt, VsCodeSettings, WorktreeId,
     settings_content::{
@@ -272,7 +272,6 @@ pub struct SettingsJsonSchemaParams<'a> {
     pub language_names: &'a [String],
     pub font_names: &'a [String],
     pub theme_names: &'a [SharedString],
-    pub icon_theme_names: &'a [SharedString],
     pub lsp_adapter_names: &'a [String],
     pub action_names: &'a [&'a str],
     pub action_documentation: &'a HashMap<&'a str, &'a str>,
@@ -1231,15 +1230,6 @@ impl SettingsStore {
                 json_schema!({
                     "type": "string",
                     "enum": params.theme_names,
-                })
-            });
-        }
-
-        if !params.icon_theme_names.is_empty() {
-            replace_subschema::<IconThemeName>(&mut generator, || {
-                json_schema!({
-                    "type": "string",
-                    "enum": params.icon_theme_names,
                 })
             });
         }
@@ -2801,7 +2791,6 @@ mod tests {
             language_names: &["Rust".to_string(), "TypeScript".to_string()],
             font_names: &["Zed Mono".to_string()],
             theme_names: &["One Dark".into()],
-            icon_theme_names: &["Zed Icons".into()],
             lsp_adapter_names: &[
                 "rust-analyzer".to_string(),
                 "typescript-language-server".to_string(),
@@ -2856,7 +2845,6 @@ mod tests {
             language_names: &["Rust".to_string(), "TypeScript".to_string()],
             font_names: &["Zed Mono".to_string()],
             theme_names: &["One Dark".into()],
-            icon_theme_names: &["Zed Icons".into()],
             lsp_adapter_names: &[
                 "rust-analyzer".to_string(),
                 "typescript-language-server".to_string(),
@@ -2911,7 +2899,6 @@ mod tests {
             language_names: &["Rust".to_string()],
             font_names: &["Zed Mono".to_string()],
             theme_names: &["One Dark".into()],
-            icon_theme_names: &["Zed Icons".into()],
             lsp_adapter_names: &["rust-analyzer".to_string()],
             action_names: &[],
             action_documentation: &HashMap::default(),

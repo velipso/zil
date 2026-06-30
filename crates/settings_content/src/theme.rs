@@ -161,8 +161,6 @@ pub struct ThemeSettingsContent {
     pub markdown_preview_theme: Option<ThemeSelection>,
     /// The name of the Zed theme to use.
     pub theme: Option<ThemeSelection>,
-    /// The name of the icon theme to use.
-    pub icon_theme: Option<IconThemeSelection>,
 
     /// UNSTABLE: Expect many elements to be broken.
     ///
@@ -294,35 +292,6 @@ impl Default for ThemeSelection {
             dark: ThemeName(DEFAULT_DARK_THEME.into()),
         }
     }
-}
-
-/// Represents the selection of an icon theme, which can be either static or dynamic.
-#[derive(
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::EnumDiscriminants,
-)]
-#[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
-#[serde(untagged)]
-pub enum IconThemeSelection {
-    /// A static icon theme selection, represented by a single icon theme name.
-    Static(IconThemeName),
-    /// A dynamic icon theme selection, which can change based on the [`ThemeMode`].
-    Dynamic {
-        /// The mode used to determine which theme to use.
-        #[serde(default)]
-        mode: ThemeAppearanceMode,
-        /// The icon theme to use for light mode.
-        light: IconThemeName,
-        /// The icon theme to use for dark mode.
-        dark: IconThemeName,
-    },
 }
 
 /// The mode use to select a theme.
@@ -503,12 +472,6 @@ pub struct PlayerColorContent {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ThemeName(pub Arc<str>);
-
-/// Icon Theme Name
-#[with_fallible_options]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct IconThemeName(pub Arc<str>);
 
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]

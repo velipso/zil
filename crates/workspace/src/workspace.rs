@@ -1498,7 +1498,6 @@ impl Workspace {
                 *SystemAppearance::global_mut(cx) = SystemAppearance(window_appearance.into());
 
                 theme_settings::reload_theme(cx);
-                theme_settings::reload_icon_theme(cx);
             }),
             cx.on_release({
                 let weak_handle = weak_handle.clone();
