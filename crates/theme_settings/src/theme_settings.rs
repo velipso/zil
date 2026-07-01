@@ -312,6 +312,8 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
         .map(|w| w.into_gpui())
         .unwrap_or_default();
 
+    let (scheme, palette, syntax, ui) = Theme::parse_yaml(Theme::default_tinted8_yaml()).unwrap();
+
     Theme {
         id: uuid::Uuid::new_v4().to_string(),
         name: theme.name.clone().into(),
@@ -325,6 +327,10 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
             player: refined_player_colors,
             syntax: syntax_theme,
         },
+        scheme,
+        palette,
+        syntax,
+        ui,
     }
 }
 

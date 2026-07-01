@@ -147,6 +147,7 @@ console = "0.16"
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
 derive_refineable = { path = "crates/refineable/derive_refineable" }
+deunicode = "1"
 dialoguer = { version = "0.12", default-features = false }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }

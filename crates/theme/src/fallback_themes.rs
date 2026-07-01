@@ -104,6 +104,9 @@ pub(crate) fn zed_default_dark() -> Theme {
     };
 
     let player = PlayerColors::dark();
+
+    let (scheme, palette, syntax, ui) = Theme::parse_yaml(Theme::default_tinted8_yaml()).unwrap();
+
     Theme {
         id: "one_dark".to_string(),
         name: DEFAULT_DARK_THEME.into(),
@@ -388,5 +391,10 @@ pub(crate) fn zed_default_dark() -> Theme {
                 ("diff.minus".into(), red.into()),
             ])),
         },
+
+        scheme,
+        palette,
+        syntax,
+        ui,
     }
 }
