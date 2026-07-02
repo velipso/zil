@@ -870,6 +870,52 @@ impl<'snap, 'a> MutableSelectionsCollection<'snap, 'a> {
         self.select(selections)
     }
 
+    pub fn add_ranges<I, T>(&mut self, ranges: I)
+    where
+        I: IntoIterator<Item = Range<T>>,
+        T: ToOffset,
+    {
+        let ranges = ranges
+            .into_iter()
+            .map(|range| range.start.to_offset(self.snapshot)..range.end.to_offset(self.snapshot));
+
+        self.add_offset_ranges(ranges);
+    }
+
+    fn add_offset_ranges<I>(&mut self, ranges: I)
+    where
+        I: IntoIterator<Item = Range<MultiBufferOffset>>,
+    {
+        let mut selections = self
+            .collection
+            .disjoint
+            .iter()
+            .cloned()
+            .map(|selection| selection.map(|anchor| anchor.to_offset(self.snapshot)))
+            .collect::<Vec<_>>();
+
+        selections.extend(ranges.into_iter().map(|range| {
+            let mut start = range.start;
+            let mut end = range.end;
+            let reversed = if start > end {
+                mem::swap(&mut start, &mut end);
+                true
+            } else {
+                false
+            };
+
+            Selection {
+                id: post_inc(&mut self.collection.next_selection_id),
+                start,
+                end,
+                reversed,
+                goal: SelectionGoal::None,
+            }
+        }));
+
+        self.select(selections);
+    }
+
     pub fn select_anchor_ranges<I>(&mut self, ranges: I)
     where
         I: IntoIterator<Item = Range<Anchor>>,

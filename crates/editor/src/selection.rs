@@ -1033,15 +1033,14 @@ impl Editor {
                 goal_column,
                 display_point,
                 reset,
-            } =>
-                self.begin_columnar_selection(
-                    position, 
-                    goal_column, 
-                    display_point, 
-                    reset, 
-                    window, 
-                    cx
-                ),
+            } => self.begin_columnar_selection(
+                position, 
+                goal_column, 
+                display_point, 
+                reset, 
+                window, 
+                cx
+            ),
             SelectPhase::Extend {
                 position,
                 click_count,
@@ -1247,7 +1246,7 @@ impl Editor {
                     SelectPhase::BeginColumnar {
                         position,
                         display_point: Some(DisplayPoint::new(position.row(), goal_column)),
-                        reset: true,
+                        reset: false,
                         goal_column,
                     },
                     window,
@@ -1377,6 +1376,11 @@ impl Editor {
         }
 
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
+        let base_selections = if reset {
+            Arc::new([])
+        } else {
+            self.selections.disjoint_anchors_arc()
+        };
 
         if reset {
             let pointer_position = display_map
@@ -1402,6 +1406,7 @@ impl Editor {
         self.columnar_selection_state = Some(ColumnarSelectionState {
             selection_tail: selection_anchor,
             display_point: display_point.or(self.columnar_display_point),
+            base_selections,
         });
 
         if !reset {
@@ -1599,8 +1604,10 @@ impl Editor {
             }
         };
 
+        let base_selections = columnar_state.base_selections.clone();
         self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-            s.select_ranges(ranges);
+            s.select_anchors(base_selections.iter().cloned().collect());
+            s.add_ranges(ranges);
         });
         cx.notify();
     }

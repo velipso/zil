@@ -714,6 +714,7 @@ enum SelectionDragState {
 struct ColumnarSelectionState {
     selection_tail: Anchor,
     display_point: Option<DisplayPoint>,
+    base_selections: Arc<[Selection<Anchor>]>,
 }
 
 /// Represents a button that shows up when hovering over lines in the gutter that don't have
