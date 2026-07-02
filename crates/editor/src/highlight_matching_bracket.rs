@@ -217,7 +217,6 @@ fn dumb_innermost_enclosing_bracket_ranges(
 }
 
 impl Editor {
-    #[ztracing::instrument(skip_all)]
     pub fn refresh_matching_bracket_highlights(
         &mut self,
         snapshot: &DisplaySnapshot,

@@ -1002,11 +1002,9 @@ dependencies = [
  "settings",
  "sum_tree",
  "text",
- "tracing",
  "unindent",
  "util",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -1318,26 +1316,15 @@ name = "cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "askpass",
- "clap",
  "collections",
- "console",
  "core-foundation 0.10.0",
  "core-services",
- "dialoguer",
  "exec",
  "fork",
  "ipc-channel",
- "parking_lot",
- "paths",
  "plist",
- "rayon",
- "release_channel",
  "serde",
  "serde_json",
- "tempfile",
- "util",
- "walkdir",
  "windows 0.61.3",
  "windows_resources",
 ]
@@ -1654,18 +1641,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
-]
-
-[[package]]
-name = "console"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d64e8af5551369d19cf50138de61f1c42074ab970f74e99be916646777f8fc87"
-dependencies = [
- "encode_unicode",
- "libc",
- "unicode-width",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2376,16 +2351,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
-name = "dialoguer"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
-dependencies = [
- "console",
- "shell-words",
-]
-
-[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2657,7 +2622,6 @@ dependencies = [
  "workspace",
  "zed_actions",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -2709,12 +2673,6 @@ checksum = "eabffdaee24bd1bf95c5ef7cec31260444317e72ea56c4c91750e8b7ee58d5f1"
 dependencies = [
  "log",
 ]
-
-[[package]]
-name = "encode_unicode"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
 name = "encoding_rs"
@@ -3434,20 +3392,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generator"
-version = "0.8.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "605183a538e3e2a9c1038635cc5c2d194e2ee8fd0d1b66b8349fad7dbacce5a2"
-dependencies = [
- "cc",
- "cfg-if",
- "libc",
- "log",
- "rustversion",
- "windows 0.61.3",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3581,7 +3525,6 @@ dependencies = [
  "urlencoding",
  "util",
  "uuid",
- "ztracing",
 ]
 
 [[package]]
@@ -5204,14 +5147,12 @@ dependencies = [
  "theme",
  "theme_settings",
  "toml 0.8.23",
- "tracing",
  "tree-sitter",
  "unicase",
  "unindent",
  "util",
  "watch",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -5568,19 +5509,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "loom"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
-dependencies = [
- "cfg-if",
- "generator",
- "scoped-tls",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "loop9"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5791,15 +5719,6 @@ dependencies = [
  "markup5ever",
  "tendril",
  "xml5ever",
-]
-
-[[package]]
-name = "matchers"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
-dependencies = [
- "regex-automata",
 ]
 
 [[package]]
@@ -6061,12 +5980,10 @@ dependencies = [
  "sum_tree",
  "text",
  "theme",
- "tracing",
  "tree-sitter",
  "unicode-segmentation",
  "util",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -7619,7 +7536,6 @@ dependencies = [
  "tempfile",
  "text",
  "toml 0.8.23",
- "tracing",
  "unindent",
  "url",
  "util",
@@ -7629,7 +7545,6 @@ dependencies = [
  "worktree",
  "zeroize",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -8355,11 +8270,9 @@ dependencies = [
  "rand 0.9.4",
  "rayon",
  "sum_tree",
- "tracing",
  "unicode-segmentation",
  "util",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -8401,7 +8314,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "strum",
- "tracing",
  "util",
  "zlog",
  "zstd",
@@ -8777,7 +8689,6 @@ dependencies = [
  "settings",
  "theme",
  "theme_settings",
- "tracing",
  "ui",
  "unindent",
  "util",
@@ -9184,21 +9095,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sharded-slab"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
-dependencies = [
- "lazy_static",
-]
-
-[[package]]
-name = "shell-words"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
-
-[[package]]
 name = "shellexpand"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9534,9 +9430,7 @@ dependencies = [
  "proptest",
  "rand 0.9.4",
  "rayon",
- "tracing",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -10022,15 +9916,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thread_local"
-version = "1.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "tiff"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10423,68 +10308,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a04e24fab5c89c6a36eb8558c9656f30d81de51dfa4d3b45f26b21d61fa0a6c"
 dependencies = [
  "once_cell",
- "valuable",
-]
-
-[[package]]
-name = "tracing-log"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-subscriber"
-version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
-dependencies = [
- "matchers",
- "nu-ansi-term",
- "once_cell",
- "regex-automata",
- "sharded-slab",
- "smallvec",
- "thread_local",
- "tracing",
- "tracing-core",
- "tracing-log",
-]
-
-[[package]]
-name = "tracing-tracy"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eaa1852afa96e0fe9e44caa53dc0bd2d9d05e0f2611ce09f97f8677af56e4ba"
-dependencies = [
- "tracing-core",
- "tracing-subscriber",
- "tracy-client",
-]
-
-[[package]]
-name = "tracy-client"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91d722a05fe49b31fef971c4732a7d4aa6a18283d9ba46abddab35f484872947"
-dependencies = [
- "loom",
- "once_cell",
- "tracy-client-sys",
-]
-
-[[package]]
-name = "tracy-client-sys"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb391ac70462b3097a755618fbf9c8f95ecc1eb379a414f7b46f202ed10db1f"
-dependencies = [
- "cc",
- "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -10911,12 +10734,6 @@ dependencies = [
  "num-traits",
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "valuable"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "value-bag"
@@ -12692,11 +12509,9 @@ dependencies = [
  "smallvec",
  "sum_tree",
  "text",
- "tracing",
  "util",
  "worktree",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -13094,7 +12909,6 @@ dependencies = [
  "time",
  "title_bar",
  "toolchain_selector",
- "tracing",
  "ui",
  "ui_prompt",
  "url",
@@ -13109,7 +12923,6 @@ dependencies = [
  "zed_env_vars",
  "zlog",
  "zlog_settings",
- "ztracing",
 ]
 
 [[package]]
@@ -13399,22 +13212,6 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[package]]
-name = "ztracing"
-version = "0.1.0"
-dependencies = [
- "tracing",
- "tracing-subscriber",
- "tracing-tracy",
- "tracy-client",
- "zlog",
- "ztracing_macro",
-]
-
-[[package]]
-name = "ztracing_macro"
-version = "0.1.0"
 
 [[package]]
 name = "zune-core"

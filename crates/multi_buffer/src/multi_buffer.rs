@@ -57,7 +57,6 @@ use text::{
 };
 use theme::SyntaxTheme;
 use unicode_segmentation::UnicodeSegmentation;
-use ztracing::instrument;
 
 pub use self::path_key::PathKey;
 
@@ -1154,7 +1153,6 @@ impl MultiBuffer {
     }
 
     /// Returns an up-to-date snapshot of the MultiBuffer.
-    #[ztracing::instrument(skip_all)]
     pub fn snapshot(&self, cx: &App) -> MultiBufferSnapshot {
         self.sync(cx);
         self.snapshot.borrow().clone()
@@ -1613,7 +1611,6 @@ impl MultiBuffer {
         }
     }
 
-    #[instrument(skip_all)]
     fn merge_excerpt_ranges<'a>(
         expanded_ranges: impl IntoIterator<Item = &'a ExcerptRange<Point>> + 'a,
     ) -> Vec<ExcerptRange<Point>> {
@@ -1917,7 +1914,6 @@ impl MultiBuffer {
         self.as_singleton().read(cx).is_parsing()
     }
 
-    #[ztracing::instrument(skip_all)]
     fn sync(&self, cx: &App) {
         let changed = self.buffer_changed_since_sync.replace(false);
         if !changed {
@@ -3439,7 +3435,6 @@ impl MultiBufferSnapshot {
         self.convert_dimension(point, text::BufferSnapshot::point_utf16_to_point)
     }
 
-    #[instrument(skip_all)]
     pub fn point_to_offset(&self, point: Point) -> MultiBufferOffset {
         self.convert_dimension(point, text::BufferSnapshot::point_to_offset)
     }
@@ -3493,7 +3488,6 @@ impl MultiBufferSnapshot {
         }
     }
 
-    #[instrument(skip_all)]
     fn convert_dimension<MBR1, MBR2, BR1, BR2>(
         &self,
         key: MBR1,
@@ -5707,7 +5701,6 @@ where
     MBD: MultiBufferDimension + Ord + Sub + ops::AddAssign<<MBD as Sub>::Output>,
     BD: TextDimension + AddAssign<<MBD as Sub>::Output>,
 {
-    #[instrument(skip_all)]
     fn seek(&mut self, position: &MBD) {
         let position = OutputDimension(*position);
         self.cached_region.take();
@@ -6575,7 +6568,6 @@ impl<'a> MultiBufferChunks<'a> {
         }
     }
 
-    #[ztracing::instrument(skip_all)]
     fn next_excerpt_chunk(&mut self) -> Option<Chunk<'a>> {
         loop {
             if self.excerpt_offset_range.is_empty() {
@@ -6624,7 +6616,6 @@ impl<'a> Iterator for ReversedMultiBufferChunks<'a> {
 impl<'a> Iterator for MultiBufferChunks<'a> {
     type Item = Chunk<'a>;
 
-    #[ztracing::instrument(skip_all)]
     fn next(&mut self) -> Option<Chunk<'a>> {
         if self.range.start >= self.range.end {
             return None;

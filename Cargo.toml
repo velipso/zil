@@ -107,8 +107,6 @@ members = [
     "crates/zed_env_vars",
     "crates/zlog",
     "crates/zlog_settings",
-    "crates/ztracing",
-    "crates/ztracing_macro",
 
     #
     # Tooling
@@ -240,8 +238,6 @@ zed_credentials_provider = { path = "crates/zed_credentials_provider" }
 zed_env_vars = { path = "crates/zed_env_vars" }
 zlog = { path = "crates/zlog" }
 zlog_settings = { path = "crates/zlog_settings" }
-ztracing = { path = "crates/ztracing" }
-ztracing_macro = { path = "crates/ztracing_macro" }
 
 #
 # External crates
@@ -457,7 +453,6 @@ tower-http = "0.4.4"
 tree-sitter = { version = "0.26.9", features = ["wasm"] }
 tree-sitter-json = "0.24"    # keep for keymap_editor + settings_json
 tree-sitter-rust = "0.24.2"  # keep for keymap_editor
-tracing = "0.1.40"
 unicase = "2.6"
 unicode-script = "0.5.7"
 unicode-segmentation = "1.10"

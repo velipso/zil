@@ -54,8 +54,6 @@ async fn run_git_blame(
     line_ending: LineEnding,
 ) -> Result<String> {
     let mut child = {
-        let span = ztracing::debug_span!("spawning git-blame command", path = path.as_unix_str());
-        let _enter = span.enter();
         git.build_command(&["blame", "--incremental", "--contents", "-", "--"])
             .arg(path.as_unix_str())
             .stdin(Stdio::piped())

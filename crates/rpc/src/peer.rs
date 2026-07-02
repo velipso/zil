@@ -151,8 +151,6 @@ impl Peer {
         let stream_response_channels = connection_state.stream_response_channels.clone();
 
         let handle_io = async move {
-            tracing::trace!(%connection_id, "handle io future: start");
-
             let _end_connection = util::defer(|| {
                 response_channels.lock().take();
                 if let Some(channels) = stream_response_channels.lock().take() {
@@ -164,7 +162,6 @@ impl Peer {
                     }
                 }
                 this.connections.write().remove(&connection_id);
-                tracing::trace!(%connection_id, "handle io future: end");
             });
 
             // Send messages on this frequency so the connection isn't closed.
@@ -176,68 +173,50 @@ impl Peer {
             futures::pin_mut!(receive_timeout);
 
             loop {
-                tracing::trace!(%connection_id, "outer loop iteration start");
                 let read_message = reader.read().fuse();
                 futures::pin_mut!(read_message);
 
                 loop {
-                    tracing::trace!(%connection_id, "inner loop iteration start");
                     futures::select_biased! {
                         outgoing = outgoing_rx.next().fuse() => match outgoing {
                             Some(outgoing) => {
-                                tracing::trace!(%connection_id, "outgoing rpc message: writing");
                                 futures::select_biased! {
                                     result = writer.write(outgoing).fuse() => {
-                                        tracing::trace!(%connection_id, "outgoing rpc message: done writing");
                                         result.context("failed to write RPC message")?;
-                                        tracing::trace!(%connection_id, "keepalive interval: resetting after sending message");
                                         keepalive_timer.set(create_timer(KEEPALIVE_INTERVAL).fuse());
                                     }
                                     _ = create_timer(WRITE_TIMEOUT).fuse() => {
-                                        tracing::trace!(%connection_id, "outgoing rpc message: writing timed out");
                                         anyhow::bail!("timed out writing message");
                                     }
                                 }
                             }
                             None => {
-                                tracing::trace!(%connection_id, "outgoing rpc message: channel closed");
                                 return Ok(())
                             },
                         },
                         _ = keepalive_timer => {
-                            tracing::trace!(%connection_id, "keepalive interval: pinging");
                             futures::select_biased! {
                                 result = writer.write(Message::Ping).fuse() => {
-                                    tracing::trace!(%connection_id, "keepalive interval: done pinging");
                                     result.context("failed to send keepalive")?;
-                                    tracing::trace!(%connection_id, "keepalive interval: resetting after pinging");
                                     keepalive_timer.set(create_timer(KEEPALIVE_INTERVAL).fuse());
                                 }
                                 _ = create_timer(WRITE_TIMEOUT).fuse() => {
-                                    tracing::trace!(%connection_id, "keepalive interval: pinging timed out");
                                     anyhow::bail!("timed out sending keepalive");
                                 }
                             }
                         }
                         incoming = read_message => {
                             let incoming = incoming.context("error reading rpc message from socket")?;
-                            tracing::trace!(%connection_id, "incoming rpc message: received");
-                            tracing::trace!(%connection_id, "receive timeout: resetting");
                             receive_timeout.set(create_timer(RECEIVE_TIMEOUT).fuse());
                             if let (Message::Envelope(incoming), received_at) = incoming {
-                                tracing::trace!(%connection_id, "incoming rpc message: processing");
                                 futures::select_biased! {
                                     result = incoming_tx.send((incoming, received_at)).fuse() => match result {
-                                        Ok(_) => {
-                                            tracing::trace!(%connection_id, "incoming rpc message: processed");
-                                        }
+                                        Ok(_) => {}
                                         Err(_) => {
-                                            tracing::trace!(%connection_id, "incoming rpc message: channel closed");
                                             return Ok(())
                                         }
                                     },
                                     _ = create_timer(WRITE_TIMEOUT).fuse() => {
-                                        tracing::trace!(%connection_id, "incoming rpc message: processing timed out");
                                         anyhow::bail!("timed out processing incoming message");
                                     }
                                 }
@@ -245,7 +224,6 @@ impl Peer {
                             break;
                         },
                         _ = receive_timeout => {
-                            tracing::trace!(%connection_id, "receive timeout: delay between messages too long");
                             anyhow::bail!("delay between messages too long");
                         }
                     }
@@ -263,19 +241,7 @@ impl Peer {
             let response_channels = response_channels.clone();
             let stream_response_channels = stream_response_channels.clone();
             async move {
-                let message_id = incoming.id;
-                tracing::trace!(?incoming, "incoming message future: start");
-                let _end = util::defer(move || {
-                    tracing::trace!(%connection_id, message_id, "incoming message future: end");
-                });
-
                 if let Some(responding_to) = incoming.responding_to {
-                    tracing::trace!(
-                        %connection_id,
-                        message_id,
-                        responding_to,
-                        "incoming response: received"
-                    );
                     let response_channel =
                         response_channels.lock().as_mut()?.remove(&responding_to);
                     let terminal_stream_response = matches!(
@@ -298,39 +264,14 @@ impl Peer {
 
                     if let Some(tx) = response_channel {
                         let requester_resumed = oneshot::channel();
-                        if let Err(error) = tx.send((incoming, received_at, requester_resumed.0)) {
-                            tracing::trace!(
-                                %connection_id,
-                                message_id,
-                                responding_to = responding_to,
-                                ?error,
-                                "incoming response: request future dropped",
-                            );
+                        if let Err(_) = tx.send((incoming, received_at, requester_resumed.0)) {
+                            // do nothing
                         }
 
-                        tracing::trace!(
-                            %connection_id,
-                            message_id,
-                            responding_to,
-                            "incoming response: waiting to resume requester"
-                        );
                         let _ = requester_resumed.1.await;
-                        tracing::trace!(
-                            %connection_id,
-                            message_id,
-                            responding_to,
-                            "incoming response: requester resumed"
-                        );
                     } else if let Some(tx) = stream_response_channel {
                         let requester_resumed = oneshot::channel();
-                        if let Err(error) = tx.unbounded_send((Ok(incoming), requester_resumed.0)) {
-                            tracing::debug!(
-                                %connection_id,
-                                message_id,
-                                responding_to = responding_to,
-                                ?error,
-                                "incoming stream response: request future dropped",
-                            );
+                        if let Err(_) = tx.unbounded_send((Ok(incoming), requester_resumed.0)) {
                             // The consumer has gone away, so drop the bookkeeping
                             // for this stream rather than letting it accumulate
                             // every subsequent message until a terminal frame.
@@ -340,32 +281,12 @@ impl Peer {
                         } else {
                             let _ = requester_resumed.1.await;
                         }
-                    } else {
-                        let message_type = proto::build_typed_envelope(
-                            connection_id.into(),
-                            received_at,
-                            incoming,
-                        )
-                        .map(|p| p.payload_type_name());
-                        tracing::warn!(
-                            %connection_id,
-                            message_id,
-                            responding_to,
-                            message_type,
-                            "incoming response: unknown request"
-                        );
                     }
 
                     None
                 } else {
-                    tracing::trace!(%connection_id, message_id, "incoming message: received");
                     proto::build_typed_envelope(connection_id.into(), received_at, incoming)
                         .or_else(|| {
-                            tracing::error!(
-                                %connection_id,
-                                message_id,
-                                "unable to construct a typed envelope"
-                            );
                             None
                         })
                 }

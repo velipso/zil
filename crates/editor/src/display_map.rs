@@ -113,7 +113,6 @@ use sum_tree::{Bias};
 use text::{BufferId, LineIndent, Patch};
 use ui::{SharedString, px};
 use unicode_segmentation::UnicodeSegmentation;
-use ztracing::instrument;
 
 use std::cell::RefCell;
 use std::collections::hash_map::Entry;
@@ -415,7 +414,6 @@ impl DisplayMap {
         })
     }
 
-    #[instrument(skip_all)]
     pub fn snapshot(&mut self, cx: &mut Context<Self>) -> DisplaySnapshot {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
         let companion_wrap_data = self.companion.as_ref().and_then(|(companion_dm, _)| {
@@ -505,7 +503,6 @@ impl DisplayMap {
         self.crease_map.snapshot()
     }
 
-    #[instrument(skip_all)]
     pub fn set_state(&mut self, other: &DisplaySnapshot, cx: &mut Context<Self>) {
         self.fold(
             other
@@ -525,7 +522,6 @@ impl DisplayMap {
     }
 
     /// Creates folds for the given creases.
-    #[instrument(skip_all)]
     pub fn fold<T: Clone + ToOffset>(&mut self, creases: Vec<Crease<T>>, cx: &mut Context<Self>) {
         if self.companion().is_some() {
             return;
@@ -599,7 +595,6 @@ impl DisplayMap {
     }
 
     /// Removes any folds with the given ranges.
-    #[instrument(skip_all)]
     pub fn remove_folds_with_type<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -629,7 +624,6 @@ impl DisplayMap {
     }
 
     /// Removes any folds whose ranges intersect any of the given ranges.
-    #[instrument(skip_all)]
     pub fn unfold_intersecting<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -666,7 +660,6 @@ impl DisplayMap {
         self_new_wrap_snapshot
     }
 
-    #[instrument(skip_all)]
     pub fn disable_header_for_buffer(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
         self.block_map
@@ -674,7 +667,6 @@ impl DisplayMap {
             .disable_header_for_buffer(buffer_id);
     }
 
-    #[instrument(skip_all)]
     pub fn fold_buffers(
         &mut self,
         buffer_ids: impl IntoIterator<Item = language::BufferId>,
@@ -700,7 +692,6 @@ impl DisplayMap {
         )
     }
 
-    #[instrument(skip_all)]
     pub fn unfold_buffers(
         &mut self,
         buffer_ids: impl IntoIterator<Item = language::BufferId>,
@@ -726,17 +717,14 @@ impl DisplayMap {
         )
     }
 
-    #[instrument(skip_all)]
     pub(crate) fn is_buffer_folded(&self, buffer_id: language::BufferId) -> bool {
         self.block_map.folded_buffers.contains(&buffer_id)
     }
 
-    #[instrument(skip_all)]
     pub(crate) fn folded_buffers(&self) -> &HashSet<BufferId> {
         &self.block_map.folded_buffers
     }
 
-    #[instrument(skip_all)]
     pub fn insert_creases(
         &mut self,
         creases: impl IntoIterator<Item = Crease<Anchor>>,
@@ -746,7 +734,6 @@ impl DisplayMap {
         self.crease_map.insert(creases, &snapshot)
     }
 
-    #[instrument(skip_all)]
     pub fn remove_creases(
         &mut self,
         crease_ids: impl IntoIterator<Item = CreaseId>,
@@ -824,7 +811,6 @@ impl DisplayMap {
         !self.lsp_folding_crease_ids.is_empty()
     }
 
-    #[instrument(skip_all)]
     pub fn insert_blocks(
         &mut self,
         blocks: impl IntoIterator<Item = BlockProperties<Anchor>>,
@@ -847,7 +833,6 @@ impl DisplayMap {
         )
     }
 
-    #[instrument(skip_all)]
     pub fn resize_blocks(&mut self, heights: HashMap<CustomBlockId, u32>, cx: &mut Context<Self>) {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
@@ -867,12 +852,10 @@ impl DisplayMap {
         )
     }
 
-    #[instrument(skip_all)]
     pub fn replace_blocks(&mut self, renderers: HashMap<CustomBlockId, RenderBlock>) {
         self.block_map.replace_blocks(renderers);
     }
 
-    #[instrument(skip_all)]
     pub fn remove_blocks(&mut self, ids: HashSet<CustomBlockId>, cx: &mut Context<Self>) {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
@@ -892,7 +875,6 @@ impl DisplayMap {
         )
     }
 
-    #[instrument(skip_all)]
     pub fn row_for_block(
         &mut self,
         block_id: CustomBlockId,
@@ -943,7 +925,6 @@ impl DisplayMap {
         Some(DisplayRow(block_row.0))
     }
 
-    #[instrument(skip_all)]
     pub fn highlight_text(
         &mut self,
         key: HighlightKey,
@@ -981,7 +962,6 @@ impl DisplayMap {
         }
     }
 
-    #[instrument(skip_all)]
     pub fn text_highlights(&self, key: HighlightKey) -> Option<(HighlightStyle, &[Range<Anchor>])> {
         let highlights = self.text_highlights.get(&key)?;
         Some((highlights.0, &highlights.1))
@@ -1030,7 +1010,6 @@ impl DisplayMap {
             .update(cx, |map, cx| map.set_wrap_width(width, cx))
     }
 
-    #[instrument(skip_all)]
     pub fn update_fold_widths(
         &mut self,
         widths: impl IntoIterator<Item = (ChunkRendererId, Pixels)>,
@@ -1061,7 +1040,6 @@ impl DisplayMap {
         widths_changed
     }
 
-    #[instrument(skip_all)]
     fn tab_size(buffer: &Entity<MultiBuffer>, cx: &App) -> NonZeroU32 {
         buffer.read(cx).as_singleton().read(cx).tab_size()
     }
@@ -1103,7 +1081,6 @@ pub struct HighlightedChunk<'a> {
 }
 
 impl<'a> HighlightedChunk<'a> {
-    #[instrument(skip_all)]
     fn highlight_invisibles(
         self,
         editor_style: &'a EditorStyle,
@@ -1284,7 +1261,6 @@ impl DisplaySnapshot {
         self.buffer_snapshot().widest_line_number()
     }
 
-    #[instrument(skip_all)]
     pub fn prev_line_boundary(&self, mut point: MultiBufferPoint) -> (Point, DisplayPoint) {
         loop {
             let mut inlay_point = self.inlay_snapshot().to_inlay_point(point);
@@ -1303,7 +1279,6 @@ impl DisplaySnapshot {
         }
     }
 
-    #[instrument(skip_all)]
     pub fn next_line_boundary(
         &self,
         mut point: MultiBufferPoint,
@@ -1342,7 +1317,6 @@ impl DisplaySnapshot {
         new_start..new_end
     }
 
-    #[instrument(skip_all)]
     pub fn point_to_display_point(&self, point: MultiBufferPoint, bias: Bias) -> DisplayPoint {
         let inlay_point = self.inlay_snapshot().to_inlay_point(point);
         let fold_point = self.fold_snapshot().to_fold_point(inlay_point, bias);
@@ -1404,7 +1378,6 @@ impl DisplaySnapshot {
             .anchor_at(point.to_offset(self, bias), bias)
     }
 
-    #[instrument(skip_all)]
     fn display_point_to_inlay_point(&self, point: DisplayPoint, bias: Bias) -> InlayPoint {
         let block_point = point.0;
         let wrap_point = self.block_snapshot.to_wrap_point(block_point, bias);
@@ -1416,7 +1389,6 @@ impl DisplaySnapshot {
         fold_point.to_inlay_point(self.fold_snapshot())
     }
 
-    #[instrument(skip_all)]
     pub fn display_point_to_fold_point(&self, point: DisplayPoint, bias: Bias) -> FoldPoint {
         let block_point = point.0;
         let wrap_point = self.block_snapshot.to_wrap_point(block_point, bias);
@@ -1426,7 +1398,6 @@ impl DisplaySnapshot {
             .0
     }
 
-    #[instrument(skip_all)]
     pub fn fold_point_to_display_point(&self, fold_point: FoldPoint) -> DisplayPoint {
         let tab_point = self.tab_snapshot().fold_point_to_tab_point(fold_point);
         let wrap_point = self.wrap_snapshot().tab_point_to_wrap_point(tab_point);
@@ -1439,7 +1410,6 @@ impl DisplaySnapshot {
     }
 
     /// Returns text chunks starting at the given display row until the end of the file
-    #[instrument(skip_all)]
     pub fn text_chunks(&self, display_row: DisplayRow) -> impl Iterator<Item = &str> {
         self.block_snapshot
             .chunks(
@@ -1455,7 +1425,6 @@ impl DisplaySnapshot {
     }
 
     /// Returns text chunks starting at the end of the given display row in reverse until the start of the file
-    #[instrument(skip_all)]
     pub fn reverse_text_chunks(&self, display_row: DisplayRow) -> impl Iterator<Item = &str> {
         (0..=display_row.0).rev().flat_map(move |row| {
             self.block_snapshot
@@ -1475,7 +1444,6 @@ impl DisplaySnapshot {
         })
     }
 
-    #[instrument(skip_all)]
     pub fn chunks(
         &self,
         display_rows: Range<DisplayRow>,
@@ -1492,7 +1460,6 @@ impl DisplaySnapshot {
         )
     }
 
-    #[instrument(skip_all)]
     pub fn highlighted_chunks<'a>(
         &'a self,
         display_rows: Range<DisplayRow>,
@@ -1590,7 +1557,6 @@ impl DisplaySnapshot {
         highlights
     }
 
-    #[instrument(skip_all)]
     pub fn layout_row(
         &self,
         display_row: DisplayRow,
@@ -1659,7 +1625,6 @@ impl DisplaySnapshot {
         layout_line.closest_index_for_x(x) as u32
     }
 
-    #[instrument(skip_all)]
     pub fn grapheme_at(&self, mut point: DisplayPoint) -> Option<SharedString> {
         point = DisplayPoint(self.block_snapshot.clip_point(point.0, Bias::Left));
         let chars = self
@@ -1885,7 +1850,6 @@ impl DisplaySnapshot {
         }
     }
 
-    #[instrument(skip_all)]
     pub fn crease_for_buffer_row(&self, buffer_row: MultiBufferRow) -> Option<Crease<Point>> {
         let start =
             MultiBufferPoint::new(buffer_row.0, self.buffer_snapshot().line_len(buffer_row));
@@ -2002,7 +1966,6 @@ impl DisplaySnapshot {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    #[instrument(skip_all)]
     pub fn text_highlight_ranges(
         &self,
         key: HighlightKey,
@@ -2011,7 +1974,6 @@ impl DisplaySnapshot {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    #[instrument(skip_all)]
     pub fn all_text_highlight_ranges(
         &self,
         f: &dyn Fn(&HighlightKey) -> bool,
@@ -2049,7 +2011,6 @@ impl DisplaySnapshot {
     ///
     /// This moves by buffer rows instead of display rows, a distinction that is
     /// important when soft wrapping is enabled.
-    #[instrument(skip_all)]
     pub fn start_of_relative_buffer_row(&self, point: DisplayPoint, times: isize) -> DisplayPoint {
         let start = self.display_point_to_fold_point(point, Bias::Left);
         let target = start.row() as isize + times;

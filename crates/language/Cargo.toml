@@ -57,13 +57,11 @@ task.workspace = true
 text.workspace = true
 theme.workspace = true
 toml.workspace = true
-tracing.workspace = true
 tree-sitter.workspace = true
 unicase = "2.6"
 util.workspace = true
 watch.workspace = true
 zlog.workspace = true
-ztracing.workspace = true
 diffy = "0.4.2"
 
 [dev-dependencies]
@@ -87,6 +85,3 @@ theme_settings.workspace = true
 [[bench]]
 name = "highlight_map"
 harness = false
-
-[package.metadata.cargo-machete]
-ignored = ["tracing"]

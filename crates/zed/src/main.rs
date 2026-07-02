@@ -236,7 +236,6 @@ fn main() {
             zlog::init_output_stdout();
         };
     }
-    ztracing::init();
 
     let version = option_env!("ZED_BUILD_ID");
     let app_commit_sha =

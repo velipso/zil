@@ -71,7 +71,6 @@ text.workspace = true
 time.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
-ztracing.workspace = true
 unicode-segmentation.workspace = true
 unicode-script.workspace = true
 unindent = { workspace = true, optional = true }

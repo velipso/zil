@@ -283,7 +283,6 @@ impl BufferDiffSnapshot {
         &self.inner.buffer_snapshot
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn hunks_intersecting_range<'a>(
         &'a self,
         range: Range<Anchor>,
@@ -1737,7 +1736,6 @@ impl BufferDiff {
         })
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn language_changed(
         &mut self,
         language: Option<Arc<Language>>,

@@ -325,7 +325,6 @@ impl SyntaxSnapshot {
         self.update_count
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn interpolate(&mut self, text: &BufferSnapshot) {
         let edits = text
             .anchored_edits_since::<Dimensions<usize, Point>>(&self.interpolated_version)
@@ -445,7 +444,6 @@ impl SyntaxSnapshot {
         self.layers = layers;
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn reparse(
         &mut self,
         text: &BufferSnapshot,
@@ -455,7 +453,6 @@ impl SyntaxSnapshot {
         self.reparse_(text, registry, root_language, None).ok();
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn reparse_with_timeout(
         &mut self,
         text: &BufferSnapshot,
@@ -466,7 +463,6 @@ impl SyntaxSnapshot {
         self.reparse_(text, registry, root_language, Some(budget))
     }
 
-    #[ztracing::instrument(skip_all, fields(lang = root_language.config.name.0.as_str()))]
     fn reparse_(
         &mut self,
         text: &BufferSnapshot,
@@ -530,7 +526,6 @@ impl SyntaxSnapshot {
         Ok(())
     }
 
-    #[ztracing::instrument(skip_all)]
     fn reparse_with_ranges(
         &mut self,
         text: &BufferSnapshot,
@@ -1499,7 +1494,6 @@ impl std::fmt::Display for ParseTimeout {
     }
 }
 
-#[ztracing::instrument(skip_all)]
 fn parse_text(
     grammar: &Grammar,
     text: &Rope,
@@ -1552,7 +1546,6 @@ fn parse_text(
     })
 }
 
-#[ztracing::instrument(skip_all)]
 fn get_injections(
     config: &InjectionConfig,
     text: &BufferSnapshot,
@@ -1784,7 +1777,6 @@ pub(crate) fn splice_included_ranges(
 /// different lines. For performance, only iterate through the given range of
 /// indices. All of the ranges in the array are relative to a given start byte
 /// and point.
-#[ztracing::instrument(skip_all)]
 fn insert_newlines_between_ranges(
     indices: Range<usize>,
     ranges: &mut Vec<tree_sitter::Range>,

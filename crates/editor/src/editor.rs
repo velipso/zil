@@ -2800,8 +2800,6 @@ impl Editor {
         }
         Some((query, selection_anchor_range))
     }
-
-    #[ztracing::instrument(skip_all)]
     fn update_selection_occurrence_highlights(
         &mut self,
         multi_buffer_snapshot: MultiBufferSnapshot,
@@ -2887,8 +2885,6 @@ impl Editor {
                 .log_err();
         })
     }
-
-    #[ztracing::instrument(skip_all)]
     fn refresh_outline_symbols_at_cursor(&mut self, cx: &mut Context<Editor>) {
         if !self.lsp_data_enabled() {
             return;
@@ -2918,8 +2914,6 @@ impl Editor {
                 });
         }
     }
-
-    #[ztracing::instrument(skip_all)]
     fn refresh_selected_text_highlights(
         &mut self,
         snapshot: &DisplaySnapshot,

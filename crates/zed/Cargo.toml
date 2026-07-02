@@ -12,7 +12,6 @@ default-run = "zed"
 workspace = true
 
 [features]
-tracy = ["ztracing/tracy"]
 # LEAK_BACKTRACE=1 cargo run --features zed/track-project-leak --profile release-fast
 track-project-leak = ["gpui/leak-detection"]
 test-support = [
@@ -120,7 +119,6 @@ theme_settings.workspace = true
 time.workspace = true
 title_bar.workspace = true
 toolchain_selector.workspace = true
-tracing.workspace = true
 ui.workspace = true
 ui_prompt.workspace = true
 url.workspace = true
@@ -133,7 +131,6 @@ zed_actions.workspace = true
 zed_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
-ztracing.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows.workspace = true
@@ -208,4 +205,4 @@ osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zed"]
 
 [package.metadata.cargo-machete]
-ignored = ["profiling", "zstd", "tracing"]
+ignored = ["profiling", "zstd"]
