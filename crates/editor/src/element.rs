@@ -80,8 +80,6 @@ use workspace::{
 #[derive(Clone, Copy, Default)]
 struct LineHighlightSpec {
     selection: bool,
-    breakpoint: bool,
-    _active_stack_frame: bool,
 }
 
 #[derive(Debug)]
@@ -1555,12 +1553,8 @@ impl EditorElement {
 
                 let color = active_rows
                     .get(&display_row)
-                    .map(|spec| {
-                        if spec.breakpoint {
-                            cx.theme().colors().debugger_accent
-                        } else {
-                            cx.theme().colors().editor_active_line_number
-                        }
+                    .map(|_| {
+                        cx.theme().colors().editor_active_line_number
                     })
                     .unwrap_or_else(|| cx.theme().colors().editor_line_number);
                 let shaped_line =

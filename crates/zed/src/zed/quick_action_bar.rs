@@ -13,6 +13,7 @@ use ui::{
 use workspace::{
     ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, item::ItemHandle,
 };
+use rope::Point;
 
 pub struct QuickActionBar {
     active_item: Option<Box<dyn ItemHandle>>,
@@ -68,6 +69,17 @@ impl Render for QuickActionBar {
         let Some(editor) = self.active_editor() else {
             return div().id("empty quick action bar");
         };
+
+        let row_column = editor.update(cx, |editor, cx| {
+            if editor.selections.count() != 0 {
+                let map = editor.display_snapshot(cx);
+                let newest = editor.selections.newest::<Point>(&map);
+                let point = newest.head();
+                format!("{}:{}", point.row + 1, point.column + 1)
+            } else {
+                format!("?:?")
+            }
+        });
 
         let editor_value = editor.read(cx);
         let minimap_enabled = editor_value.minimap().is_some();
@@ -375,6 +387,17 @@ impl Render for QuickActionBar {
         h_flex()
             .id("quick action bar")
             .gap(DynamicSpacing::Base01.rems(cx))
+            .child(ui::Button::new("go-to-line", row_column).size(ButtonSize::Compact).on_click({
+                let editor_focus_handle = editor.focus_handle(cx);
+                move |_ev, window, cx| {
+                    editor_focus_handle.dispatch_action(
+                        &editor::actions::ToggleGoToLine,
+                        window,
+                        cx
+                    );
+                }
+            }))
+            .gap_1()
             .child(editor_settings_dropdown)
     }
 }
