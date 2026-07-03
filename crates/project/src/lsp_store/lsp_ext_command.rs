@@ -2,7 +2,7 @@ use crate::{
     LocationLink,
     lsp_command::{
         LspCommand,
-        location_links_from_lsp, location_links_from_proto,
+        location_links_from_lsp,
         location_links_to_proto,
     },
     lsp_store::LspStore,
@@ -486,12 +486,12 @@ impl LspCommand for GoToParentModule {
 
     async fn response_from_proto(
         self,
-        message: proto::LspExtGoToParentModuleResponse,
-        lsp_store: Entity<LspStore>,
+        _message: proto::LspExtGoToParentModuleResponse,
+        _lsp_store: Entity<LspStore>,
         _: Entity<Buffer>,
-        cx: AsyncApp,
+        _cx: AsyncApp,
     ) -> anyhow::Result<Vec<LocationLink>> {
-        location_links_from_proto(message.links, lsp_store, cx).await
+        todo!("GoToParentModule");
     }
 
     fn buffer_id_from_proto(message: &proto::LspExtGoToParentModule) -> Result<BufferId> {

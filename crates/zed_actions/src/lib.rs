@@ -56,8 +56,6 @@ actions!(
         OpenKeymap,
         /// Opens account settings.
         OpenAccountSettings,
-        /// Opens server settings.
-        OpenServerSettings,
         /// Quits the application.
         Quit,
         /// Shows information about Zed.

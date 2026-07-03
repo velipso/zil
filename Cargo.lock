@@ -1568,7 +1568,6 @@ dependencies = [
 name = "command_palette"
 version = "0.1.0"
 dependencies = [
- "client",
  "collections",
  "command_palette_hooks",
  "editor",
@@ -6155,7 +6154,6 @@ name = "notifications"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client",
  "component",
  "futures-lite 1.13.0",
  "gpui",
@@ -10014,7 +10012,6 @@ name = "title_bar"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
- "client",
  "gpui",
  "notifications",
  "platform_title_bar",

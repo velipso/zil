@@ -683,7 +683,7 @@ impl LogStore {
                                     project_id,
                                     language_server_id: id.to_proto(),
                                     message: text.clone(),
-                                    log_type: Some(kind.to_proto()),
+                                    log_type: None,
                                 })
                                 .ok();
                         }

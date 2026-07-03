@@ -27,7 +27,6 @@ use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 pub use open_listener::*;
 use paths::local_settings_file_relative_path;
-use project::{ProjectItem};
 use quick_action_bar::QuickActionBar;
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rope::Rope;
@@ -63,7 +62,7 @@ use workspace::{
 };
 use workspace::{Pane};
 use zed_actions::{
-    About, OpenAccountSettings, OpenBrowser, OpenDocs, OpenServerSettings, OpenSettingsFile,
+    About, OpenAccountSettings, OpenBrowser, OpenDocs, OpenSettingsFile,
     OpenZedUrl, Quit,
 };
 
@@ -516,7 +515,7 @@ fn register_actions(
     app_state: Arc<AppState>,
     workspace: &mut Workspace,
     _: &mut Window,
-    cx: &mut Context<Workspace>,
+    _cx: &mut Context<Workspace>,
 ) {
     workspace
         .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
@@ -741,38 +740,6 @@ fn register_actions(
                 .detach_and_log_err(cx);
             }
         });
-
-    if workspace.project().read(cx).is_via_remote_server() {
-        workspace.register_action({
-            move |workspace, _: &OpenServerSettings, window, cx| {
-                let open_server_settings = workspace
-                    .project()
-                    .update(cx, |project, cx| project.open_server_settings(cx));
-
-                cx.spawn_in(window, async move |workspace, cx| {
-                    let buffer = open_server_settings.await?;
-
-                    workspace
-                        .update_in(cx, |workspace, window, cx| {
-                            workspace.open_path(
-                                buffer
-                                    .read(cx)
-                                    .project_path(cx)
-                                    .expect("Settings file must have a location"),
-                                None,
-                                true,
-                                window,
-                                cx,
-                            )
-                        })?
-                        .await?;
-
-                    anyhow::Ok(())
-                })
-                .detach_and_log_err(cx);
-            }
-        });
-    }
 }
 
 fn initialize_pane(

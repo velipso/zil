@@ -20,7 +20,6 @@ test-support = [
 
 [dependencies]
 anyhow.workspace = true
-client.workspace = true
 futures-lite.workspace = true
 component.workspace = true
 gpui.workspace = true
@@ -33,7 +32,6 @@ workspace.workspace = true
 zed_actions.workspace = true
 
 [dev-dependencies]
-client = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 rpc = { workspace = true, features = ["test-support"] }
 util = { workspace = true, features = ["test-support"] }
