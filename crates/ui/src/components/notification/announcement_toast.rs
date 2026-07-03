@@ -1,9 +1,8 @@
-use crate::{ListBulletItem, prelude::*};
-use component::{Component, ComponentScope, example_group, single_example};
+use crate::prelude::*;
 use gpui::{AnyElement, ClickEvent, IntoElement, ParentElement, SharedString};
 use smallvec::SmallVec;
 
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct AnnouncementToast {
     illustration: Option<AnyElement>,
     heading: Option<SharedString>,
@@ -152,45 +151,5 @@ impl RenderOnce for AnnouncementToast {
                         .on_click(self.dismiss_on_click),
                 ),
             )
-    }
-}
-
-impl Component for AnnouncementToast {
-    fn scope() -> ComponentScope {
-        ComponentScope::Notification
-    }
-
-    fn description() -> &'static str {
-        "A special toast for announcing new and exciting features."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        let examples = vec![single_example(
-            "Basic",
-            div()
-                .w_80()
-                .child(
-                    AnnouncementToast::new()
-                        .heading("Introducing Parallel Agents")
-                        .description("Run multiple agent threads simultaneously across projects.")
-                        .bullet_item(ListBulletItem::new(
-                            "Mix and match Zed's agent with any ACP-compatible agent",
-                        ))
-                        .bullet_item(ListBulletItem::new(
-                            "Optional worktree isolation keeps agents from conflicting",
-                        ))
-                        .bullet_item(ListBulletItem::new(
-                            "Updated workspace layout designed for agentic workflows",
-                        ))
-                        .primary_action_label("Try Now")
-                        .secondary_action_label("Learn More"),
-                )
-                .into_any_element(),
-        )];
-
-        v_flex()
-            .gap_6()
-            .child(example_group(examples).vertical())
-            .into_any_element()
     }
 }

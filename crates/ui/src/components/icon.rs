@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use gpui::{AnimationElement, AnyElement, Hsla, IntoElement, Rems, Transformation, img, svg};
+use gpui::{AnimationElement, Hsla, IntoElement, Rems, Transformation, img, svg};
 pub use icons::*;
 
 use crate::traits::transformable::Transformable;
@@ -122,7 +122,7 @@ enum IconSource {
     ExternalSvg(SharedString),
 }
 
-#[derive(Clone, IntoElement, RegisterComponent)]
+#[derive(Clone, IntoElement)]
 pub struct Icon {
     source: IconSource,
     color: Color,
@@ -275,62 +275,5 @@ impl RenderOnce for IconWithIndicator {
                         .child(indicator),
                 )
             })
-    }
-}
-
-impl Component for Icon {
-    fn scope() -> ComponentScope {
-        ComponentScope::Images
-    }
-
-    fn description() -> &'static str {
-        "A versatile icon component that supports SVG and image-based icons \
-        with customizable size, color, and transformations."
-    }
-
-    fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
-        v_flex()
-            .gap_6()
-            .children(vec![
-                example_group_with_title(
-                    "Sizes",
-                    vec![single_example(
-                        "XSmall, Small, Default, Large",
-                        h_flex()
-                            .gap_1()
-                            .child(Icon::new(IconName::Star).size(IconSize::XSmall))
-                            .child(Icon::new(IconName::Star).size(IconSize::Small))
-                            .child(Icon::new(IconName::Star))
-                            .child(Icon::new(IconName::Star).size(IconSize::XLarge))
-                            .into_any_element(),
-                    )],
-                ),
-                example_group(vec![single_example(
-                    "All Icons",
-                    h_flex()
-                        .image_cache(gpui::retain_all("all icons"))
-                        .flex_wrap()
-                        .gap_2()
-                        .children(<IconName as strum::IntoEnumIterator>::iter().map(
-                            |icon_name: IconName| {
-                                let name: SharedString = format!("{icon_name:?}").into();
-                                v_flex()
-                                    .min_w_0()
-                                    .w_24()
-                                    .p_1p5()
-                                    .gap_2()
-                                    .border_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                                    .bg(cx.theme().colors().element_disabled)
-                                    .rounded_sm()
-                                    .items_center()
-                                    .child(Icon::new(icon_name))
-                                    .child(Label::new(name).size(LabelSize::XSmall).truncate())
-                            },
-                        ))
-                        .into_any_element(),
-                )]),
-            ])
-            .into_any_element()
     }
 }

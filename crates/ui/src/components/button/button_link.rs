@@ -12,7 +12,7 @@ use crate::{ButtonLike, prelude::*};
 ///
 /// let button_link = ButtonLink::new("Click me", "https://example.com");
 /// ```
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct ButtonLink {
     label: SharedString,
     label_size: LabelSize,
@@ -72,29 +72,6 @@ impl RenderOnce for ButtonLink {
                     }),
             )
             .on_click(move |_, _, cx| cx.open_url(&self.link))
-            .into_any_element()
-    }
-}
-
-impl Component for ButtonLink {
-    fn scope() -> ComponentScope {
-        ComponentScope::Navigation
-    }
-
-    fn description() -> &'static str {
-        "A button that opens a URL."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        v_flex()
-            .gap_6()
-            .child(
-                example_group(vec![single_example(
-                    "Simple",
-                    ButtonLink::new("zed.dev", "https://zed.dev").into_any_element(),
-                )])
-                .vertical(),
-            )
             .into_any_element()
     }
 }

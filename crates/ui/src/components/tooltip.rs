@@ -5,7 +5,6 @@ use crate::prelude::*;
 use crate::{Color, KeyBinding, Label, LabelSize, StyledExt, h_flex, v_flex};
 use gpui::{Action, AnyElement, AnyView, AppContext, FocusHandle, IntoElement, Render};
 
-#[derive(RegisterComponent)]
 pub struct Tooltip {
     title: Title,
     meta: Option<SharedString>,
@@ -266,26 +265,5 @@ impl Render for LinkPreview {
                     .color(Color::Muted),
             )
         })
-    }
-}
-
-impl Component for Tooltip {
-    fn scope() -> ComponentScope {
-        ComponentScope::DataDisplay
-    }
-
-    fn description() -> &'static str {
-        "A tooltip that appears when hovering over an element, \
-        optionally showing a keybinding or additional metadata."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        example_group(vec![single_example(
-            "Text only",
-            Button::new("delete-example", "Delete")
-                .tooltip(Tooltip::text("This is a tooltip!"))
-                .into_any_element(),
-        )])
-        .into_any_element()
     }
 }

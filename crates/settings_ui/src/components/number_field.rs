@@ -253,7 +253,7 @@ impl_numeric_stepper_nonzero_int!(NonZero<usize>, usize);
 
 type OnChangeCallback<T> = Rc<dyn Fn(&T, &mut Window, &mut App) + 'static>;
 
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct NumberField<T: NumberFieldType = usize> {
     id: ElementId,
     value: T,
@@ -317,12 +317,12 @@ impl<T: NumberFieldType> NumberField<T> {
         }
     }
 
-    pub fn min(mut self, min: T) -> Self {
+    pub fn _min(mut self, min: T) -> Self {
         self.min_value = min;
         self
     }
 
-    pub fn max(mut self, max: T) -> Self {
+    pub fn _max(mut self, max: T) -> Self {
         self.max_value = max;
         self
     }
@@ -715,53 +715,5 @@ impl<T: NumberFieldType> RenderOnce for NumberField<T> {
                         )
                     })
             })
-    }
-}
-
-impl Component for NumberField<usize> {
-    fn scope() -> ComponentScope {
-        ComponentScope::Input
-    }
-
-    fn name() -> &'static str {
-        "Number Field"
-    }
-
-    fn description() -> &'static str {
-        "A numeric input element with increment and decrement buttons."
-    }
-
-    fn preview(window: &mut Window, cx: &mut App) -> AnyElement {
-        let default_ex = window.use_state(cx, |_, _| 100.0);
-        let edit_ex = window.use_state(cx, |_, _| 500.0);
-
-        v_flex()
-            .gap_6()
-            .children(vec![
-                single_example(
-                    "Button-Only Number Field",
-                    NumberField::new("number-field", *default_ex.read(cx), window, cx)
-                        .on_change({
-                            let default_ex = default_ex.clone();
-                            move |value, _, cx| default_ex.write(cx, *value)
-                        })
-                        .min(1.0)
-                        .max(100.0)
-                        .into_any_element(),
-                ),
-                single_example(
-                    "Editable Number Field",
-                    NumberField::new("editable-number-field", *edit_ex.read(cx), window, cx)
-                        .on_change({
-                            let edit_ex = edit_ex.clone();
-                            move |value, _, cx| edit_ex.write(cx, *value)
-                        })
-                        .min(100.0)
-                        .max(500.0)
-                        .mode(NumberFieldMode::Edit, cx)
-                        .into_any_element(),
-                ),
-            ])
-            .into_any_element()
     }
 }

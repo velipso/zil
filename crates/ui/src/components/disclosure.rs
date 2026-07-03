@@ -4,7 +4,7 @@ use gpui::{AnyView, ClickEvent, CursorStyle, SharedString};
 
 use crate::prelude::*;
 
-#[derive(IntoElement, RegisterComponent)]
+#[derive(IntoElement)]
 pub struct Disclosure {
     id: ElementId,
     is_open: bool,
@@ -109,45 +109,5 @@ impl RenderOnce for Disclosure {
         .when_some(self.on_toggle_expanded, move |this, on_toggle| {
             this.on_click(move |event, window, cx| on_toggle(event, window, cx))
         })
-    }
-}
-
-impl Component for Disclosure {
-    fn scope() -> ComponentScope {
-        ComponentScope::Input
-    }
-
-    fn description() -> &'static str {
-        "An interactive element used to show or hide content, \
-            typically used in expandable sections or tree-like structures."
-    }
-
-    fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        v_flex()
-            .gap_6()
-            .children(vec![
-                example_group_with_title(
-                    "Disclosure States",
-                    vec![
-                        single_example(
-                            "Closed",
-                            Disclosure::new("closed", false).into_any_element(),
-                        ),
-                        single_example("Open", Disclosure::new("open", true).into_any_element()),
-                    ],
-                ),
-                example_group_with_title(
-                    "Interactive Example",
-                    vec![single_example(
-                        "Toggleable",
-                        v_flex()
-                            .gap_2()
-                            .child(Disclosure::new("interactive", false).into_any_element())
-                            .child(Label::new("Click to toggle"))
-                            .into_any_element(),
-                    )],
-                ),
-            ])
-            .into_any_element()
     }
 }
