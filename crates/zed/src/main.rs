@@ -14,16 +14,15 @@ const _: () = assert!(
 );
 
 use anyhow::{Context as _, Result};
-use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore, parse_zed_link};
+use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore};
 use collections::HashMap;
 use editor::Editor;
 use fs::{Fs, RealFs};
 use futures::StreamExt;
 use git::GitHostingProviderRegistry;
 use gpui::{
-    App, AppContext, Application, AssetSource, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _,
+    App, AppContext, Application, AssetSource, AsyncApp, QuitMode, TaskExt, UpdateGlobal as _,
 };
 use gpui_platform;
 
@@ -34,7 +33,7 @@ use reqwest_client::ReqwestClient;
 use assets::Assets;
 use parking_lot::Mutex;
 use project::trusted_worktrees;
-use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
+use release_channel::{AppCommitSha, AppVersion};
 use session::{AppSession, Session};
 use settings::{Settings, SettingsStore, watch_config_file};
 use std::{
@@ -42,8 +41,7 @@ use std::{
     io::{self, IsTerminal},
     path::Path,
     process,
-    sync::{Arc, LazyLock, OnceLock},
-    time::Instant,
+    sync::{Arc, LazyLock},
 };
 use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
 use theme_settings::load_user_theme;
@@ -57,6 +55,7 @@ use zed::{
 };
 
 use crate::zed::OpenRequestKind;
+use crate::zed::arg_listener::{ArgListenerResult, handle_args, handle_args_exit};
 
 #[cfg(debug_assertions)]
 use ui::prelude::IconName;
@@ -179,43 +178,21 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
         .detach();
     }
 }
-static STARTUP_TIME: OnceLock<Instant> = OnceLock::new();
 
 fn main() {
-    STARTUP_TIME.get_or_init(|| Instant::now());
-
     #[cfg(unix)]
     util::prevent_root_execution();
 
-    let args = Args::parse();
+    let mut args: Vec<String> = std::env::args().collect();
+    let _command = args.remove(0);
+    let _foreground = false; // VELIPSO: set according to flags?
 
     #[cfg(all(not(debug_assertions), target_os = "windows"))]
     unsafe {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 
-        if args.foreground {
+        if _foreground {
             let _ = AttachConsole(ATTACH_PARENT_PROCESS);
-        }
-    }
-
-    if args.dump_all_actions {
-        dump_all_gpui_actions();
-        return;
-    }
-
-    // Set custom data directory.
-    if let Some(dir) = &args.user_data_dir {
-        paths::set_custom_data_dir(dir);
-    }
-
-    #[cfg(target_os = "windows")]
-    match util::get_zed_cli_path() {
-        Ok(path) => askpass::set_askpass_program(path),
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            if std::option_env!("ZED_BUNDLE").is_some() {
-                process::exit(1);
-            }
         }
     }
 
@@ -224,6 +201,17 @@ fn main() {
         files_not_created_on_launch(file_errors);
         return;
     }
+    
+    let mut args_rx = match handle_args(&args) {
+        Ok(ArgListenerResult::Create(rx)) => rx,
+        Ok(ArgListenerResult::Exit) => {
+            return;
+        },
+        Err(err) => {
+            eprintln!("{}", err);
+            return;
+        },
+    };
 
     zlog::init();
 
@@ -288,32 +276,6 @@ fn main() {
     ));
 
     let (open_listener, mut open_rx) = OpenListener::new();
-
-    let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS
-        || *release_channel::RELEASE_CHANNEL == ReleaseChannel::Dev
-    {
-        false
-    } else {
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-        {
-            crate::zed::listen_for_cli_connections(open_listener.clone()).is_err()
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            !crate::zed::windows_only_instance::handle_single_instance(open_listener.clone(), &args)
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            use zed::mac_only_instance::*;
-            ensure_only_instance() != IsOnlyInstance::Yes
-        }
-    };
-    if failed_single_instance_check {
-        println!("zed is already running");
-        return;
-    }
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let git_binary_path =
@@ -541,25 +503,7 @@ fn main() {
         })
         .detach_and_log_err(cx);
 
-        let urls: Vec<_> = args
-            .paths_or_urls
-            .iter()
-            .map(|arg| parse_url_arg(arg, cx))
-            .collect();
-
-        #[cfg(target_os = "windows")]
-        let wsl = args.wsl;
-        #[cfg(not(target_os = "windows"))]
-        let wsl = None;
-
-        if !urls.is_empty() {
-            open_listener.open(RawOpenRequest {
-                urls,
-                wsl,
-                ..Default::default()
-            })
-        }
-
+        /*
         let restore_task = match open_rx
             .try_recv()
             .ok()
@@ -586,11 +530,7 @@ fn main() {
                 }
             }),
         };
-
-        cx.spawn(async move |_cx| {
-            restore_task.await;
-        })
-        .detach();
+        */
 
         let app_state = app_state.clone();
 
@@ -601,6 +541,35 @@ fn main() {
                         handle_open_request(request, app_state.clone(), cx);
                     }
                 });
+            }
+        })
+        .detach();
+
+        cx.on_app_quit(|cx| {
+            cx.background_executor().spawn(async move {
+                handle_args_exit();
+            })
+        })
+        .detach();
+
+        cx.spawn(async move |_cx| {
+            while let Some(args) = args_rx.next().await {
+                let urls: Vec<_> = args
+                    .iter()
+                    .map(|arg| parse_url_arg(arg))
+                    .collect();
+
+                if urls.is_empty() {
+                    open_listener.open(RawOpenRequest {
+                        urls: vec!["zed://open".to_string()],
+                        ..Default::default()
+                    })
+                } else {
+                    open_listener.open(RawOpenRequest {
+                        urls,
+                        ..Default::default()
+                    })
+                }
             }
         })
         .detach();
@@ -793,56 +762,7 @@ fn stdout_is_a_pty() -> bool {
     !*FORCE_CLI_MODE && io::stdout().is_terminal()
 }
 
-#[derive(Parser, Debug)]
-#[command(name = "zed", disable_version_flag = true, max_term_width = 100)]
-struct Args {
-    /// A sequence of space-separated paths or urls that you want to open.
-    ///
-    /// Use `path:line:row` syntax to open a file at a specific location.
-    /// Non-existing paths and directories will ignore `:line:row` suffix.
-    ///
-    /// URLs can either be `file://` or `zed://` scheme, or relative to <https://zed.dev>.
-    paths_or_urls: Vec<String>,
-
-    /// Sets a custom directory for all user data (e.g., database, extensions, logs).
-    ///
-    /// This overrides the default platform-specific data directory location.
-    /// On macOS, the default is `~/Library/Application Support/Zed`.
-    /// On Linux/FreeBSD, the default is `$XDG_DATA_HOME/zed`.
-    /// On Windows, the default is `%LOCALAPPDATA%\Zed`.
-    #[arg(long, value_name = "DIR", verbatim_doc_comment)]
-    user_data_dir: Option<String>,
-
-    /// The username and WSL distribution to use when opening paths. If not specified,
-    /// Zed will attempt to open the paths directly.
-    ///
-    /// The username is optional, and if not specified, the default user for the distribution
-    /// will be used.
-    ///
-    /// Example: `me@Ubuntu` or `Ubuntu`.
-    ///
-    /// WARN: You should not fill in this field by hand.
-    #[cfg(target_os = "windows")]
-    #[arg(long, value_name = "USER@DISTRO")]
-    wsl: Option<String>,
-
-    /// Run zed in the foreground, only used on Windows, to match the behavior on macOS.
-    #[arg(long)]
-    #[cfg(target_os = "windows")]
-    #[arg(hide = true)]
-    foreground: bool,
-
-    /// The dock action to perform. This is used on Windows only.
-    #[arg(long)]
-    #[cfg(target_os = "windows")]
-    #[arg(hide = true)]
-    dock_action: Option<usize>,
-
-    #[arg(long, hide = true)]
-    dump_all_actions: bool,
-}
-
-fn parse_url_arg(arg: &str, cx: &App) -> String {
+fn parse_url_arg(arg: &str) -> String {
     match std::fs::canonicalize(Path::new(&arg)) {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
@@ -850,7 +770,6 @@ fn parse_url_arg(arg: &str, cx: &App) -> String {
                 || arg.starts_with("zed://")
                 || arg.starts_with("zed-cli://")
                 || arg.starts_with("ssh://")
-                || parse_zed_link(arg, cx).is_some()
             {
                 arg.into()
             } else {
@@ -955,7 +874,7 @@ fn watch_themes(fs: Arc<dyn fs::Fs>, cx: &mut App) {
     .detach()
 }
 
-fn dump_all_gpui_actions() {
+fn _dump_all_gpui_actions() {
     #[derive(Debug, serde::Serialize)]
     struct ActionDef {
         name: &'static str,

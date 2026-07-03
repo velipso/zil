@@ -7941,6 +7941,7 @@ pub fn open_paths(
         let result = if let Some((existing, target_workspace)) = existing {
             let open_task = existing
                 .update(cx, |multi_workspace, window, cx| {
+                    cx.activate(true);
                     window.activate_window();
                     multi_workspace.activate(target_workspace.clone(), None, window, cx);
                     target_workspace.update(cx, |workspace, cx| {

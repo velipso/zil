@@ -70,14 +70,6 @@ impl std::fmt::Debug for OpenRequestKind {
 }
 
 impl OpenRequest {
-    pub fn is_focus_app_only(&self) -> bool {
-        matches!(self.kind, Some(OpenRequestKind::FocusApp))
-            && self.open_paths.is_empty()
-            && self.remote_connection.is_none()
-            && self.join_channel.is_none()
-            && self.open_channel_notes.is_empty()
-    }
-
     pub fn parse(request: RawOpenRequest, cx: &App) -> Result<Self> {
         let mut this = Self::default();
 

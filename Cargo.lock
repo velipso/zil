@@ -1290,7 +1290,6 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim 0.11.1",
- "terminal_size",
 ]
 
 [[package]]
@@ -6510,16 +6509,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "objc2-io-kit"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
-dependencies = [
- "libc",
- "objc2-core-foundation",
-]
-
-[[package]]
 name = "objc2-metal"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9633,20 +9622,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sysinfo"
-version = "0.37.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16607d5caffd1c07ce073528f9ed972d88db15dd44023fa57142963be3feb11f"
-dependencies = [
- "libc",
- "memchr",
- "ntapi",
- "objc2-core-foundation",
- "objc2-io-kit",
- "windows 0.61.3",
-]
-
-[[package]]
 name = "system-configuration"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9802,16 +9777,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "terminal_size"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60b8cb979cb11c32ce1603f8137b22262a9d131aaa5c37b5678025f22b8becd0"
-dependencies = [
- "rustix 1.1.2",
- "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -12839,11 +12804,9 @@ version = "1.6.3"
 dependencies = [
  "anyhow",
  "ashpd",
- "askpass",
  "assets",
  "breadcrumbs",
  "chrono",
- "clap",
  "cli",
  "client",
  "clock",
@@ -12861,7 +12824,6 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "gpui_tokio",
- "hdrhistogram",
  "http_client",
  "image",
  "image_viewer",
@@ -12895,12 +12857,12 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "serde_json_lenient",
  "session",
  "settings",
  "settings_profile_selector",
  "settings_ui",
  "strum",
- "sysinfo 0.37.2",
  "tab_switcher",
  "task",
  "tempfile",
@@ -12920,7 +12882,6 @@ dependencies = [
  "windows_resources",
  "workspace",
  "zed_actions",
- "zed_env_vars",
  "zlog",
  "zlog_settings",
 ]
@@ -13011,7 +12972,7 @@ dependencies = [
  "rand 0.8.6",
  "screencapturekit",
  "screencapturekit-sys",
- "sysinfo 0.31.4",
+ "sysinfo",
  "tao-core-video-sys",
  "windows 0.61.3",
  "windows-capture",
@@ -13054,13 +13015,6 @@ dependencies = [
  "release_channel",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "zed_env_vars"
-version = "0.1.0"
-dependencies = [
- "env_var",
 ]
 
 [[package]]

@@ -1,14 +1,11 @@
 mod app_menus;
-#[cfg(target_os = "macos")]
-pub(crate) mod mac_only_instance;
+pub(crate) mod arg_listener;
 mod open_listener;
 mod open_url_modal;
 mod quick_action_bar;
 pub mod remote_debug;
 #[cfg(all(target_os = "macos", feature = "visual-tests"))]
 pub mod visual_tests;
-#[cfg(target_os = "windows")]
-pub(crate) mod windows_only_instance;
 
 use anyhow::Context as _;
 pub use app_menus::*;

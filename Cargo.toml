@@ -104,7 +104,6 @@ members = [
     "crates/zed",
     "crates/zed_actions",
     "crates/zed_credentials_provider",
-    "crates/zed_env_vars",
     "crates/zlog",
     "crates/zlog_settings",
 
@@ -235,7 +234,6 @@ worktree = { path = "crates/worktree" }
 zed = { path = "crates/zed" }
 zed_actions = { path = "crates/zed_actions" }
 zed_credentials_provider = { path = "crates/zed_credentials_provider" }
-zed_env_vars = { path = "crates/zed_env_vars" }
 zlog = { path = "crates/zlog" }
 zlog_settings = { path = "crates/zlog_settings" }
 
@@ -277,7 +275,6 @@ bytes = "1.0"
 chardetng = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 ciborium = "0.2"
-clap = { version = "4.4", features = ["derive", "wrap_help"] }
 cocoa = "=0.26.0"
 cocoa-foundation = "=0.2.0"
 const_format = "0.2"
@@ -430,7 +427,6 @@ strsim = "0.11"
 strum = { version = "0.27.2", features = ["derive"] }
 syn = { version = "2.0.101", features = ["full", "extra-traits", "visit-mut"] }
 sys-locale = "0.3.1"
-sysinfo = "0.37.0"
 take-until = "0.2.0"
 tempfile = "3.20.0"
 thiserror = "2.0.12"

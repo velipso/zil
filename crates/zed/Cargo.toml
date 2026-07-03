@@ -51,11 +51,9 @@ required-features = ["visual-tests"]
 
 [dependencies]
 anyhow.workspace = true
-askpass.workspace = true
 assets.workspace = true
 breadcrumbs.workspace = true
 chrono.workspace = true
-clap.workspace = true
 cli.workspace = true
 client.workspace = true
 clock = { workspace = true, optional = true }
@@ -73,12 +71,10 @@ go_to_line.workspace = true
 gpui = { workspace = true, features = ["input-latency-histogram"] }
 gpui_platform = {workspace = true, features=["screen-capture", "font-kit", "wayland", "x11"]}
 gpui_tokio.workspace = true
-hdrhistogram.workspace = true
 http_client.workspace = true
 image = { workspace = true, optional = true }
 image_viewer.workspace = true
 inspector_ui.workspace = true
-itertools.workspace = true
 keymap_editor.workspace = true
 language.workspace = true
 language_model.workspace = true
@@ -105,12 +101,12 @@ search.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_json_lenient.workspace = true
 session.workspace = true
 settings.workspace = true
 settings_profile_selector.workspace = true
 settings_ui.workspace = true
 strum.workspace = true
-sysinfo.workspace = true
 tab_switcher.workspace = true
 task.workspace = true
 tempfile = { workspace = true, optional = true }
@@ -128,7 +124,6 @@ uuid.workspace = true
 which_key.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
-zed_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
 
