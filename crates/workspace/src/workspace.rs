@@ -7717,6 +7717,7 @@ pub fn activate_any_workspace_window(cx: &mut AsyncApp) -> Option<WindowHandle<M
 
         for window in cx.windows() {
             if let Some(workspace_window) = window.downcast::<MultiWorkspace>() {
+                cx.activate(true);
                 workspace_window
                     .update(cx, |_, window, _| window.activate_window())
                     .ok();

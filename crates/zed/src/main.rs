@@ -40,7 +40,7 @@ use std::{
     env,
     io::{self, IsTerminal},
     path::Path,
-    process,
+    process::{self, Command, Stdio},
     sync::{Arc, LazyLock},
 };
 use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
@@ -179,19 +179,62 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     }
 }
 
+fn spawn_in_background(args: &[String]) -> Result<(), String> {
+    let exe = std::env::current_exe()
+        .map_err(|err| format!("Failed to find current executable: {err}"))?;
+
+    let mut command = Command::new(exe);
+
+    command
+        .args(args.iter())
+        .env("ZIL_BACKGROUND_CHILD", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+
+        // Put the GUI child in a new process group so terminal signals
+        // like Ctrl-C don't hit both the launcher and the GUI.
+        command.process_group(0);
+    }
+
+    command
+        .spawn()
+        .map_err(|err| format!("Failed to spawn Zil in background: {err}"))?;
+
+    Ok(())
+}
+
 fn main() {
     #[cfg(unix)]
     util::prevent_root_execution();
 
-    let mut args: Vec<String> = std::env::args().collect();
-    let _command = args.remove(0);
-    let _foreground = false; // VELIPSO: set according to flags?
+    let mut args = Vec::<String>::new();
+    let mut foreground = false;
+    let mut rest_files = false;
+
+    for arg in std::env::args().skip(1) {
+        if rest_files {
+            args.push(arg);
+        } else {
+            if arg == "--" {
+                rest_files = true;
+            } else if arg == "-f" {
+                foreground = true;
+            } else {
+                args.push(arg);
+            }
+        }
+    }
 
     #[cfg(all(not(debug_assertions), target_os = "windows"))]
     unsafe {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 
-        if _foreground {
+        if foreground {
             let _ = AttachConsole(ATTACH_PARENT_PROCESS);
         }
     }
@@ -200,6 +243,17 @@ fn main() {
     if !file_errors.is_empty() {
         files_not_created_on_launch(file_errors);
         return;
+    }
+
+    let in_terminal = stdout_is_a_pty();
+    let is_background_child = std::env::var_os("ZIL_BACKGROUND_CHILD").is_some();
+    if in_terminal && !is_background_child && !foreground {
+        if let Err(err) = spawn_in_background(&args) {
+            eprintln!("Failed to spawn in background: {err}");
+        } else {
+            // successfully spawned in background
+            return;
+        }
     }
     
     let mut args_rx = match handle_args(&args) {
@@ -215,7 +269,7 @@ fn main() {
 
     zlog::init();
 
-    if stdout_is_a_pty() {
+    if in_terminal {
         zlog::init_output_stdout();
     } else {
         let result = zlog::init_output_file(paths::log_file(), Some(paths::old_log_file()));
@@ -238,7 +292,7 @@ fn main() {
         .unwrap();
 
     log::info!(
-        "========== starting zed version {}, sha {} ==========",
+        "========== starting zil version {}, sha {} ==========",
         app_version,
         app_commit_sha
             .as_ref()
@@ -502,35 +556,6 @@ fn main() {
             async move |cx| authenticate(client, cx).await
         })
         .detach_and_log_err(cx);
-
-        /*
-        let restore_task = match open_rx
-            .try_recv()
-            .ok()
-            .and_then(|request| OpenRequest::parse(request, cx).log_err())
-        {
-            Some(request) if request.is_focus_app_only() => cx.spawn({
-                let app_state = app_state.clone();
-                async move |cx| {
-                    if let Err(e) = restore_or_create_workspace(app_state, cx).await {
-                        fail_to_open_window_async(e, cx)
-                    }
-                }
-            }),
-            Some(request) => {
-                handle_open_request(request, app_state.clone(), cx);
-                Task::ready(())
-            }
-            None => cx.spawn({
-                let app_state = app_state.clone();
-                async move |cx| {
-                    if let Err(e) = restore_or_create_workspace(app_state, cx).await {
-                        fail_to_open_window_async(e, cx)
-                    }
-                }
-            }),
-        };
-        */
 
         let app_state = app_state.clone();
 
