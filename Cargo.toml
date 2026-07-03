@@ -14,7 +14,6 @@ members = [
     "crates/collections",
     "crates/command_palette",
     "crates/command_palette_hooks",
-    "crates/component",
     "crates/credentials_provider",
     "crates/editor",
     "crates/encoding_selector",
@@ -139,7 +138,6 @@ cloud_llm_client = { path = "crates/cloud_llm_client" }
 collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
 command_palette_hooks = { path = "crates/command_palette_hooks" }
-component = { path = "crates/component" }
 console = "0.16"
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.4"
@@ -666,7 +664,6 @@ ignored = [
     "cbindgen",
     "prost_build",
     "serde",
-    "component",
     "documented",
     "sea-orm-macros",
 ]

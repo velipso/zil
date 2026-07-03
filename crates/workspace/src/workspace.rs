@@ -643,7 +643,6 @@ pub fn prompt_for_open_path_and_open(
 }
 
 pub fn init(app_state: Arc<AppState>, cx: &mut App) {
-    component::init();
     toast_layer::init(cx);
     history_manager::init(app_state.fs.clone(), cx);
 

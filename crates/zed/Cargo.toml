@@ -59,7 +59,6 @@ client.workspace = true
 clock = { workspace = true, optional = true }
 collections.workspace = true
 command_palette.workspace = true
-component.workspace = true
 editor.workspace = true
 encoding_selector.workspace = true
 env_logger.workspace = true

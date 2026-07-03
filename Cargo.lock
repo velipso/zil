@@ -1601,19 +1601,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "component"
-version = "0.1.0"
-dependencies = [
- "collections",
- "documented",
- "gpui",
- "inventory",
- "parking_lot",
- "strum",
- "theme",
-]
-
-[[package]]
 name = "compression-codecs"
 version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4976,7 +4963,6 @@ dependencies = [
  "anyhow",
  "collections",
  "command_palette",
- "component",
  "editor",
  "fs",
  "fuzzy",
@@ -6152,7 +6138,6 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 name = "notifications"
 version = "0.1.0"
 dependencies = [
- "component",
  "gpui",
  "rpc",
  "sum_tree",
@@ -9016,7 +9001,6 @@ name = "settings_ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "component",
  "editor",
  "fs",
  "futures",
@@ -10413,7 +10397,6 @@ dependencies = [
 name = "ui_input"
 version = "0.1.0"
 dependencies = [
- "component",
  "gpui",
  "ui",
 ]
@@ -10422,7 +10405,6 @@ dependencies = [
 name = "ui_macros"
 version = "0.1.0"
 dependencies = [
- "component",
  "quote",
  "syn 2.0.117",
  "ui",
@@ -12396,7 +12378,6 @@ dependencies = [
  "anyhow",
  "client",
  "collections",
- "component",
  "dirs",
  "fs",
  "futures",
@@ -12802,7 +12783,6 @@ dependencies = [
  "clock",
  "collections",
  "command_palette",
- "component",
  "editor",
  "encoding_selector",
  "env_logger",

@@ -29,7 +29,6 @@ any_vec.workspace = true
 anyhow.workspace = true
 client.workspace = true
 collections.workspace = true
-component.workspace = true
 dirs.workspace = true
 futures-lite.workspace = true
 fs.workspace = true
