@@ -1730,7 +1730,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn minimap_section() -> [SettingsPageItem; 7] {
+    fn minimap_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Minimap"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -1743,97 +1743,6 @@ fn editor_page() -> SettingsPage {
                     },
                     write: |settings_content, value, _| {
                         settings_content.editor.minimap.get_or_insert_default().show = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Display In",
-                description: "Where to show the minimap in the editor.",
-                field: Box::new(SettingField {
-                    json_path: Some("minimap.display_in"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .as_ref()?
-                            .display_in
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .get_or_insert_default()
-                            .display_in = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Thumb",
-                description: "When to show the minimap thumb.",
-                field: Box::new(SettingField {
-                    json_path: Some("minimap.thumb"),
-                    pick: |settings_content| {
-                        settings_content.editor.minimap.as_ref()?.thumb.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .get_or_insert_default()
-                            .thumb = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Thumb Border",
-                description: "Border style for the minimap's scrollbar thumb.",
-                field: Box::new(SettingField {
-                    json_path: Some("minimap.thumb_border"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .as_ref()?
-                            .thumb_border
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .get_or_insert_default()
-                            .thumb_border = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Current Line Highlight",
-                description: "How to highlight the current line in the minimap.",
-                field: Box::new(SettingField {
-                    json_path: Some("minimap.current_line_highlight"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .as_ref()
-                            .and_then(|minimap| minimap.current_line_highlight.as_ref())
-                            .or(settings_content.editor.current_line_highlight.as_ref())
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .minimap
-                            .get_or_insert_default()
-                            .current_line_highlight = value;
                     },
                 }),
                 metadata: None,

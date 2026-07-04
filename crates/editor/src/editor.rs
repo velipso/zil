@@ -53,7 +53,7 @@ pub use display_map::{
 pub use editor_settings::{
     CurrentLineHighlight,
     DocumentColorsRenderMode, EditorSettings, ScrollBeyondLastLine,
-    ScrollbarAxes, SearchSettings, ShowMinimap,
+    ScrollbarAxes, SearchSettings,
 };
 pub use element::{
     CursorLayout, EditorElement, HighlightedRange, HighlightedRangeLine, PointForPosition,
@@ -78,7 +78,6 @@ use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
 use display_map::*;
 use document_colors::LspColorData;
-use editor_settings::{Minimap as MinimapSettings};
 use element::{LineWithInvisibles, PositionMap};
 use futures::{
     FutureExt,
@@ -361,6 +360,11 @@ impl EditorMode {
     fn could_have_scrollbars(&self) -> bool {
         self.is_full()
     }
+
+    #[inline]
+    fn could_have_minimap(&self) -> bool {
+        self.is_full()
+    }
 }
 
 #[derive(Clone)]
@@ -438,80 +442,6 @@ struct ScrollbarMarkerState {
 impl ScrollbarMarkerState {
     fn should_refresh(&self, scrollbar_size: Size<Pixels>) -> bool {
         self.pending_refresh.is_none() && (self.scrollbar_size != scrollbar_size || self.dirty)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum MinimapVisibility {
-    Disabled,
-    Enabled {
-        /// The configuration currently present in the users settings.
-        setting_configuration: bool,
-        /// Whether to override the currently set visibility from the users setting.
-        toggle_override: bool,
-    },
-}
-
-impl MinimapVisibility {
-    fn for_mode(mode: &EditorMode, cx: &App) -> Self {
-        if mode.is_full() {
-            Self::Enabled {
-                setting_configuration: EditorSettings::get_global(cx).minimap.minimap_enabled(),
-                toggle_override: false,
-            }
-        } else {
-            Self::Disabled
-        }
-    }
-
-    fn hidden(&self) -> Self {
-        match *self {
-            Self::Enabled {
-                setting_configuration,
-                ..
-            } => Self::Enabled {
-                setting_configuration,
-                toggle_override: setting_configuration,
-            },
-            Self::Disabled => Self::Disabled,
-        }
-    }
-
-    fn disabled(&self) -> bool {
-        matches!(*self, Self::Disabled)
-    }
-
-    fn settings_visibility(&self) -> bool {
-        match *self {
-            Self::Enabled {
-                setting_configuration,
-                ..
-            } => setting_configuration,
-            _ => false,
-        }
-    }
-
-    fn visible(&self) -> bool {
-        match *self {
-            Self::Enabled {
-                setting_configuration,
-                toggle_override,
-            } => setting_configuration ^ toggle_override,
-            _ => false,
-        }
-    }
-
-    fn toggle_visibility(&self) -> Self {
-        match *self {
-            Self::Enabled {
-                toggle_override,
-                setting_configuration,
-            } => Self::Enabled {
-                setting_configuration,
-                toggle_override: !toggle_override,
-            },
-            Self::Disabled => Self::Disabled,
-        }
     }
 }
 
@@ -756,7 +686,6 @@ pub struct Editor {
     mode: EditorMode,
     breadcrumbs_visibility: BreadcrumbsVisibility,
     show_gutter: bool,
-    minimap_visibility: MinimapVisibility,
     offset_content: bool,
     disable_expand_excerpt_buttons: bool,
     enable_lsp_data: bool,
@@ -1733,7 +1662,6 @@ impl Editor {
             project,
             blink_manager: blink_manager.clone(),
             show_local_selections: true,
-            minimap_visibility: MinimapVisibility::for_mode(&mode, cx),
             offset_content: !matches!(mode, EditorMode::SingleLine),
             breadcrumbs_visibility: BreadcrumbsVisibility::from_settings(cx),
             show_gutter: full_mode,
@@ -1923,8 +1851,11 @@ impl Editor {
         editor.selection_history.mode = SelectionHistoryMode::Normal;
 
         if full_mode {
-            editor.minimap =
-                editor.create_minimap(EditorSettings::get_global(cx).minimap, window, cx);
+            editor.minimap = if editor.should_show_minimap(cx) {
+                Some(editor.create_minimap(window, cx))
+            } else {
+                None
+            };
             editor.colors = Some(LspColorData::new(cx));
             editor.use_document_folding_ranges = true;
 
@@ -5499,21 +5430,6 @@ impl Editor {
         window.show_character_palette();
     }
 
-    pub fn supports_minimap(&self, cx: &App) -> bool {
-        !self.minimap_visibility.disabled() && self.buffer_kind(cx) == ItemBufferKind::Singleton
-    }
-
-    pub fn toggle_minimap(
-        &mut self,
-        _: &ToggleMinimap,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        if self.supports_minimap(cx) {
-            self.set_minimap_visibility(self.minimap_visibility.toggle_visibility(), window, cx);
-        }
-    }
-
     pub fn transact(
         &mut self,
         window: &mut Window,
@@ -5732,17 +5648,6 @@ impl Editor {
 
     fn create_minimap(
         &self,
-        minimap_settings: MinimapSettings,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Entity<Self>> {
-        (minimap_settings.minimap_enabled() && self.buffer_kind(cx) == ItemBufferKind::Singleton)
-            .then(|| self.initialize_new_minimap(minimap_settings, window, cx))
-    }
-
-    fn initialize_new_minimap(
-        &self,
-        minimap_settings: MinimapSettings,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<Self> {
@@ -5773,21 +5678,11 @@ impl Editor {
             font_family: Some(MINIMAP_FONT_FAMILY),
             ..Default::default()
         });
-        minimap.update_minimap_configuration(minimap_settings, cx);
         cx.new(|_| minimap)
     }
 
-    fn update_minimap_configuration(&mut self, minimap_settings: MinimapSettings, cx: &App) {
-        let current_line_highlight = minimap_settings
-            .current_line_highlight
-            .unwrap_or_else(|| EditorSettings::get_global(cx).current_line_highlight);
-        self.set_current_line_highlight(Some(current_line_highlight));
-    }
-
     pub fn minimap(&self) -> Option<&Entity<Self>> {
-        self.minimap
-            .as_ref()
-            .filter(|_| self.minimap_visibility.visible())
+        self.minimap.as_ref()
     }
 
     pub fn set_masked(&mut self, masked: bool, cx: &mut Context<Self>) {
@@ -6733,6 +6628,10 @@ impl Editor {
                     BreadcrumbsVisibility::new(editor_settings.toolbar.breadcrumbs);
             }
             self.cursor_shape = editor_settings.cursor_shape.unwrap_or_default();
+
+            if self.mode.could_have_minimap() {
+                self.set_show_minimap(editor_settings.minimap.show, window, cx);
+            }
         }
 
         if old_cursor_shape != self.cursor_shape {
@@ -6752,23 +6651,6 @@ impl Editor {
             .then(|| BufferSerialization::new(restore_unsaved_buffers));
 
         if self.mode.is_full() {
-            let minimap_settings = EditorSettings::get_global(cx).minimap;
-            if self.minimap_visibility != MinimapVisibility::Disabled {
-                if self.minimap_visibility.settings_visibility()
-                    != minimap_settings.minimap_enabled()
-                {
-                    self.set_minimap_visibility(
-                        MinimapVisibility::for_mode(self.mode(), cx),
-                        window,
-                        cx,
-                    );
-                } else if let Some(minimap_entity) = self.minimap.as_ref() {
-                    minimap_entity.update(cx, |minimap_editor, cx| {
-                        minimap_editor.update_minimap_configuration(minimap_settings, cx)
-                    })
-                }
-            }
-
             if language_settings_changed {
                 self.clear_disabled_lsp_folding_ranges(window, cx);
                 self.refresh_document_symbols(None, cx);

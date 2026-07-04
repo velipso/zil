@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 use editor::{
-    Bias, Editor, EditorEvent, EditorMode, MinimapVisibility, MultiBuffer,
+    Bias, Editor, EditorEvent, EditorMode, MultiBuffer,
 };
 use gpui::{
     AsyncWindowContext, DivInspectorState, Entity, InspectorElementId, IntoElement,
@@ -459,7 +459,7 @@ impl DivInspector {
             editor.set_soft_wrap(Some(false), cx);
             editor.set_show_line_numbers(false, cx);
             editor.disable_mouse_wheel_zoom();
-            editor.set_minimap_visibility(MinimapVisibility::Disabled, window, cx);
+            editor.set_show_minimap(false, window, cx);
             editor
         })
     }

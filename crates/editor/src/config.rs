@@ -54,7 +54,7 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-       let fs = <dyn fs::Fs>::global(cx);
+        let fs = <dyn fs::Fs>::global(cx);
 
         settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
             let gutter = content.editor.gutter.get_or_insert_default();
@@ -93,20 +93,38 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_minimap_visibility(
+    pub fn set_show_minimap(
         &mut self,
-        minimap_visibility: MinimapVisibility,
+        show_minimap: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.minimap_visibility != minimap_visibility {
-            if minimap_visibility.visible() && self.minimap.is_none() {
-                let minimap_settings = EditorSettings::get_global(cx).minimap;
-                self.minimap =
-                    self.create_minimap(minimap_settings.with_show_override(), window, cx);
-            }
-            self.minimap_visibility = minimap_visibility;
+        if !show_minimap && self.minimap.is_some() {
+            self.minimap = None;
             cx.notify();
+        } else if show_minimap && self.minimap.is_none() {
+            self.minimap = Some(self.create_minimap(window, cx));
+            cx.notify();
+        }
+    }
+
+    pub fn should_show_minimap(&self, cx: &App) -> bool {
+        self.mode.could_have_minimap() && EditorSettings::get_global(cx).minimap.show
+    }
+
+    pub fn toggle_minimap(
+        &mut self,
+        _: &ToggleMinimap,
+        _: &mut Window,
+        cx: &mut Context<Editor>,
+    ) {
+        if self.mode.could_have_minimap() {
+            let fs = <dyn fs::Fs>::global(cx);
+
+            settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
+                let minimap = content.editor.minimap.get_or_insert_default();
+                minimap.show = Some(!minimap.show.unwrap_or(false));
+            });
         }
     }
 
@@ -133,10 +151,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         self.set_breadcrumbs_visibility(self.breadcrumbs_visibility.toggle_visibility(), cx);
-    }
-
-    pub fn hide_minimap_by_default(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_minimap_visibility(self.minimap_visibility.hidden(), window, cx);
     }
 
     /// Normally the text in full mode and auto height editors is padded on the
@@ -181,7 +195,7 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-       let fs = <dyn fs::Fs>::global(cx);
+        let fs = <dyn fs::Fs>::global(cx);
 
         settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
             content.editor.soft_wrap = Some(!content.editor.soft_wrap.unwrap_or(false));

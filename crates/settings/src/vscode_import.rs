@@ -414,21 +414,8 @@ impl VsCodeSettings {
     }
 
     fn minimap_content(&self) -> Option<MinimapContent> {
-        let minimap_enabled = self.read_bool("editor.minimap.enabled").unwrap_or(true);
-        let autohide = self.read_bool("editor.minimap.autohide").unwrap_or(false);
-        let show = match (minimap_enabled, autohide) {
-            (true, false) => Some(ShowMinimap::Always),
-            (true, true) => Some(ShowMinimap::Auto),
-            (false, _) => Some(ShowMinimap::Never),
-        };
-
         skip_default(MinimapContent {
-            show,
-            thumb: self.read_enum("editor.minimap.showSlider", |s| match s {
-                "always" => Some(MinimapThumb::Always),
-                "mouseover" => Some(MinimapThumb::Hover),
-                _ => None,
-            }),
+            show: None,
             max_width_columns: self
                 .read_u32("editor.minimap.maxColumn")
                 .and_then(|v| NonZeroU32::new(v)),

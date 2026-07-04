@@ -14,8 +14,7 @@ use crate::{
         HighlightKey, HighlightedChunk, ToDisplayPoint,
     },
     editor_settings::{
-        CurrentLineHighlight, DocumentColorsRenderMode, Minimap, MinimapThumb, MinimapThumbBorder,
-        ScrollBeyondLastLine, ShowMinimap,
+        CurrentLineHighlight, DocumentColorsRenderMode, Minimap, ScrollBeyondLastLine,
     },
     scroll::{
         ActiveScrollbarState, ScrollOffset, ScrollPixelOffset, ScrollbarThumbState,
@@ -344,9 +343,7 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_line_numbers);
         register_action(editor, window, Editor::toggle_relative_line_numbers);
         register_action(editor, window, Editor::toggle_semantic_highlights);
-        if editor.read(cx).supports_minimap(cx) {
-            register_action(editor, window, Editor::toggle_minimap);
-        }
+        register_action(editor, window, Editor::toggle_minimap);
         register_action(editor, window, Editor::reveal_in_finder);
         register_action(editor, window, Editor::copy_path);
         register_action(editor, window, Editor::copy_relative_path);
@@ -1058,7 +1055,6 @@ impl EditorElement {
 
     fn layout_minimap(
         &self,
-        snapshot: &EditorSnapshot,
         minimap_width: Pixels,
         scroll_position: gpui::Point<f64>,
         scrollbar_layout_information: &ScrollbarLayoutInformation,
@@ -1068,28 +1064,7 @@ impl EditorElement {
     ) -> Option<MinimapLayout> {
         let minimap_editor = self.editor.read(cx).minimap().cloned()?;
 
-        let minimap_settings = EditorSettings::get_global(cx).minimap;
-
-        if minimap_settings.on_active_editor() {
-            let active_editor = self.editor.read(cx).workspace().and_then(|ws| {
-                ws.read(cx)
-                    .active_pane()
-                    .read(cx)
-                    .active_item()
-                    .and_then(|i| i.act_as::<Editor>(cx))
-            });
-            if active_editor.is_some_and(|e| e != self.editor) {
-                return None;
-            }
-        }
-
-        if !snapshot.mode.is_full()
-            || minimap_width.is_zero()
-            || matches!(
-                minimap_settings.show,
-                ShowMinimap::Auto if scrollbar_layout.is_none_or(|layout| !layout.visible)
-            )
-        {
+        if minimap_width.is_zero() {
             return None;
         }
 
@@ -1113,10 +1088,7 @@ impl EditorElement {
             .editor
             .read_with(cx, |editor, _| editor.scroll_manager.minimap_thumb_state());
 
-        let show_thumb = match minimap_settings.thumb {
-            MinimapThumb::Always => true,
-            MinimapThumb::Hover => thumb_state.is_some(),
-        };
+        let show_thumb = true;
 
         let minimap_bounds = Bounds::from_anchor_and_size(
             gpui::Anchor::TopRight,
@@ -1184,7 +1156,6 @@ impl EditorElement {
         Some(MinimapLayout {
             minimap,
             thumb_layout: layout,
-            thumb_border_style: minimap_settings.thumb_border,
             max_scroll_top: total_editor_lines,
         })
     }
@@ -3476,25 +3447,11 @@ impl EditorElement {
                             }
                         };
 
-                        let minimap_thumb_border = match layout.thumb_border_style {
-                            MinimapThumbBorder::Full => Edges::all(ScrollbarLayout::BORDER_WIDTH),
-                            MinimapThumbBorder::LeftOnly => Edges {
-                                left: ScrollbarLayout::BORDER_WIDTH,
-                                ..Default::default()
-                            },
-                            MinimapThumbBorder::LeftOpen => Edges {
-                                right: ScrollbarLayout::BORDER_WIDTH,
-                                top: ScrollbarLayout::BORDER_WIDTH,
-                                bottom: ScrollbarLayout::BORDER_WIDTH,
-                                ..Default::default()
-                            },
-                            MinimapThumbBorder::RightOpen => Edges {
-                                left: ScrollbarLayout::BORDER_WIDTH,
-                                top: ScrollbarLayout::BORDER_WIDTH,
-                                bottom: ScrollbarLayout::BORDER_WIDTH,
-                                ..Default::default()
-                            },
-                            MinimapThumbBorder::None => Default::default(),
+                        let minimap_thumb_border = Edges {
+                            right: ScrollbarLayout::BORDER_WIDTH,
+                            top: ScrollbarLayout::BORDER_WIDTH,
+                            bottom: ScrollbarLayout::BORDER_WIDTH,
+                            ..Default::default()
                         };
 
                         window.paint_layer(minimap_hitbox.bounds, |window| {
@@ -5588,7 +5545,6 @@ impl Element for EditorElement {
 
                     let minimap = window.with_element_namespace("minimap", |window| {
                         self.layout_minimap(
-                            &snapshot,
                             minimap_width,
                             scroll_position,
                             &scrollbar_layout_information,
@@ -6257,7 +6213,6 @@ impl ScrollbarLayout {
 struct MinimapLayout {
     pub minimap: AnyElement,
     pub thumb_layout: ScrollbarLayout,
-    pub thumb_border_style: MinimapThumbBorder,
     pub max_scroll_top: ScrollOffset,
 }
 

@@ -2,9 +2,8 @@ use core::num;
 use language::CursorShape;
 pub use settings::{
     CurrentLineHighlight, DelayMs,
-    DisplayIn, DocumentColorsRenderMode,
-    MinimapThumb, MinimapThumbBorder,
-    ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
+    DocumentColorsRenderMode,
+    ScrollBeyondLastLine, SeedQuerySetting,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
 
@@ -71,30 +70,8 @@ pub struct Scrollbar {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Minimap {
-    pub show: ShowMinimap,
-    pub display_in: DisplayIn,
-    pub thumb: MinimapThumb,
-    pub thumb_border: MinimapThumbBorder,
-    pub current_line_highlight: Option<CurrentLineHighlight>,
+    pub show: bool,
     pub max_width_columns: num::NonZeroU32,
-}
-
-impl Minimap {
-    pub fn minimap_enabled(&self) -> bool {
-        self.show != ShowMinimap::Never
-    }
-
-    #[inline]
-    pub fn on_active_editor(&self) -> bool {
-        self.display_in == DisplayIn::ActiveEditor
-    }
-
-    pub fn with_show_override(self) -> Self {
-        Self {
-            show: ShowMinimap::Always,
-            ..self
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -223,10 +200,6 @@ impl Settings for EditorSettings {
             },
             minimap: Minimap {
                 show: minimap.show.unwrap(),
-                display_in: minimap.display_in.unwrap(),
-                thumb: minimap.thumb.unwrap(),
-                thumb_border: minimap.thumb_border.unwrap(),
-                current_line_highlight: minimap.current_line_highlight,
                 max_width_columns: minimap.max_width_columns.unwrap(),
             },
             gutter: Gutter {
