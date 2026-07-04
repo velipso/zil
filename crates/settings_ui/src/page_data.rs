@@ -170,6 +170,32 @@ fn general_page(cx: &App) -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
+                title: "Trim Whitespace On Save",
+                description: "Trim whitespace at end of lines when file is saved.",
+                field: Box::new(SettingField {
+                    json_path: Some("trim_whitespace_on_save"),
+                    pick: |settings_content| settings_content.editor.trim_whitespace_on_save.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.editor.trim_whitespace_on_save = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Ensure EOF Newline On Save",
+                description: "Ensure the file ends with a newline when saved.",
+                field: Box::new(SettingField {
+                    json_path: Some("ensure_eof_newline_on_save"),
+                    pick: |settings_content| settings_content.editor.ensure_eof_newline_on_save.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.editor.ensure_eof_newline_on_save = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
                 title: "Redact Private Values",
                 description: "Hide the values of variables in private files.",
                 field: Box::new(SettingField {

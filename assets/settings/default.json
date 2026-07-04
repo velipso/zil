@@ -1325,16 +1325,11 @@
   "extend_list_on_newline": true,
   // Whether to indent list items when pressing tab after a list marker.
   "indent_list_on_tab": true,
-  // How to soft-wrap long lines of text.
-  // Possible values:
-  //
-  // 1. Prefer a single line generally, unless an overly long line is encountered.
-  //      "soft_wrap": "none",
-  //      "soft_wrap": "prefer_line", // (deprecated, same as "none")
-  // 2. Soft wrap lines that overflow the editor.
-  //      "soft_wrap": "editor_width",
-  // 3. Soft wrap lines at the preferred line length or the editor width (whichever is smaller).
-  //      "soft_wrap": "bounded",
+  // Enable trimming lines to remove whitespace on save.
+  "trim_whitespace_on_save": false,
+  // Enable ensuring the buffer ends in a newline on save.
+  "ensure_eof_newline_on_save": false,
+  // Enable soft wrapping of long lines.
   "soft_wrap": false,
   // How many columns a tab should occupy for new files or when detection fails.
   "default_tab_size": 2,
@@ -2040,8 +2035,6 @@
     },
     "Diff": {
       "show_edit_predictions": false,
-      "remove_trailing_whitespace_on_save": false,
-      "ensure_final_newline_on_save": false,
     },
     "EEx": {
       "language_servers": ["elixir-ls", "!expert", "!dexter", "!next-ls", "!lexical", "..."],
@@ -2122,7 +2115,6 @@
     "Markdown": {
       "format_on_save": "off",
       "use_on_type_format": false,
-      "remove_trailing_whitespace_on_save": false,
       "allow_rewrap": "anywhere",
       "soft_wrap": "editor_width",
       "completions": {

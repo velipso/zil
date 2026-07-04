@@ -135,6 +135,7 @@ pub struct Buffer {
     tab_size: NonZeroU32,
     hard_tabs: bool,
     reload_with_encoding_txns: HashMap<TransactionId, (&'static Encoding, bool)>,
+    saved_line_ending: LineEnding,
 }
 
 #[derive(Debug)]
@@ -1069,6 +1070,7 @@ impl Buffer {
         let snapshot = buffer.snapshot();
         let syntax_map = Mutex::new(SyntaxMap::new(&snapshot));
         let tree_sitter_data = TreeSitterData::new(snapshot);
+        let saved_line_ending = snapshot.line_ending().clone();
         Self {
             saved_mtime,
             tree_sitter_data: Arc::new(tree_sitter_data),
@@ -1111,6 +1113,7 @@ impl Buffer {
             tab_size: NonZeroU32::new(2).unwrap(),
             hard_tabs: false,
             reload_with_encoding_txns: HashMap::default(),
+            saved_line_ending,
         }
     }
 
@@ -1573,6 +1576,7 @@ impl Buffer {
         self.has_unsaved_edits.set((version, false));
         self.has_conflict = false;
         self.saved_mtime = mtime;
+        self.saved_line_ending = self.text.snapshot().line_ending();
         self.was_changed();
         cx.emit(BufferEvent::Saved);
         cx.notify();
@@ -2277,48 +2281,98 @@ impl Buffer {
         })
     }
 
-    /// Spawns a background task that searches the buffer for any whitespace
-    /// at the ends of a lines, and returns a `Diff` that removes that whitespace.
-    pub fn remove_trailing_whitespace(&self, cx: &App) -> Task<Diff> {
+    pub fn remove_trailing_whitespace(&self) -> Diff {
         let old_text = self.as_rope().clone();
         let line_ending = self.line_ending();
         let base_version = self.version();
-        cx.background_spawn(async move {
-            let ranges = trailing_whitespace_ranges(&old_text);
-            let empty = Arc::<str>::from("");
-            Diff {
-                base_version,
-                line_ending,
-                edits: ranges
-                    .into_iter()
-                    .map(|range| (range, empty.clone()))
-                    .collect(),
+        let ranges = trailing_whitespace_ranges(&old_text);
+        let empty = Arc::<str>::from("");
+        Diff {
+            base_version,
+            line_ending,
+            edits: ranges
+                .into_iter()
+                .map(|range| (range, empty.clone()))
+                .collect(),
+        }
+    }
+
+    pub fn ensure_final_newline(&mut self, cx: &mut Context<Self>) {
+        let len = self.len();
+
+        if len == 0 {
+            return;
+        }
+
+        for chunk in self.as_rope().reversed_chunks_in_range(0..len) {
+            if chunk.is_empty() {
+                continue;
             }
-        })
+
+            if chunk.ends_with('\n') {
+                return;
+            }
+
+            break;
+        }
+
+        self.edit([(len..len, "\n")], None, cx);
     }
 
     /// Ensures that the buffer ends with a single newline character, and
     /// no other whitespace. Skips if the buffer is empty.
-    pub fn ensure_final_newline(&mut self, cx: &mut Context<Self>) {
+    pub fn ensure_trimmed_final_newline(&mut self, cx: &mut Context<Self>) {
         let len = self.len();
+
         if len == 0 {
             return;
         }
+
         let mut offset = len;
-        for chunk in self.as_rope().reversed_chunks_in_range(0..len) {
-            let non_whitespace_len = chunk
-                .trim_end_matches(|c: char| c.is_ascii_whitespace())
-                .len();
-            offset -= chunk.len();
-            offset += non_whitespace_len;
-            if non_whitespace_len != 0 {
-                if offset == len - 1 && chunk.get(non_whitespace_len..) == Some("\n") {
-                    return;
+        let mut earliest_trailing_newline: Option<usize> = None;
+        let edit;
+
+        'scan: {
+            for chunk in self.as_rope().reversed_chunks_in_range(0..len) {
+                for ch in chunk.chars().rev() {
+                    offset -= ch.len_utf8();
+
+                    if ch == '\n' {
+                        earliest_trailing_newline = Some(offset);
+                        continue;
+                    }
+
+                    if ch.is_ascii_whitespace() {
+                        continue;
+                    }
+
+                    // Hit real content. Decide what to do after the immutable borrow ends.
+                    edit = Some(match earliest_trailing_newline {
+                        Some(newline_offset) => {
+                            // Collapse everything after the first trailing newline.
+                            newline_offset + 1..len
+                        }
+                        None => {
+                            // No trailing newline existed; add one.
+                            len..len
+                        }
+                    });
+
+                    break 'scan;
                 }
-                break;
             }
+
+            // Entire buffer was whitespace.
+            edit = Some(match earliest_trailing_newline {
+                Some(newline_offset) => newline_offset + 1..len,
+                None => len..len,
+            });
         }
-        self.edit([(offset..len, "\n")], None, cx);
+
+        if let Some(range) = edit {
+            let replacement = if range.start == len { "\n" } else { "" };
+            self.edit([(range, replacement)], None, cx);
+        }
     }
 
     /// Applies a diff to the buffer. If the buffer has changed since the given diff was
@@ -2379,6 +2433,9 @@ impl Buffer {
             return false;
         }
         if self.has_conflict {
+            return true;
+        }
+        if self.saved_line_ending != self.text.snapshot().line_ending() {
             return true;
         }
         match self.file.as_ref().map(|f| f.disk_state()) {

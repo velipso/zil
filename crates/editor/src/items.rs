@@ -863,7 +863,38 @@ impl Item for Editor {
                 .collect()
         };
 
-        cx.spawn_in(window, async move |_this, cx| {
+        let EditorSettings {
+            trim_whitespace_on_save,
+            ensure_eof_newline_on_save,
+            ..
+        } = EditorSettings::get_global(cx);
+        let trim_whitespace_on_save = *trim_whitespace_on_save;
+        let ensure_eof_newline_on_save = *ensure_eof_newline_on_save;
+
+        cx.spawn_in(window, async move |this, cx| {
+            if options.format
+                && (trim_whitespace_on_save || ensure_eof_newline_on_save)
+            {
+                let buffers_to_save = buffers_to_save.clone();
+                this.update_in(cx, |_editor, _window, cx| {
+                    for buffer in buffers_to_save {
+                        buffer.update(cx, |buffer, cx| {
+                            buffer.start_transaction();
+                            if trim_whitespace_on_save {
+                                let diff = buffer.remove_trailing_whitespace();
+                                buffer.apply_diff(diff, cx);
+                                if ensure_eof_newline_on_save {
+                                    buffer.ensure_trimmed_final_newline(cx);
+                                }
+                            } else if ensure_eof_newline_on_save {
+                                buffer.ensure_final_newline(cx);
+                            }
+                            buffer.end_transaction(cx);
+                        });
+                    }
+                })?;
+            }
+
             if !buffers_to_save.is_empty() {
                 project
                     .update(cx, |project, cx| {

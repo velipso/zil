@@ -161,6 +161,16 @@ pub struct EditorSettingsContent {
     ///
     /// Default: [`DocumentColorsRenderMode::Inlay`]
     pub lsp_document_colors: Option<DocumentColorsRenderMode>,
+
+    /// Enable trimming lines to remove whitespace on save.
+    ///
+    /// Default: false
+    pub trim_whitespace_on_save: Option<bool>,
+
+    /// Enable ensuring the buffer ends in a newline on save.
+    ///
+    /// Default: false
+    pub ensure_eof_newline_on_save: Option<bool>,
 }
 
 #[derive(

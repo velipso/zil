@@ -2,7 +2,6 @@ use editor::Editor;
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Task, WeakEntity, actions};
 use language::{Buffer, LineEnding};
 use picker::{Picker, PickerDelegate};
-use project::Project;
 use std::sync::Arc;
 use ui::{ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
@@ -45,23 +44,21 @@ impl LineEndingSelector {
             .act_as::<Editor>(cx)?
             .read(cx)
             .active_buffer(cx)?;
-        let project = workspace.project().clone();
 
         workspace.toggle_modal(window, cx, move |window, cx| {
-            LineEndingSelector::new(buffer, project, window, cx)
+            LineEndingSelector::new(buffer, window, cx)
         });
         Some(())
     }
 
     fn new(
         buffer: Entity<Buffer>,
-        project: Entity<Project>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let line_ending = buffer.read(cx).line_ending();
         let delegate =
-            LineEndingSelectorDelegate::new(cx.entity().downgrade(), buffer, project, line_ending);
+            LineEndingSelectorDelegate::new(cx.entity().downgrade(), buffer, line_ending);
         let picker = cx.new(|cx| Picker::nonsearchable_uniform_list(delegate, window, cx));
         Self { picker }
     }
@@ -85,7 +82,6 @@ impl ModalView for LineEndingSelector {}
 struct LineEndingSelectorDelegate {
     line_ending_selector: WeakEntity<LineEndingSelector>,
     buffer: Entity<Buffer>,
-    project: Entity<Project>,
     line_ending: LineEnding,
     matches: Vec<LineEnding>,
     selected_index: usize,
@@ -95,13 +91,11 @@ impl LineEndingSelectorDelegate {
     fn new(
         line_ending_selector: WeakEntity<LineEndingSelector>,
         buffer: Entity<Buffer>,
-        project: Entity<Project>,
         line_ending: LineEnding,
     ) -> Self {
         Self {
             line_ending_selector,
             buffer,
-            project,
             line_ending,
             matches: vec![LineEnding::Unix, LineEnding::Windows],
             selected_index: 0,
@@ -124,13 +118,6 @@ impl PickerDelegate for LineEndingSelectorDelegate {
         if let Some(line_ending) = self.matches.get(self.selected_index) {
             self.buffer.update(cx, |this, cx| {
                 this.set_line_ending(*line_ending, cx);
-            });
-            let buffer = self.buffer.clone();
-            let project = self.project.clone();
-            cx.defer(move |cx| {
-                project.update(cx, |this, cx| {
-                    this.save_buffer(buffer, cx).detach();
-                });
             });
         }
         self.dismissed(window, cx);

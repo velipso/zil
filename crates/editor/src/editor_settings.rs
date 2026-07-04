@@ -42,6 +42,8 @@ pub struct EditorSettings {
     pub drag_and_drop_selection: DragAndDropSelection,
     pub lsp_document_colors: DocumentColorsRenderMode,
     pub minimum_contrast_for_highlights: f32,
+    pub trim_whitespace_on_save: bool,
+    pub ensure_eof_newline_on_save: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -245,6 +247,8 @@ impl Settings for EditorSettings {
             },
             lsp_document_colors: editor.lsp_document_colors.unwrap(),
             minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,
+            trim_whitespace_on_save: editor.trim_whitespace_on_save.unwrap(),
+            ensure_eof_newline_on_save: editor.ensure_eof_newline_on_save.unwrap(),
         }
     }
 }
