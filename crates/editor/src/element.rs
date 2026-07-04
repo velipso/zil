@@ -1,8 +1,4 @@
-mod header;
 mod mouse;
-
-#[cfg(test)]
-pub(crate) use header::StickyHeader;
 
 use crate::{
     BlockId, ChunkRendererContext, ChunkReplacement,
@@ -1463,7 +1459,7 @@ impl EditorElement {
         for (_, block) in snapshot.blocks_in_range(prev_line..row_range.start) {
             if matches!(
                 block,
-                Block::ExcerptBoundary { .. } | Block::BufferHeader { .. }
+                Block::ExcerptBoundary { .. }
             ) {
                 found_excerpt_header = true;
                 break;
@@ -1484,7 +1480,7 @@ impl EditorElement {
         for (_, block) in snapshot.blocks_in_range(row_range.end..cons_line) {
             if matches!(
                 block,
-                Block::ExcerptBoundary { .. } | Block::BufferHeader { .. }
+                Block::ExcerptBoundary { .. }
             ) {
                 found_excerpt_header = true;
             }
@@ -1929,10 +1925,7 @@ impl EditorElement {
         resized_blocks: &mut HashMap<CustomBlockId, u32>,
         row_block_types: &mut HashMap<DisplayRow, bool>,
         selections: &[Selection<Point>],
-        selected_buffer_ids: &Vec<BufferId>,
-        latest_selection_anchors: &HashMap<BufferId, Anchor>,
         is_row_soft_wrapped: impl Copy + Fn(usize) -> bool,
-        sticky_header_excerpt_id: Option<BufferId>,
         indent_guides: &Option<Vec<IndentGuideLayout>>,
         block_resize_offset: &mut i32,
         window: &mut Window,
@@ -2014,38 +2007,13 @@ impl EditorElement {
                     .into_any()
             }
 
-            Block::FoldedBuffer {
-                first_excerpt,
-                height,
-                ..
-            } => {
-                let mut result = v_flex().id(block_id).w_full().pr(editor_margins.right);
-
-                if self.should_show_buffer_headers() {
-                    let selected = selected_buffer_ids.contains(&first_excerpt.buffer_id());
-                    let jump_data = header::header_jump_data(
-                        snapshot,
-                        block_row_start,
-                        *height,
-                        first_excerpt,
-                        latest_selection_anchors,
-                    );
-                    result = result.child(header::render_buffer_header(
-                        &self.editor,
-                        first_excerpt,
-                        true,
-                        selected,
-                        false,
-                        jump_data,
-                        window,
-                        cx,
-                    ));
-                } else {
-                    result =
-                        result.child(div().h(FILE_HEADER_HEIGHT as f32 * window.line_height()));
-                }
-
-                result.into_any_element()
+            Block::FoldedBuffer { .. } => {
+                v_flex()
+                    .id(block_id)
+                    .w_full()
+                    .pr(editor_margins.right)
+                    .child(div().h(FILE_HEADER_HEIGHT as f32 * window.line_height()))
+                    .into_any_element()
             }
 
             Block::ExcerptBoundary { .. } => {
@@ -2062,45 +2030,6 @@ impl EditorElement {
                             .bg(color.border_variant),
                     ),
                 );
-
-                result.into_any()
-            }
-
-            Block::BufferHeader { excerpt, height } => {
-                let mut result = v_flex().id(block_id).w_full();
-
-                if self.should_show_buffer_headers() {
-                    let jump_data = header::header_jump_data(
-                        snapshot,
-                        block_row_start,
-                        *height,
-                        excerpt,
-                        latest_selection_anchors,
-                    );
-
-                    if sticky_header_excerpt_id != Some(excerpt.buffer_id()) {
-                        let selected = selected_buffer_ids.contains(&excerpt.buffer_id());
-
-                        result = result.child(div().pr(editor_margins.right).child(
-                            header::render_buffer_header(
-                                &self.editor,
-                                excerpt,
-                                false,
-                                selected,
-                                false,
-                                jump_data,
-                                window,
-                                cx,
-                            ),
-                        ));
-                    } else {
-                        result =
-                            result.child(div().h(FILE_HEADER_HEIGHT as f32 * window.line_height()));
-                    }
-                } else {
-                    result =
-                        result.child(div().h(FILE_HEADER_HEIGHT as f32 * window.line_height()));
-                }
 
                 result.into_any()
             }
@@ -2259,10 +2188,7 @@ impl EditorElement {
         line_height: Pixels,
         line_layouts: &mut [LineWithInvisibles],
         selections: &[Selection<Point>],
-        selected_buffer_ids: &Vec<BufferId>,
-        latest_selection_anchors: &HashMap<BufferId, Anchor>,
         is_row_soft_wrapped: impl Copy + Fn(usize) -> bool,
-        sticky_header_excerpt_id: Option<BufferId>,
         indent_guides: &Option<Vec<IndentGuideLayout>>,
         window: &mut Window,
         cx: &mut App,
@@ -2306,10 +2232,7 @@ impl EditorElement {
                 &mut resized_blocks,
                 &mut row_block_types,
                 selections,
-                selected_buffer_ids,
-                latest_selection_anchors,
                 is_row_soft_wrapped,
-                sticky_header_excerpt_id,
                 indent_guides,
                 &mut block_resize_offset,
                 window,
@@ -2324,7 +2247,6 @@ impl EditorElement {
                     available_space: size(AvailableSpace::MinContent, element_size.height.into()),
                     style: BlockStyle::Fixed,
                     overlaps_gutter: true,
-                    is_buffer_header: block.is_buffer_header(),
                 });
             }
         }
@@ -2374,10 +2296,7 @@ impl EditorElement {
                 &mut resized_blocks,
                 &mut row_block_types,
                 selections,
-                selected_buffer_ids,
-                latest_selection_anchors,
                 is_row_soft_wrapped,
-                sticky_header_excerpt_id,
                 indent_guides,
                 &mut block_resize_offset,
                 window,
@@ -2391,7 +2310,6 @@ impl EditorElement {
                     available_space: size(width, element_size.height.into()),
                     style,
                     overlaps_gutter: !block.place_near() && style != BlockStyle::Spacer,
-                    is_buffer_header: block.is_buffer_header(),
                 };
                 if style == BlockStyle::Spacer {
                     spacer_blocks.push(layout);
@@ -2442,10 +2360,7 @@ impl EditorElement {
                 &mut resized_blocks,
                 &mut row_block_types,
                 selections,
-                selected_buffer_ids,
-                latest_selection_anchors,
                 is_row_soft_wrapped,
-                sticky_header_excerpt_id,
                 indent_guides,
                 &mut block_resize_offset,
                 window,
@@ -2459,7 +2374,6 @@ impl EditorElement {
                     available_space: size(width, element_size.height.into()),
                     style,
                     overlaps_gutter: true,
-                    is_buffer_header: block.is_buffer_header(),
                 });
             }
         }
@@ -4953,7 +4867,6 @@ impl Element for EditorElement {
 
         let could_have_scrollbars = self.editor.read(cx).mode.could_have_scrollbars();
         let is_minimap = self.editor.read(cx).mode.is_minimap();
-        let is_singleton = self.editor.read(cx).buffer_kind(cx) == ItemBufferKind::Singleton;
 
         if !is_minimap {
             let focus_handle = self.editor.focus_handle(cx);
@@ -5221,38 +5134,12 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    let (local_selections, selected_buffer_ids, latest_selection_anchors): (
-                        Vec<Selection<Point>>,
-                        Vec<BufferId>,
-                        HashMap<BufferId, Anchor>,
-                    ) = self
+                    let local_selections: Vec<Selection<Point>> = self
                         .editor_with_selections(cx)
                         .map(|editor| {
-                            editor.update(cx, |editor, cx| {
-                                let all_selections =
-                                    editor.selections.all::<Point>(&snapshot.display_snapshot);
+                            editor.update(cx, |editor, _cx| {
                                 let all_anchor_selections =
                                     editor.selections.all_anchors(&snapshot.display_snapshot);
-                                let selected_buffer_ids =
-                                    if editor.buffer_kind(cx) == ItemBufferKind::Singleton {
-                                        Vec::new()
-                                    } else {
-                                        let mut selected_buffer_ids =
-                                            Vec::with_capacity(all_selections.len());
-
-                                        for selection in all_selections {
-                                            for buffer_id in snapshot
-                                                .buffer_snapshot()
-                                                .buffer_ids_for_range(selection.range())
-                                            {
-                                                if selected_buffer_ids.last() != Some(&buffer_id) {
-                                                    selected_buffer_ids.push(buffer_id);
-                                                }
-                                            }
-                                        }
-
-                                        selected_buffer_ids
-                                    };
 
                                 let mut selections = editor.selections.disjoint_in_range(
                                     start_anchor..end_anchor,
@@ -5279,15 +5166,11 @@ impl Element for EditorElement {
                                             .or_insert((selection.id, head));
                                     }
                                 }
-                                let latest_selection_anchors = anchors_by_buffer
-                                    .into_iter()
-                                    .map(|(buffer_id, (_, anchor))| (buffer_id, anchor))
-                                    .collect();
 
-                                (selections, selected_buffer_ids, latest_selection_anchors)
+                                selections
                             })
                         })
-                        .unwrap_or_else(|| (Vec::new(), Vec::new(), HashMap::default()));
+                        .unwrap_or_else(|| Vec::new());
 
                     let (selections, active_rows) = self
                         .layout_selections(
@@ -5436,15 +5319,6 @@ impl Element for EditorElement {
 
                     let mut scroll_width = scrollbar_layout_information.scroll_range.width;
 
-                    let sticky_header_excerpt = if snapshot.buffer_snapshot().show_headers() {
-                        snapshot.sticky_header_excerpt(scroll_position.y)
-                    } else {
-                        None
-                    };
-                    let sticky_header_excerpt_id = sticky_header_excerpt
-                        .as_ref()
-                        .map(|top| top.excerpt.buffer_id());
-
                     let buffer = snapshot.buffer_snapshot();
                     let start_buffer_row = MultiBufferRow(start_anchor.to_point(&buffer).row);
                     let end_buffer_row = MultiBufferRow(end_anchor.to_point(&buffer).row);
@@ -5481,10 +5355,7 @@ impl Element for EditorElement {
                                     line_height,
                                     &mut line_layouts,
                                     &local_selections,
-                                    &selected_buffer_ids,
-                                    &latest_selection_anchors,
                                     is_row_soft_wrapped,
-                                    sticky_header_excerpt_id,
                                     &indent_guides_for_spacers,
                                     window,
                                     cx,
@@ -5522,28 +5393,6 @@ impl Element for EditorElement {
                             );
                         }
                     }
-
-                    let sticky_buffer_header = if self.should_show_buffer_headers() {
-                        sticky_header_excerpt.map(|sticky_header_excerpt| {
-                            window.with_element_namespace("blocks", |window| {
-                                self.layout_sticky_buffer_header(
-                                    sticky_header_excerpt,
-                                    scroll_position,
-                                    line_height,
-                                    right_margin,
-                                    &snapshot,
-                                    &hitbox,
-                                    &selected_buffer_ids,
-                                    &blocks,
-                                    &latest_selection_anchors,
-                                    window,
-                                    cx,
-                                )
-                            })
-                        })
-                    } else {
-                        None
-                    };
 
                     let scroll_max: gpui::Point<ScrollPixelOffset> = point(
                         ScrollPixelOffset::from(
@@ -5583,29 +5432,6 @@ impl Element for EditorElement {
                         scroll_position.x * f64::from(em_layout_width),
                         scroll_position.y * f64::from(line_height),
                     );
-                    let sticky_headers = if !is_minimap
-                        && is_singleton
-                        && EditorSettings::get_global(cx).sticky_scroll.enabled
-                    {
-                        let relative = self.editor.read(cx).relative_line_numbers(cx);
-                        self.layout_sticky_headers(
-                            &snapshot,
-                            editor_width,
-                            is_row_soft_wrapped,
-                            line_height,
-                            scroll_pixel_position,
-                            content_origin,
-                            &gutter_dimensions,
-                            &gutter_hitbox,
-                            &text_hitbox,
-                            relative,
-                            current_selection_head,
-                            window,
-                            cx,
-                        )
-                    } else {
-                        None
-                    };
                     let indent_guides =
                         if scroll_pixel_position != preliminary_scroll_pixel_position {
                             self.layout_indent_guides(
@@ -5863,8 +5689,6 @@ impl Element for EditorElement {
                         crease_trailers,
                         tab_invisible,
                         space_invisible,
-                        sticky_buffer_header,
-                        sticky_headers,
                         text_align: self.style.text.text_align,
                         content_width: text_hitbox.size.width,
                     }
@@ -5909,65 +5733,32 @@ impl Element for EditorElement {
             window.with_text_style(Some(text_style), |window| {
                 window.with_content_mask(Some(ContentMask { bounds }), |window| {
                     self.paint_mouse_listeners(layout, window, cx);
+                    self.paint_background(layout, window, cx);
+                    self.paint_indent_guides(layout, window, cx);
 
-                    // Mask the editor behind sticky scroll headers. Important
-                    // for transparent backgrounds.
-                    let below_sticky_headers_mask = layout
-                        .sticky_headers
-                        .as_ref()
-                        .and_then(|h| h.lines.last())
-                        .map(|last| ContentMask {
-                            bounds: Bounds {
-                                origin: point(
-                                    bounds.origin.x,
-                                    bounds.origin.y + last.offset + layout.position_map.line_height,
-                                ),
-                                size: size(
-                                    bounds.size.width,
-                                    (bounds.size.height
-                                        - last.offset
-                                        - layout.position_map.line_height)
-                                        .max(Pixels::ZERO),
-                                ),
-                            },
+                    if layout.gutter_hitbox.size.width > Pixels::ZERO {
+                        self.paint_line_numbers(layout, window, cx);
+                    }
+
+                    self.paint_text(layout, window, cx);
+
+                    if !layout.spacer_blocks.is_empty() {
+                        window.with_element_namespace("blocks", |window| {
+                            self.paint_spacer_blocks(layout, window, cx);
                         });
+                    }
 
-                    window.with_content_mask(below_sticky_headers_mask, |window| {
-                        self.paint_background(layout, window, cx);
+                    if layout.gutter_hitbox.size.width > Pixels::ZERO {
+                        self.paint_gutter_highlights(layout, window, cx);
+                        self.paint_gutter_indicators(layout, window, cx);
+                    }
 
-                        self.paint_indent_guides(layout, window, cx);
+                    if !layout.blocks.is_empty() {
+                        window.with_element_namespace("blocks", |window| {
+                            self.paint_non_spacer_blocks(layout, window, cx);
+                        });
+                    }
 
-                        if layout.gutter_hitbox.size.width > Pixels::ZERO {
-                            self.paint_line_numbers(layout, window, cx);
-                        }
-
-                        self.paint_text(layout, window, cx);
-
-                        if !layout.spacer_blocks.is_empty() {
-                            window.with_element_namespace("blocks", |window| {
-                                self.paint_spacer_blocks(layout, window, cx);
-                            });
-                        }
-
-                        if layout.gutter_hitbox.size.width > Pixels::ZERO {
-                            self.paint_gutter_highlights(layout, window, cx);
-                            self.paint_gutter_indicators(layout, window, cx);
-                        }
-
-                        if !layout.blocks.is_empty() {
-                            window.with_element_namespace("blocks", |window| {
-                                self.paint_non_spacer_blocks(layout, window, cx);
-                            });
-                        }
-                    });
-
-                    window.with_element_namespace("blocks", |window| {
-                        if let Some(mut sticky_header) = layout.sticky_buffer_header.take() {
-                            sticky_header.paint(window, cx)
-                        }
-                    });
-
-                    self.paint_sticky_headers(layout, window, cx);
                     self.paint_minimap(layout, window, cx);
                     self.paint_scrollbars(layout, window, cx);
                     self.paint_mouse_context_menu(layout, window, cx);
@@ -6061,8 +5852,6 @@ pub struct EditorLayout {
     mouse_context_menu: Option<AnyElement>,
     tab_invisible: ShapedLine,
     space_invisible: ShapedLine,
-    sticky_buffer_header: Option<AnyElement>,
-    sticky_headers: Option<header::StickyHeaders>,
     document_colors: Option<(DocumentColorsRenderMode, Vec<(Range<DisplayPoint>, Hsla)>)>,
     text_align: TextAlign,
     content_width: Pixels,
@@ -6611,52 +6400,6 @@ impl PositionMap {
             column_overshoot_after_line_end,
         }
     }
-
-    fn point_for_position_on_line(
-        &self,
-        position: gpui::Point<Pixels>,
-        row: DisplayRow,
-        line: &LineWithInvisibles,
-    ) -> PointForPosition {
-        let text_bounds = self.text_hitbox.bounds;
-        let scroll_position = self.scroll_position;
-        let position = position - text_bounds.origin;
-        let x = position.x + (scroll_position.x as f32 * self.em_layout_width);
-
-        let alignment_offset = line.alignment_offset(self.text_align, self.content_width);
-        let x_relative_to_text = x - alignment_offset;
-        let (column, x_overshoot_after_line_end) =
-            if let Some(ix) = line.index_for_x(x_relative_to_text) {
-                (ix as u32, px(0.))
-            } else {
-                (line.len as u32, px(0.).max(x_relative_to_text - line.width))
-            };
-
-        let mut exact_unclipped = DisplayPoint::new(row, column);
-        let previous_valid = self.snapshot.clip_point(exact_unclipped, Bias::Left);
-        let next_valid = self.snapshot.clip_point(exact_unclipped, Bias::Right);
-
-        let nearest_valid = if previous_valid == next_valid {
-            previous_valid
-        } else {
-            match self.snapshot.inlay_bias_at(exact_unclipped) {
-                Some(Bias::Left) => next_valid,
-                Some(Bias::Right) => previous_valid,
-                None => previous_valid,
-            }
-        };
-
-        let column_overshoot_after_line_end =
-            (x_overshoot_after_line_end / self.em_layout_width) as u32;
-        *exact_unclipped.column_mut() += column_overshoot_after_line_end;
-        PointForPosition {
-            previous_valid,
-            next_valid,
-            nearest_valid,
-            exact_unclipped,
-            column_overshoot_after_line_end,
-        }
-    }
 }
 
 pub(crate) struct BlockLayout {
@@ -6667,7 +6410,6 @@ pub(crate) struct BlockLayout {
     pub(crate) available_space: Size<AvailableSpace>,
     pub(crate) style: BlockStyle,
     pub(crate) overlaps_gutter: bool,
-    pub(crate) is_buffer_header: bool,
 }
 
 pub fn layout_line(

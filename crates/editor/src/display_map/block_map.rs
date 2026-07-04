@@ -343,10 +343,6 @@ pub enum Block {
         excerpt: ExcerptBoundaryInfo,
         height: u32,
     },
-    BufferHeader {
-        excerpt: ExcerptBoundaryInfo,
-        height: u32,
-    },
     Spacer {
         id: SpacerId,
         height: u32,
@@ -365,10 +361,6 @@ impl Block {
             Block::FoldedBuffer { first_excerpt, .. } => {
                 BlockId::FoldedBuffer(first_excerpt.buffer_id())
             }
-            Block::BufferHeader {
-                excerpt: next_excerpt,
-                ..
-            } => BlockId::ExcerptBoundary(next_excerpt.start_anchor),
             Block::Spacer { id, .. } => BlockId::Spacer(*id),
         }
     }
@@ -378,7 +370,6 @@ impl Block {
             Block::Custom(block) => block.height.is_some(),
             Block::ExcerptBoundary { .. }
             | Block::FoldedBuffer { .. }
-            | Block::BufferHeader { .. }
             | Block::Spacer { .. } => true,
         }
     }
@@ -388,7 +379,6 @@ impl Block {
             Block::Custom(block) => block.height.unwrap_or(0),
             Block::ExcerptBoundary { height, .. }
             | Block::FoldedBuffer { height, .. }
-            | Block::BufferHeader { height, .. }
             | Block::Spacer { height, .. } => *height,
         }
     }
@@ -397,8 +387,7 @@ impl Block {
         match self {
             Block::Custom(block) => block.style,
             Block::ExcerptBoundary { .. }
-            | Block::FoldedBuffer { .. }
-            | Block::BufferHeader { .. } => BlockStyle::Sticky,
+            | Block::FoldedBuffer { .. } => BlockStyle::Sticky,
             Block::Spacer { .. } => BlockStyle::Spacer,
         }
     }
@@ -408,7 +397,6 @@ impl Block {
             Block::Custom(block) => matches!(block.placement, BlockPlacement::Above(_)),
             Block::FoldedBuffer { .. } => false,
             Block::ExcerptBoundary { .. } => true,
-            Block::BufferHeader { .. } => true,
             Block::Spacer { is_below, .. } => !*is_below,
         }
     }
@@ -418,7 +406,6 @@ impl Block {
             Block::Custom(block) => matches!(block.placement, BlockPlacement::Near(_)),
             Block::FoldedBuffer { .. } => false,
             Block::ExcerptBoundary { .. } => false,
-            Block::BufferHeader { .. } => false,
             Block::Spacer { .. } => false,
         }
     }
@@ -431,7 +418,6 @@ impl Block {
             ),
             Block::FoldedBuffer { .. } => false,
             Block::ExcerptBoundary { .. } => false,
-            Block::BufferHeader { .. } => false,
             Block::Spacer { is_below, .. } => *is_below,
         }
     }
@@ -441,7 +427,6 @@ impl Block {
             Block::Custom(block) => matches!(block.placement, BlockPlacement::Replace(_)),
             Block::FoldedBuffer { .. } => true,
             Block::ExcerptBoundary { .. } => false,
-            Block::BufferHeader { .. } => false,
             Block::Spacer { .. } => false,
         }
     }
@@ -451,17 +436,6 @@ impl Block {
             Block::Custom(_) => false,
             Block::FoldedBuffer { .. } => true,
             Block::ExcerptBoundary { .. } => true,
-            Block::BufferHeader { .. } => true,
-            Block::Spacer { .. } => false,
-        }
-    }
-
-    pub fn is_buffer_header(&self) -> bool {
-        match self {
-            Block::Custom(_) => false,
-            Block::FoldedBuffer { .. } => true,
-            Block::ExcerptBoundary { .. } => false,
-            Block::BufferHeader { .. } => true,
             Block::Spacer { .. } => false,
         }
     }
@@ -481,11 +455,6 @@ impl Debug for Block {
                 .finish(),
             Self::ExcerptBoundary { excerpt, height } => f
                 .debug_struct("ExcerptBoundary")
-                .field("excerpt", excerpt)
-                .field("height", height)
-                .finish(),
-            Self::BufferHeader { excerpt, height } => f
-                .debug_struct("BufferHeader")
                 .field("excerpt", excerpt)
                 .field("height", height)
                 .finish(),
@@ -1389,25 +1358,19 @@ impl BlockMap {
                     (
                         Block::ExcerptBoundary {
                             excerpt: excerpt_a, ..
-                        }
-                        | Block::BufferHeader {
-                            excerpt: excerpt_a, ..
                         },
                         Block::ExcerptBoundary {
-                            excerpt: excerpt_b, ..
-                        }
-                        | Block::BufferHeader {
                             excerpt: excerpt_b, ..
                         },
                     ) => Some(excerpt_a.start_text_anchor().opaque_id())
                         .cmp(&Some(excerpt_b.start_text_anchor().opaque_id())),
                     (
-                        Block::ExcerptBoundary { .. } | Block::BufferHeader { .. },
+                        Block::ExcerptBoundary { .. },
                         Block::Spacer { .. } | Block::Custom(_),
                     ) => Ordering::Less,
                     (
                         Block::Spacer { .. } | Block::Custom(_),
-                        Block::ExcerptBoundary { .. } | Block::BufferHeader { .. },
+                        Block::ExcerptBoundary { .. },
                     ) => Ordering::Greater,
                     (Block::Spacer { .. }, Block::Custom(_)) => Ordering::Less,
                     (Block::Custom(_), Block::Spacer { .. }) => Ordering::Greater,
@@ -2088,29 +2051,6 @@ impl BlockSnapshot {
             }
             None
         })
-    }
-
-    pub(crate) fn sticky_header_excerpt(&self, position: f64) -> Option<StickyHeaderExcerpt<'_>> {
-        let top_row = position as u32;
-        let mut cursor = self.transforms.cursor::<BlockRow>(());
-        cursor.seek(&BlockRow(top_row), Bias::Right);
-
-        while let Some(transform) = cursor.item() {
-            match &transform.block {
-                Some(
-                    Block::ExcerptBoundary { excerpt, .. } | Block::BufferHeader { excerpt, .. },
-                ) => {
-                    return Some(StickyHeaderExcerpt { excerpt });
-                }
-                Some(block) if block.is_buffer_header() => return None,
-                _ => {
-                    cursor.prev();
-                    continue;
-                }
-            }
-        }
-
-        None
     }
 
     pub fn block_for_id(&self, block_id: BlockId) -> Option<Block> {

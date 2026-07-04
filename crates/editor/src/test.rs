@@ -255,27 +255,6 @@ pub fn editor_content_with_blocks_and_size(
                     lines[row as usize].push_str("§ -----");
                 }
             }
-            Block::BufferHeader { excerpt, height } => {
-                while lines.len() <= row.0 as usize {
-                    lines.push(String::new());
-                }
-                lines[row.0 as usize].push_str(&cx.update(|_, cx| {
-                    format!(
-                        "§ {}",
-                        excerpt
-                            .buffer(snapshot.buffer_snapshot())
-                            .file()
-                            .map(|file| file.file_name(cx))
-                            .unwrap_or("<no file>")
-                    )
-                }));
-                for row in row.0 + 1..row.0 + height {
-                    while lines.len() <= row as usize {
-                        lines.push(String::new());
-                    }
-                    lines[row as usize].push_str("§ -----");
-                }
-            }
             Block::Spacer { height, .. } => {
                 for row in row.0..row.0 + height {
                     while lines.len() <= row as usize {

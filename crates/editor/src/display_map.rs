@@ -1735,10 +1735,6 @@ impl DisplaySnapshot {
             .map(|(row, block)| (DisplayRow(row.0), block))
     }
 
-    pub fn sticky_header_excerpt(&self, row: f64) -> Option<StickyHeaderExcerpt<'_>> {
-        self.block_snapshot.sticky_header_excerpt(row)
-    }
-
     pub fn block_for_id(&self, id: BlockId) -> Option<Block> {
         self.block_snapshot.block_for_id(id)
     }
