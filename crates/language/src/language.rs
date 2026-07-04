@@ -20,7 +20,6 @@ pub mod proto;
 mod syntax_map;
 mod task_context;
 mod text_diff;
-mod toolchain;
 
 #[cfg(test)]
 pub mod buffer_tests;
@@ -78,10 +77,6 @@ pub use text_diff::{
     word_diff_ranges,
 };
 use theme::SyntaxTheme;
-pub use toolchain::{
-    LanguageToolchainStore, LocalLanguageToolchainStore, Toolchain, ToolchainList, ToolchainLister,
-    ToolchainMetadata, ToolchainScope,
-};
 use tree_sitter::{self, QueryCursor, WasmStore, wasmtime};
 use util::rel_path::RelPath;
 
@@ -245,14 +240,12 @@ impl CachedLspAdapter {
     pub async fn get_language_server_command(
         self: Arc<Self>,
         delegate: Arc<dyn LspAdapterDelegate>,
-        toolchains: Option<Toolchain>,
         binary_options: LanguageServerBinaryOptions,
         cx: &mut AsyncApp,
     ) -> LanguageServerBinaryLocations {
         let cached_binary = self.cached_binary.clone().lock_owned().await;
         self.adapter.clone().get_language_server_command(
             delegate,
-            toolchains,
             binary_options,
             cached_binary,
             cx.clone(),
@@ -474,7 +467,6 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
     async fn workspace_configuration(
         self: Arc<Self>,
         _: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: Option<Uri>,
         _cx: &mut AsyncApp,
     ) -> Result<Value> {
@@ -548,7 +540,6 @@ pub trait LspInstaller {
     fn check_if_user_installed(
         &self,
         _: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> impl Future<Output = Option<LanguageServerBinary>> {
         async { None }
@@ -597,7 +588,6 @@ pub trait DynLspInstaller {
     fn get_language_server_command(
         self: Arc<Self>,
         delegate: Arc<dyn LspAdapterDelegate>,
-        toolchains: Option<Toolchain>,
         binary_options: LanguageServerBinaryOptions,
         cached_binary: OwnedMutexGuard<Option<(bool, LanguageServerBinary)>>,
         cx: AsyncApp,
@@ -649,7 +639,6 @@ where
     fn get_language_server_command(
         self: Arc<Self>,
         delegate: Arc<dyn LspAdapterDelegate>,
-        toolchain: Option<Toolchain>,
         binary_options: LanguageServerBinaryOptions,
         mut cached_binary: OwnedMutexGuard<Option<(bool, LanguageServerBinary)>>,
         mut cx: AsyncApp,
@@ -669,7 +658,7 @@ where
             // for each worktree we might have open.
             if binary_options.allow_path_lookup
                 && let Some(binary) = self
-                    .check_if_user_installed(&delegate, toolchain, &mut cx)
+                    .check_if_user_installed(&delegate, &mut cx)
                     .await
             {
                 log::info!(
@@ -732,7 +721,6 @@ pub struct Language {
     pub(crate) config: LanguageConfig,
     pub(crate) grammar: Option<Arc<Grammar>>,
     pub(crate) context_provider: Option<Arc<dyn ContextProvider>>,
-    pub(crate) toolchain: Option<Arc<dyn ToolchainLister>>,
     pub(crate) manifest_name: Option<ManifestName>,
 }
 
@@ -755,18 +743,12 @@ impl Language {
             config,
             grammar: ts_language.map(|ts_language| Arc::new(Grammar::new(ts_language))),
             context_provider: None,
-            toolchain: None,
             manifest_name: None,
         }
     }
 
     pub fn with_context_provider(mut self, provider: Option<Arc<dyn ContextProvider>>) -> Self {
         self.context_provider = provider;
-        self
-    }
-
-    pub fn with_toolchain_lister(mut self, provider: Option<Arc<dyn ToolchainLister>>) -> Self {
-        self.toolchain = provider;
         self
     }
 
@@ -868,10 +850,6 @@ impl Language {
 
     pub fn context_provider(&self) -> Option<Arc<dyn ContextProvider>> {
         self.context_provider.clone()
-    }
-
-    pub fn toolchain_lister(&self) -> Option<Arc<dyn ToolchainLister>> {
-        self.toolchain.clone()
     }
 
     pub fn highlight_text<'a>(
@@ -1199,7 +1177,6 @@ impl LspInstaller for FakeLspAdapter {
     async fn check_if_user_installed(
         &self,
         _: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         Some(self.language_server_binary.clone())

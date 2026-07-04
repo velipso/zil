@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use crate::{Buffer, LanguageToolchainStore, Location};
+use crate::{Buffer, Location};
 
 use anyhow::Result;
 use collections::HashMap;
@@ -20,7 +20,6 @@ pub trait ContextProvider: Send + Sync {
         _variables: &TaskVariables,
         _location: ContextLocation<'_>,
         _project_env: Option<HashMap<String, String>>,
-        _toolchains: Arc<dyn LanguageToolchainStore>,
         _cx: &mut App,
     ) -> Task<Result<TaskVariables>> {
         let _ = _location;

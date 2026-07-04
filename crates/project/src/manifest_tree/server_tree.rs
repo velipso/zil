@@ -14,7 +14,7 @@ use std::{
 use collections::IndexMap;
 use gpui::{App, Entity};
 use language::{
-    CachedLspAdapter, LanguageName, LanguageRegistry, ManifestDelegate, ManifestName, Toolchain,
+    CachedLspAdapter, LanguageName, LanguageRegistry, ManifestDelegate, ManifestName,
     language_settings::AllLanguageSettings,
 };
 use lsp::LanguageServerName;
@@ -24,7 +24,6 @@ use util::rel_path::RelPath;
 
 use crate::{
     LanguageServerId, ProjectPath, project_settings::LspSettings,
-    toolchain_store::LocalToolchainStore,
 };
 
 use super::ManifestTree;
@@ -41,7 +40,6 @@ pub struct LanguageServerTree {
     manifest_tree: Entity<ManifestTree>,
     pub(crate) instances: BTreeMap<WorktreeId, ServersForWorktree>,
     languages: Arc<LanguageRegistry>,
-    toolchains: Entity<LocalToolchainStore>,
 }
 
 /// A node in language server tree represents either:
@@ -57,7 +55,6 @@ pub(crate) struct LaunchDisposition {
     /// Path to the root directory of a subproject.
     pub(crate) path: ProjectPath,
     pub(crate) settings: Arc<LspSettings>,
-    pub(crate) toolchain: Option<Toolchain>,
 }
 
 impl LanguageServerTreeNode {
@@ -102,7 +99,6 @@ impl InnerTreeNode {
         server_name: LanguageServerName,
         path: ProjectPath,
         settings: LspSettings,
-        toolchain: Option<Toolchain>,
     ) -> Self {
         InnerTreeNode {
             id: Default::default(),
@@ -110,7 +106,6 @@ impl InnerTreeNode {
                 server_name,
                 path,
                 settings: settings.into(),
-                toolchain,
             }),
         }
     }
@@ -124,13 +119,11 @@ impl LanguageServerTree {
     pub(crate) fn new(
         manifest_tree: Entity<ManifestTree>,
         languages: Arc<LanguageRegistry>,
-        toolchains: Entity<LocalToolchainStore>,
     ) -> Self {
         Self {
             manifest_tree,
             instances: Default::default(),
             languages,
-            toolchains,
         }
     }
 
@@ -167,7 +160,7 @@ impl LanguageServerTree {
         root_path: ProjectPath,
         language_name: LanguageName,
         adapters: IndexMap<LanguageServerName, (LspSettings, Arc<CachedLspAdapter>)>,
-        cx: &'a App,
+        _cx: &'a App,
     ) -> impl Iterator<Item = LanguageServerTreeNode> + 'a {
         adapters.into_iter().map(move |(_, (settings, adapter))| {
             let root_path = root_path.clone();
@@ -180,18 +173,11 @@ impl LanguageServerTree {
                 .or_default()
                 .entry(adapter.name());
             let (node, languages) = inner_node.or_insert_with(|| {
-                let toolchain = self.toolchains.read(cx).active_toolchain(
-                    root_path.worktree_id,
-                    &root_path.path,
-                    language_name.clone(),
-                );
-
                 (
                     Arc::new(InnerTreeNode::new(
                         adapter.name(),
                         root_path.clone(),
                         settings.clone(),
-                        toolchain,
                     )),
                     Default::default(),
                 )
@@ -378,7 +364,6 @@ impl ServerTreeRebase {
         let new_tree = LanguageServerTree::new(
             old_tree.manifest_tree.clone(),
             old_tree.languages.clone(),
-            old_tree.toolchains.clone(),
         );
         Self {
             old_contents,
@@ -424,8 +409,7 @@ impl ServerTreeRebase {
                         // Only compare settings that require server restart.
                         // Dynamic settings (settings.settings) can be updated via DidChangeConfiguration
                         // without restarting the server.
-                        disposition.toolchain == old_node.disposition.toolchain
-                            && disposition.settings.binary == old_node.disposition.settings.binary
+                        disposition.settings.binary == old_node.disposition.settings.binary
                             && disposition.settings.initialization_options
                                 == old_node.disposition.settings.initialization_options
                     })

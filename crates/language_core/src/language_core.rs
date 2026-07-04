@@ -27,7 +27,6 @@ pub mod language_name;
 pub mod lsp_adapter;
 pub mod manifest;
 pub mod queries;
-pub mod toolchain;
 
 pub use code_label::{CodeLabel, CodeLabelBuilder, Symbol};
 pub use language_name::{LanguageId, LanguageName};
@@ -36,4 +35,3 @@ pub use lsp_adapter::{
 };
 pub use manifest::ManifestName;
 pub use queries::{LanguageQueries, QUERY_FILENAME_PREFIXES};
-pub use toolchain::{Toolchain, ToolchainList, ToolchainMetadata, ToolchainScope};
