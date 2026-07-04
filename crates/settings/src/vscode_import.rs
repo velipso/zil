@@ -457,13 +457,6 @@ impl VsCodeSettings {
             code_actions_on_format: None,
             debuggers: None,
             enable_language_server: None,
-            ensure_final_newline_on_save: self.read_bool("files.insertFinalNewline"),
-            line_ending: self.read_enum("files.eol", |s| match s {
-                "\n" => Some(LineEndingSetting::PreferLf),
-                "\r\n" => Some(LineEndingSetting::PreferCrlf),
-                "auto" => Some(LineEndingSetting::Detect),
-                _ => None,
-            }),
             extend_list_on_newline: None,
             indent_list_on_tab: None,
             indent_guides: skip_default(IndentGuideSettingsContent {
@@ -483,7 +476,6 @@ impl VsCodeSettings {
             document_folding_ranges: None,
             document_symbols: None,
             preferred_line_length: self.read_u32("editor.wordWrapColumn"),
-            remove_trailing_whitespace_on_save: self.read_bool("editor.trimAutoWhitespace"),
             show_whitespaces: self.read_enum("editor.renderWhitespace", |s| {
                 Some(match s {
                     "boundary" => ShowWhitespaceSetting::Boundary,
@@ -496,7 +488,7 @@ impl VsCodeSettings {
             show_wrap_guides: None,
             soft_wrap: self.read_enum("editor.wordWrap", |s| match s {
                 "on" => Some(SoftWrap::EditorWidth),
-                "wordWrapColumn" => Some(SoftWrap::PreferLine),
+                "wordWrapColumn" => Some(SoftWrap::None),
                 "bounded" => Some(SoftWrap::Bounded),
                 "off" => Some(SoftWrap::None),
                 _ => None,

@@ -1,4 +1,3 @@
-
 use collections::{HashMap, HashSet};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -138,9 +137,6 @@ pub enum AutoIndentMode {
 pub enum SoftWrap {
     /// Prefer a single line generally, unless an overly long line is encountered.
     None,
-    /// Deprecated: use None instead. Left to avoid breaking existing users' configs.
-    /// Prefer a single line generally, unless an overly long line is encountered.
-    PreferLine,
     /// Soft wrap lines that exceed the editor width.
     EditorWidth,
     /// Soft wrap line at the preferred line length or the editor width (whichever is smaller).
@@ -174,33 +170,6 @@ pub struct LanguageSettingsContent {
     pub wrap_guides: Option<Vec<usize>>,
     /// Indent guide related settings.
     pub indent_guides: Option<IndentGuideSettingsContent>,
-    /// Whether or not to remove any trailing whitespace from lines of a buffer
-    /// before saving it.
-    ///
-    /// Default: true
-    pub remove_trailing_whitespace_on_save: Option<bool>,
-    /// Whether or not to ensure there's a single newline at the end of a buffer
-    /// when saving it.
-    ///
-    /// Default: true
-    pub ensure_final_newline_on_save: Option<bool>,
-    /// How line endings should be handled for new files and during format and
-    /// save operations.
-    ///
-    /// - `detect`: Detect existing line endings and otherwise use the platform
-    ///   default (`lf` on Unix, `crlf` on Windows).
-    /// - `prefer_lf`: Prefer LF for new files and files with no existing line
-    ///   ending.
-    /// - `prefer_crlf`: Prefer CRLF for new files and files with no existing
-    ///   line ending.
-    /// - `enforce_lf`: Enforce LF during format and save.
-    /// - `enforce_crlf`: Enforce CRLF during format and save.
-    ///
-    /// The EditorConfig `end_of_line` property overrides this setting and
-    /// behaves like `enforce_lf` or `enforce_crlf`.
-    ///
-    /// Default: detect
-    pub line_ending: Option<LineEndingSetting>,
     /// Whether to use language servers to provide code intelligence.
     ///
     /// Default: true

@@ -3957,72 +3957,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn formatting_section() -> [SettingsPageItem; 4] {
-        [
-            SettingsPageItem::SectionHeader("Formatting"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Remove Trailing Whitespace On Save",
-                description: "Whether or not to remove any trailing whitespace from lines of a buffer before saving it.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).remove_trailing_whitespace_on_save"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.remove_trailing_whitespace_on_save.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.remove_trailing_whitespace_on_save = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Ensure Final Newline On Save",
-                description: "Whether or not to ensure there's a single newline at the end of a buffer when saving it.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).ensure_final_newline_on_save"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.ensure_final_newline_on_save.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.ensure_final_newline_on_save = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Line Ending",
-                description: "How line endings should be handled for new files and during format and save operations.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).line_ending"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.line_ending.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.line_ending = value;
-                        })
-                    },
-                }),
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    should_do_titlecase: Some(false),
-                    ..Default::default()
-                })),
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     fn whitespace_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader("Whitespace"),
@@ -4286,7 +4220,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             indentation_section(),
             wrapping_section(),
             indent_guides_section(),
-            formatting_section(),
             whitespace_section(),
             lsp_document_colors_item,
             tasks_section(),
@@ -4298,7 +4231,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
             indentation_section(),
             wrapping_section(),
             indent_guides_section(),
-            formatting_section(),
             whitespace_section(),
             tasks_section(),
             miscellaneous_section(),

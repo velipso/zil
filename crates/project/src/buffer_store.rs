@@ -12,7 +12,6 @@ use gpui::{
 };
 use language::{
     Buffer, BufferEvent, Capability, DiskState, File as _, Language, LineEnding, Operation,
-    language_settings::{AllLanguageSettings, LineEndingSetting},
     proto::{
         serialize_line_ending, serialize_version,
         split_operations,
@@ -1096,18 +1095,8 @@ fn apply_initial_line_ending(buffer: &mut Buffer, cx: &mut Context<Buffer>) {
     if buffer.max_point().row > 0 {
         return;
     }
-    let location = buffer.file().map(|file| settings::SettingsLocation {
-        worktree_id: file.worktree_id(cx),
-        path: file.path().as_ref(),
-    });
-    let language = buffer.language().map(|l| l.name());
-    let settings = AllLanguageSettings::get(location, cx).language(location, language.as_ref(), cx);
-    let desired = match settings.line_ending {
-        LineEndingSetting::Detect => return,
-        LineEndingSetting::PreferLf | LineEndingSetting::EnforceLf => LineEnding::Unix,
-        LineEndingSetting::PreferCrlf | LineEndingSetting::EnforceCrlf => LineEnding::Windows,
-    };
-    if buffer.line_ending() != desired {
-        buffer.set_line_ending(desired, cx);
-    }
+    #[cfg(windows)]
+    buffer.set_line_ending(LineEnding::Windows, cx);
+    #[cfg(not(windows))]
+    buffer.set_line_ending(LineEnding::Unix, cx);
 }

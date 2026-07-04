@@ -60,15 +60,6 @@ pub struct LanguageSettings {
     pub wrap_guides: Vec<usize>,
     /// Indent guide related settings.
     pub indent_guides: IndentGuideSettings,
-    /// Whether or not to remove any trailing whitespace from lines of a buffer
-    /// before saving it.
-    pub remove_trailing_whitespace_on_save: bool,
-    /// Whether or not to ensure there's a single newline at the end of a buffer
-    /// when saving it.
-    pub ensure_final_newline_on_save: bool,
-    /// How line endings are initialized for new files and normalized during
-    /// format and save.
-    pub line_ending: LineEndingSetting,
     /// Whether to use language servers to provide code intelligence.
     pub enable_language_server: bool,
     /// The list of language servers to use (or disable) for this language.
@@ -394,9 +385,6 @@ fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSetti
     settings
         .show_whitespaces
         .merge_from_option(show_whitespaces.as_ref());
-    settings
-        .ensure_final_newline_on_save
-        .merge_from_option(modeline.ensure_final_newline.as_ref());
 }
 
 impl settings::Settings for AllLanguageSettings {
@@ -420,11 +408,6 @@ impl settings::Settings for AllLanguageSettings {
                     coloring: indent_guides.coloring.unwrap(),
                     background_coloring: indent_guides.background_coloring.unwrap(),
                 },
-                remove_trailing_whitespace_on_save: settings
-                    .remove_trailing_whitespace_on_save
-                    .unwrap(),
-                ensure_final_newline_on_save: settings.ensure_final_newline_on_save.unwrap(),
-                line_ending: settings.line_ending.unwrap(),
                 enable_language_server: settings.enable_language_server.unwrap(),
                 language_servers: settings.language_servers.unwrap(),
                 semantic_tokens: settings.semantic_tokens.unwrap(),
