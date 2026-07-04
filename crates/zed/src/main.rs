@@ -486,7 +486,6 @@ fn main() {
         encoding_selector::init(cx);
         language_selector::init(cx);
         line_ending_selector::init(cx);
-        toolchain_selector::init(cx);
         settings_profile_selector::init(cx);
         language_tools::init(cx);
         notifications::init(cx);

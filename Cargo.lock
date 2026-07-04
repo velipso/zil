@@ -10173,26 +10173,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df8b2b54733674ad286d16267dcfc7a71ed5c776e4ac7aa3c3e2561f7c637bf2"
 
 [[package]]
-name = "toolchain_selector"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "convert_case 0.11.0",
- "editor",
- "futures",
- "fuzzy",
- "gpui",
- "language",
- "menu",
- "open_path_prompt",
- "picker",
- "project",
- "ui",
- "util",
- "workspace",
-]
-
-[[package]]
 name = "tower"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12840,7 +12820,6 @@ dependencies = [
  "theme_settings",
  "time",
  "title_bar",
- "toolchain_selector",
  "ui",
  "ui_prompt",
  "url",
