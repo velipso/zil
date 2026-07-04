@@ -119,57 +119,10 @@ pub enum AutoIndentMode {
     None,
 }
 
-/// Controls the soft-wrapping behavior in the editor.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum SoftWrap {
-    /// Prefer a single line generally, unless an overly long line is encountered.
-    None,
-    /// Soft wrap lines that exceed the editor width.
-    EditorWidth,
-    /// Soft wrap line at the preferred line length or the editor width (whichever is smaller).
-    #[serde(alias = "preferred_line_length")]
-    Bounded,
-}
-
 /// The settings for a particular language.
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LanguageSettingsContent {
-    /// How to soft-wrap long lines of text.
-    ///
-    /// Default: none
-    pub soft_wrap: Option<SoftWrap>,
-    /// The column at which to soft-wrap lines, for buffers where soft-wrap
-    /// is enabled.
-    ///
-    /// Default: 80
-    pub preferred_line_length: Option<u32>,
-    /// Whether to show wrap guides in the editor. Setting this to true will
-    /// show a guide at the 'preferred_line_length' value if softwrap is set to
-    /// 'preferred_line_length', and will show any additional guides as specified
-    /// by the 'wrap_guides' setting.
-    ///
-    /// Default: true
-    pub show_wrap_guides: Option<bool>,
-    /// Character counts at which to show wrap guides in the editor.
-    ///
-    /// Default: []
-    pub wrap_guides: Option<Vec<usize>>,
-    /// Indent guide related settings.
-    pub indent_guides: Option<IndentGuideSettingsContent>,
     /// Whether to use language servers to provide code intelligence.
     ///
     /// Default: true
@@ -554,32 +507,6 @@ struct LanguageServerSpecifierContent {
     name: Option<String>,
 }
 
-/// The settings for indent guides.
-#[with_fallible_options]
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct IndentGuideSettingsContent {
-    /// Whether to display indent guides in the editor.
-    ///
-    /// Default: true
-    pub enabled: Option<bool>,
-    /// The width of the indent guides in pixels, between 1 and 10.
-    ///
-    /// Default: 1
-    pub line_width: Option<u32>,
-    /// The width of the active indent guide in pixels, between 1 and 10.
-    ///
-    /// Default: 1
-    pub active_line_width: Option<u32>,
-    /// Determines how indent guides are colored.
-    ///
-    /// Default: Fixed
-    pub coloring: Option<IndentGuideColoring>,
-    /// Determines how indent guide backgrounds are colored.
-    ///
-    /// Default: Disabled
-    pub background_coloring: Option<IndentGuideBackgroundColoring>,
-}
-
 /// The task settings for a particular language.
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Serialize, JsonSchema, MergeFrom)]
@@ -601,56 +528,6 @@ pub struct LanguageTaskSettingsContent {
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LanguageToSettingsMap(pub HashMap<String, LanguageSettingsContent>);
-
-/// Determines how indent guides are colored.
-#[derive(
-    Default,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum IndentGuideColoring {
-    /// Do not render any lines for indent guides.
-    Disabled,
-    /// Use the same color for all indentation levels.
-    #[default]
-    Fixed,
-    /// Use a different color for each indentation level.
-    IndentAware,
-}
-
-/// Determines how indent guide backgrounds are colored.
-#[derive(
-    Default,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum IndentGuideBackgroundColoring {
-    /// Do not render any background for indent guides.
-    #[default]
-    Disabled,
-    /// Use a different color for each indentation level.
-    IndentAware,
-}
 
 #[cfg(test)]
 mod test {

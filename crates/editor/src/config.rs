@@ -11,15 +11,6 @@ impl Editor {
         }
     }
 
-    pub fn set_soft_wrap_mode(
-        &mut self,
-        mode: language_settings::SoftWrap,
-        cx: &mut Context<Self>,
-    ) {
-        self.soft_wrap_mode_override = Some(mode);
-        cx.notify();
-    }
-
     pub fn set_hard_wrap(&mut self, hard_wrap: Option<usize>, cx: &mut Context<Self>) {
         self.hard_wrap = hard_wrap;
         cx.notify();
@@ -46,20 +37,6 @@ impl Editor {
             display_map.update(cx, |map, cx| map.set_font(font, font_size, cx));
         }
         self.style = Some(style);
-    }
-
-    pub fn set_soft_wrap(&mut self) {
-        self.soft_wrap_mode_override = Some(language_settings::SoftWrap::EditorWidth)
-    }
-
-    pub fn set_show_wrap_guides(&mut self, show_wrap_guides: bool, cx: &mut Context<Self>) {
-        self.show_wrap_guides = Some(show_wrap_guides);
-        cx.notify();
-    }
-
-    pub fn set_show_indent_guides(&mut self, show_indent_guides: bool, cx: &mut Context<Self>) {
-        self.show_indent_guides = Some(show_indent_guides);
-        cx.notify();
     }
 
     pub fn disable_indent_guides_for_buffer(
@@ -183,39 +160,6 @@ impl Editor {
         cx.notify();
     }
 
-    pub(super) fn wrap_guides(&self, cx: &App) -> SmallVec<[(usize, bool); 2]> {
-        let mut wrap_guides = smallvec![];
-
-        if self.show_wrap_guides == Some(false) {
-            return wrap_guides;
-        }
-
-        let settings = self.buffer.read(cx).language_settings(cx);
-        if settings.show_wrap_guides {
-            match self.soft_wrap_mode(cx) {
-                SoftWrap::Bounded(soft_wrap) => {
-                    wrap_guides.push((soft_wrap as usize, true));
-                }
-                SoftWrap::None | SoftWrap::EditorWidth => {}
-            }
-            wrap_guides.extend(settings.wrap_guides.iter().map(|guide| (*guide, false)))
-        }
-
-        wrap_guides
-    }
-
-    pub(super) fn soft_wrap_mode(&self, cx: &App) -> SoftWrap {
-        let settings = self.buffer.read(cx).language_settings(cx);
-        let mode = self.soft_wrap_mode_override.unwrap_or(settings.soft_wrap);
-        match mode {
-            language_settings::SoftWrap::None => SoftWrap::None,
-            language_settings::SoftWrap::EditorWidth => SoftWrap::EditorWidth,
-            language_settings::SoftWrap::Bounded => {
-                SoftWrap::Bounded(settings.preferred_line_length)
-            }
-        }
-    }
-
     // Called by the element. This method is not designed to be called outside of the editor
     // element's layout code because it does not notify when rewrapping is computed synchronously.
     pub(super) fn set_wrap_width(&self, width: Option<Pixels>, cx: &mut App) -> bool {
@@ -237,16 +181,28 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.soft_wrap_mode_override.is_some() {
-            self.soft_wrap_mode_override.take();
-        } else {
-            let soft_wrap = match self.soft_wrap_mode(cx) {
-                SoftWrap::None => language_settings::SoftWrap::EditorWidth,
-                SoftWrap::EditorWidth | SoftWrap::Bounded(_) => language_settings::SoftWrap::None,
-            };
-            self.soft_wrap_mode_override = Some(soft_wrap);
-        }
+       let fs = <dyn fs::Fs>::global(cx);
+
+        settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
+            content.editor.soft_wrap = Some(!content.editor.soft_wrap.unwrap_or(false));
+        });
+
         cx.notify();
+    }
+
+    pub fn set_soft_wrap(&mut self, soft_wrap: Option<bool>, cx: &mut Context<Self>) {
+        self.soft_wrap = soft_wrap;
+        cx.notify();
+    }
+
+    pub fn should_soft_wrap(&self, cx: &App) -> bool {
+        match self.mode {
+            EditorMode::SingleLine => false,
+            EditorMode::AutoHeight { .. } => true,
+            EditorMode::Full { .. } | EditorMode::Minimap { .. } => {
+                self.soft_wrap.unwrap_or_else(|| EditorSettings::get_global(cx).soft_wrap)
+            }
+        }
     }
 
     pub(super) fn toggle_tab_bar(
@@ -265,25 +221,13 @@ impl Editor {
         });
     }
 
-    pub(super) fn toggle_indent_guides(
-        &mut self,
-        _: &ToggleIndentGuides,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let currently_enabled = self.should_show_indent_guides().unwrap_or_else(|| {
-            self.buffer
-                .read(cx)
-                .language_settings(cx)
-                .indent_guides
-                .enabled
-        });
-        self.show_indent_guides = Some(!currently_enabled);
-        cx.notify();
-    }
-
-    pub(super) fn should_show_indent_guides(&self) -> Option<bool> {
-        self.show_indent_guides
+    pub fn should_show_indent_guides(&self, cx: &App) -> bool {
+        match self.mode {
+            EditorMode::SingleLine
+            | EditorMode::AutoHeight { .. }
+            | EditorMode::Minimap { .. } => false,
+            EditorMode::Full { .. }  => EditorSettings::get_global(cx).indent_guides.enabled
+        }
     }
 
     pub(super) fn has_indent_guides_disabled_for_buffer(&self, buffer_id: BufferId) -> bool {
@@ -299,5 +243,9 @@ impl Editor {
     ) {
         let is_relative = self.relative_line_numbers(cx);
         self.set_relative_line_number(Some(!is_relative.enabled()), cx)
+    }
+
+    pub fn rulers(&self, cx: &App) -> Vec<usize> {
+        EditorSettings::get_global(cx).rulers.clone()
     }
 }

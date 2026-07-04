@@ -2,7 +2,6 @@ use std::{cmp::Ordering, num::NonZeroU32, ops::Range, time::Duration};
 
 use collections::HashSet;
 use gpui::{App, AppContext as _, Context, Task, Window};
-use language::language_settings::LanguageSettings;
 use multi_buffer::{IndentGuide, MultiBufferRow, ToPoint};
 use text::{LineIndent, Point};
 use util::ResultExt;
@@ -35,21 +34,13 @@ impl Editor {
         snapshot: &DisplaySnapshot,
         cx: &mut Context<Editor>,
     ) -> Option<Vec<IndentGuide>> {
-        let show_indent_guides = self.should_show_indent_guides().unwrap_or_else(|| {
-            let buffer = self.buffer().read(cx).as_singleton();
-            LanguageSettings::for_buffer(buffer.read(cx), cx)
-                .indent_guides
-                .enabled
-        });
-
-        if !show_indent_guides {
+        if !self.should_show_indent_guides(cx) {
             return None;
         }
 
         Some(indent_guides_in_range(
             self,
             visible_buffer_range,
-            self.should_show_indent_guides() == Some(true),
             self.buffer.read_with(cx, |mb, cx| mb.tab_size(cx)),
             snapshot,
             cx,
@@ -144,7 +135,6 @@ impl Editor {
 pub fn indent_guides_in_range(
     editor: &Editor,
     visible_buffer_range: Range<MultiBufferRow>,
-    ignore_disabled_for_language: bool,
     tab_size: NonZeroU32,
     snapshot: &DisplaySnapshot,
     cx: &App,
@@ -176,9 +166,7 @@ pub fn indent_guides_in_range(
         .buffer_snapshot()
         .indent_guides_in_range(
             start_anchor..end_anchor,
-            ignore_disabled_for_language,
             tab_size,
-            cx
         )
         .filter(|indent_guide| {
             if editor.has_indent_guides_disabled_for_buffer(indent_guide.buffer_id) {

@@ -391,13 +391,8 @@
   //  - "hint"
   //  - "all" — allow all diagnostics (default)
   "diagnostics_max_severity": "all",
-  // Whether to show wrap guides (vertical rulers) in the editor.
-  // Setting this to true will show a guide at the 'preferred_line_length' value
-  // if 'soft_wrap' is set to 'preferred_line_length', and will show any
-  // additional guides as specified by the 'wrap_guides' setting.
-  "show_wrap_guides": true,
-  // Character counts at which to show wrap guides in the editor.
-  "wrap_guides": [],
+  // Character counts at which to show rulers in the editor.
+  "rulers": [],
   // Hide the values of in variables from visual display in private files
   "redact_private_values": false,
   // The default number of lines to expand excerpts in the multibuffer by.
@@ -1367,11 +1362,6 @@
     // Whether to include text channels in file finder results.
     "include_channels": false,
   },
-  // Whether or not to remove any trailing whitespace from lines of a buffer
-  // before saving it.
-  "remove_trailing_whitespace_on_save": true,
-  // Whether to start a new line with a comment when a previous line is a comment as well.
-  "extend_comment_on_newline": true,
   // Whether to continue markdown lists when pressing enter.
   "extend_list_on_newline": true,
   // Whether to indent list items when pressing tab after a list marker.
@@ -1386,10 +1376,7 @@
   //      "soft_wrap": "editor_width",
   // 3. Soft wrap lines at the preferred line length or the editor width (whichever is smaller).
   //      "soft_wrap": "bounded",
-  "soft_wrap": "none",
-  // The column at which to soft-wrap lines, for buffers where soft-wrap
-  // is enabled.
-  "preferred_line_length": 80,
+  "soft_wrap": false,
   // How many columns a tab should occupy for new files or when detection fails.
   "default_tab_size": 2,
   // Default to hard tabs for new files or when indentation cannot be detected.

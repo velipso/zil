@@ -195,27 +195,6 @@ impl Editor {
                 cx,
                 |s| s.select(new_selections),
             );
-
-            if this.hard_wrap.is_some() {
-                let latest: Range<Point> = this.selections.newest(&map).range();
-                if latest.is_empty()
-                    && this
-                        .buffer()
-                        .read(cx)
-                        .snapshot(cx)
-                        .line_len(MultiBufferRow(latest.start.row))
-                        == latest.start.column
-                {
-                    this.rewrap(
-                        RewrapOptions {
-                            override_language_settings: true,
-                            preserve_existing_whitespace: true,
-                            line_length: None,
-                        },
-                        cx,
-                    )
-                }
-            }
         });
     }
 

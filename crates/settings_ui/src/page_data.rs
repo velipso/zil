@@ -157,6 +157,19 @@ fn general_page(cx: &App) -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
+                title: "Soft Wrap",
+                description: "Wrap long lines in the editor.",
+                field: Box::new(SettingField {
+                    json_path: Some("soft_wrap"),
+                    pick: |settings_content| settings_content.editor.soft_wrap.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.editor.soft_wrap = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
                 title: "Redact Private Values",
                 description: "Hide the values of variables in private files.",
                 field: Box::new(SettingField {
@@ -940,60 +953,6 @@ fn appearance_page() -> SettingsPage {
         ]
     }
 
-    fn guides_section() -> [SettingsPageItem; 3] {
-        [
-            SettingsPageItem::SectionHeader("Guides"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Wrap Guides",
-                description: "Show wrap guides (vertical rulers).",
-                field: Box::new(SettingField {
-                    json_path: Some("show_wrap_guides"),
-                    pick: |settings_content| {
-                        settings_content
-                            .project
-                            .all_languages
-                            .defaults
-                            .show_wrap_guides
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .project
-                            .all_languages
-                            .defaults
-                            .show_wrap_guides = value;
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            // todo(settings_ui): This needs a custom component
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Wrap Guides",
-                description: "Character counts at which to show wrap guides.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("wrap_guides"),
-                        pick: |settings_content| {
-                            settings_content
-                                .project
-                                .all_languages
-                                .defaults
-                                .wrap_guides
-                                .as_ref()
-                        },
-                        write: |settings_content, value, _| {
-                            settings_content.project.all_languages.defaults.wrap_guides = value;
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     let items: Box<[SettingsPageItem]> = concat_sections!(
         theme_section(),
         buffer_font_section(),
@@ -1002,7 +961,6 @@ fn appearance_page() -> SettingsPage {
         text_rendering_section(),
         cursor_section(),
         highlighting_section(),
-        guides_section(),
     );
 
     SettingsPage {
@@ -1515,6 +1473,118 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
+
+    fn indent_guides_section() -> [SettingsPageItem; 6] {
+        [
+            SettingsPageItem::SectionHeader("Indent Guides"),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Enabled",
+                description: "Display indent guides in the editor.",
+                field: Box::new(SettingField {
+                    json_path: Some("indent_guides.enabled"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .indent_guides
+                            .as_ref()
+                            .and_then(|indent_guides| indent_guides.enabled.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .indent_guides.get_or_insert_default().enabled = value;
+                    },
+                }),
+                metadata: None,
+                files: USER | PROJECT,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Line Width",
+                description: "The width of the indent guides in pixels, between 1 and 10.",
+                field: Box::new(SettingField {
+                    json_path: Some("indent_guides.line_width"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .indent_guides
+                            .as_ref()
+                            .and_then(|indent_guides| indent_guides.line_width.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .indent_guides.get_or_insert_default().line_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER | PROJECT,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Active Line Width",
+                description: "The width of the active indent guide in pixels, between 1 and 10.",
+                field: Box::new(SettingField {
+                    json_path: Some("indent_guides.active_line_width"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .indent_guides
+                            .as_ref()
+                            .and_then(|indent_guides| indent_guides.active_line_width.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .indent_guides.get_or_insert_default().active_line_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER | PROJECT,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Coloring",
+                description: "Determines how indent guides are colored.",
+                field: Box::new(SettingField {
+                    json_path: Some("indent_guides.coloring"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .indent_guides
+                            .as_ref()
+                            .and_then(|indent_guides| indent_guides.coloring.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .indent_guides.get_or_insert_default().coloring = value;
+                    },
+                }),
+                metadata: None,
+                files: USER | PROJECT,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Background Coloring",
+                description: "Determines how indent guide backgrounds are colored.",
+                field: Box::new(SettingField {
+                    json_path: Some("indent_guides.background_coloring"),
+                    pick: |settings_content| {
+                        settings_content
+                            .editor
+                            .indent_guides
+                            .as_ref()
+                            .and_then(|indent_guides| indent_guides.background_coloring.as_ref())
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .editor
+                            .indent_guides.get_or_insert_default().background_coloring = value;
+                    },
+                }),
+                metadata: None,
+                files: USER | PROJECT,
+            }),
+        ]
+    }
+
     fn scrollbar_section() -> [SettingsPageItem; 7] {
         [
             SettingsPageItem::SectionHeader("Scrollbar"),
@@ -1929,6 +1999,7 @@ fn editor_page() -> SettingsPage {
         hover_popover_section(),
         drag_and_drop_selection_section(),
         gutter_section(),
+        indent_guides_section(),
         scrollbar_section(),
         minimap_section(),
         toolbar_section(),
@@ -3728,235 +3799,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn wrapping_section() -> [SettingsPageItem; 6] {
-        [
-            SettingsPageItem::SectionHeader("Wrapping"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Soft Wrap",
-                description: "How to soft-wrap long lines of text.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).soft_wrap"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.soft_wrap.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.soft_wrap = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Wrap Guides",
-                description: "Show wrap guides in the editor.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).show_wrap_guides"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.show_wrap_guides.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.show_wrap_guides = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Preferred Line Length",
-                description: "The column at which to soft-wrap lines, for buffers where soft-wrap is enabled.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).preferred_line_length"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.preferred_line_length.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.preferred_line_length = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Wrap Guides",
-                description: "Character counts at which to show wrap guides in the editor.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).wrap_guides"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.wrap_guides.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.wrap_guides = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Allow Rewrap",
-                description: "Controls where the `editor::rewrap` action is allowed for this language.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).allow_rewrap"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.allow_rewrap.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.allow_rewrap = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
-    fn indent_guides_section() -> [SettingsPageItem; 6] {
-        [
-            SettingsPageItem::SectionHeader("Indent Guides"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enabled",
-                description: "Display indent guides in the editor.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).indent_guides.enabled"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language
-                                .indent_guides
-                                .as_ref()
-                                .and_then(|indent_guides| indent_guides.enabled.as_ref())
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.indent_guides.get_or_insert_default().enabled = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Line Width",
-                description: "The width of the indent guides in pixels, between 1 and 10.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).indent_guides.line_width"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language
-                                .indent_guides
-                                .as_ref()
-                                .and_then(|indent_guides| indent_guides.line_width.as_ref())
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.indent_guides.get_or_insert_default().line_width = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Active Line Width",
-                description: "The width of the active indent guide in pixels, between 1 and 10.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).indent_guides.active_line_width"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language
-                                .indent_guides
-                                .as_ref()
-                                .and_then(|indent_guides| indent_guides.active_line_width.as_ref())
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language
-                                .indent_guides
-                                .get_or_insert_default()
-                                .active_line_width = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Coloring",
-                description: "Determines how indent guides are colored.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).indent_guides.coloring"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language
-                                .indent_guides
-                                .as_ref()
-                                .and_then(|indent_guides| indent_guides.coloring.as_ref())
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.indent_guides.get_or_insert_default().coloring = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Background Coloring",
-                description: "Determines how indent guide backgrounds are colored.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).indent_guides.background_coloring"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.indent_guides.as_ref().and_then(|indent_guides| {
-                                indent_guides.background_coloring.as_ref()
-                            })
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language
-                                .indent_guides
-                                .get_or_insert_default()
-                                .background_coloring = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-        ]
-    }
-
     fn whitespace_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader("Whitespace"),
@@ -4218,8 +4060,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
     if is_global {
         concat_sections!(
             indentation_section(),
-            wrapping_section(),
-            indent_guides_section(),
             whitespace_section(),
             lsp_document_colors_item,
             tasks_section(),
@@ -4229,8 +4069,6 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
     } else {
         concat_sections!(
             indentation_section(),
-            wrapping_section(),
-            indent_guides_section(),
             whitespace_section(),
             tasks_section(),
             miscellaneous_section(),

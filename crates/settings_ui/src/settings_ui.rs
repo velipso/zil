@@ -465,7 +465,6 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<settings::HideMouseMode>(render_dropdown)
         .add_basic_renderer::<settings::CurrentLineHighlight>(render_dropdown)
         .add_basic_renderer::<settings::ShowWhitespaceSetting>(render_dropdown)
-        .add_basic_renderer::<settings::SoftWrap>(render_dropdown)
         .add_basic_renderer::<settings::AutoIndentMode>(render_dropdown)
         .add_basic_renderer::<settings::ScrollBeyondLastLine>(render_dropdown)
         .add_basic_renderer::<settings::ClosePosition>(render_dropdown)

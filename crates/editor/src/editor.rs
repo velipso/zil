@@ -42,7 +42,6 @@ mod clipboard;
 mod config;
 mod input;
 mod navigation;
-mod rewrap;
 mod selection;
 
 pub(crate) use actions::*;
@@ -102,13 +101,10 @@ use itertools::{Either, Itertools};
 use language::{
     AutoindentMode, BlockCommentConfig, Buffer, BufferRow,
     BufferSnapshot, Capability, CharKind, CodeLabel, CursorShape,
-    DiffOptions, HighlightedText, IndentKind, IndentSize, Language,
+    HighlightedText, IndentKind, IndentSize, Language,
     LanguageAwareStyling, LanguageName, LanguageScope, OffsetRangeExt,
     OutlineItem, Point, Selection, SelectionGoal, TextObject, TransactionId, TreeSitterOptions,
-    language_settings::{
-        self, LanguageSettings, RewrapBehavior,
-    },
-    text_diff_with_options,
+    language_settings::LanguageSettings,
 };
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
@@ -133,7 +129,7 @@ use settings::{
     GitGutterSetting, RelativeLineNumbers, Settings, SettingsLocation, SettingsStore,
     update_settings_file,
 };
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
     borrow::Cow,
@@ -365,16 +361,6 @@ impl EditorMode {
     fn could_have_scrollbars(&self) -> bool {
         self.is_full()
     }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum SoftWrap {
-    /// Prefer a single line generally, unless an overly long line is encountered.
-    None,
-    /// Soft wrap lines that exceed the editor width.
-    EditorWidth,
-    /// Soft wrap line at the preferred line length or the editor width (whichever is smaller).
-    Bounded(u32),
 }
 
 #[derive(Clone)]
@@ -759,7 +745,6 @@ pub struct Editor {
     deferred_selection_effects_state: Option<DeferredSelectionEffectsState>,
     select_syntax_node_history: SelectSyntaxNodeHistory,
     ime_transaction: Option<TransactionId>,
-    soft_wrap_mode_override: Option<language_settings::SoftWrap>,
     hard_wrap: Option<usize>,
     project: Option<Entity<Project>>,
     semantics_provider: Option<Rc<dyn SemanticsProvider>>,
@@ -778,10 +763,9 @@ pub struct Editor {
     needs_initial_data_update: bool,
     enable_mouse_wheel_zoom: bool,
     show_line_numbers: Option<bool>,
+    soft_wrap: Option<bool>,
     use_relative_line_numbers: Option<bool>,
     show_git_diff_gutter: Option<bool>,
-    show_wrap_guides: Option<bool>,
-    show_indent_guides: Option<bool>,
     buffers_with_disabled_indent_guides: HashSet<BufferId>,
     highlight_order: usize,
     highlighted_rows: HashMap<TypeId, Vec<RowHighlight>>,
@@ -1613,9 +1597,6 @@ impl Editor {
             blink_manager
         });
 
-        let soft_wrap_mode_override =
-            matches!(mode, EditorMode::SingleLine).then(|| language_settings::SoftWrap::None);
-
         let mut project_subscriptions = Vec::new();
         if full_mode && let Some(project) = project.as_ref() {
             project_subscriptions.push(cx.subscribe_in(
@@ -1725,13 +1706,6 @@ impl Editor {
                 .detach();
         }
 
-        let show_indent_guides =
-            if matches!(mode, EditorMode::SingleLine | EditorMode::Minimap { .. }) {
-                Some(false)
-            } else {
-                None
-            };
-
         let mut editor = Self {
             focus_handle,
             show_cursor_when_unfocused: false,
@@ -1751,7 +1725,6 @@ impl Editor {
             deferred_selection_effects_state: None,
             select_syntax_node_history: SelectSyntaxNodeHistory::default(),
             ime_transaction: None,
-            soft_wrap_mode_override,
             hard_wrap: None,
             semantics_provider: project
                 .as_ref()
@@ -1765,14 +1738,13 @@ impl Editor {
             breadcrumbs_visibility: BreadcrumbsVisibility::from_settings(cx),
             show_gutter: full_mode,
             show_line_numbers: (!full_mode).then_some(false),
+            soft_wrap: None,
             use_relative_line_numbers: None,
             disable_expand_excerpt_buttons: !full_mode,
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
             enable_mouse_wheel_zoom: full_mode,
             show_git_diff_gutter: None,
-            show_wrap_guides: None,
-            show_indent_guides,
             buffers_with_disabled_indent_guides: HashSet::default(),
             highlight_order: 0,
             highlighted_rows: HashMap::default(),
@@ -5839,11 +5811,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         if let Some(path) = self.target_file_abs_path(cx) {
-            if let Some(project) = self.project() {
-                project.update(cx, |project, cx| project.reveal_path(&path, cx));
-            } else {
-                cx.reveal_path(&path);
-            }
+            cx.reveal_path(&path);
         }
     }
 

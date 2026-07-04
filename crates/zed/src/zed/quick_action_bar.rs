@@ -93,6 +93,7 @@ impl Render for QuickActionBar {
                 }
             });
         let show_line_numbers = editor_value.line_numbers_enabled(cx);
+        let soft_wrap = editor_value.should_soft_wrap(cx);
 
         let tab_size = editor_value.tab_size(cx);
         let hard_tabs = editor_value.hard_tabs(cx);
@@ -183,6 +184,22 @@ impl Render for QuickActionBar {
                                         move |window, cx| {
                                             editor_focus_handle.dispatch_action(
                                                 &editor::actions::ToggleLineNumbers,
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .toggleable_entry(
+                                    "Soft Wrap",
+                                    soft_wrap,
+                                    IconPosition::Start,
+                                    Some(Box::new(editor::actions::ToggleSoftWrap)),
+                                    {
+                                        let editor_focus_handle = editor_focus_handle.clone();
+                                        move |window, cx| {
+                                            editor_focus_handle.dispatch_action(
+                                                &editor::actions::ToggleSoftWrap,
                                                 window,
                                                 cx,
                                             );

@@ -225,6 +225,9 @@ impl VsCodeSettings {
             fast_scroll_sensitivity: self.read_f32("editor.fastScrollSensitivity"),
             sticky_scroll: self.sticky_scroll_content(),
             gutter: self.gutter_content(),
+            soft_wrap: None,
+            rulers: None,
+            indent_guides: None,
             horizontal_scroll_margin: None,
             hover_popover_delay: self.read_u64("editor.hover.delay").map(Into::into),
             hover_popover_enabled: self.read_bool("editor.hover.enabled"),
@@ -459,10 +462,6 @@ impl VsCodeSettings {
             enable_language_server: None,
             extend_list_on_newline: None,
             indent_list_on_tab: None,
-            indent_guides: skip_default(IndentGuideSettingsContent {
-                enabled: self.read_bool("editor.guides.indentation"),
-                ..Default::default()
-            }),
             language_servers: None,
             semantic_tokens: self
                 .read_bool("editor.semanticHighlighting.enabled")
@@ -475,7 +474,6 @@ impl VsCodeSettings {
                 }),
             document_folding_ranges: None,
             document_symbols: None,
-            preferred_line_length: self.read_u32("editor.wordWrapColumn"),
             show_whitespaces: self.read_enum("editor.renderWhitespace", |s| {
                 Some(match s {
                     "boundary" => ShowWhitespaceSetting::Boundary,
@@ -485,24 +483,8 @@ impl VsCodeSettings {
                     _ => ShowWhitespaceSetting::None,
                 })
             }),
-            show_wrap_guides: None,
-            soft_wrap: self.read_enum("editor.wordWrap", |s| match s {
-                "on" => Some(SoftWrap::EditorWidth),
-                "wordWrapColumn" => Some(SoftWrap::None),
-                "bounded" => Some(SoftWrap::Bounded),
-                "off" => Some(SoftWrap::None),
-                _ => None,
-            }),
             tasks: None,
             whitespace_map: None,
-            wrap_guides: self
-                .read_value("editor.rulers")
-                .and_then(|v| v.as_array())
-                .map(|v| {
-                    v.iter()
-                        .flat_map(|n| n.as_u64().map(|n| n as usize))
-                        .collect()
-                }),
             word_diff_enabled: None,
         }
     }

@@ -24,7 +24,7 @@ mod text_diff;
 #[cfg(test)]
 pub mod buffer_tests;
 
-pub use crate::language_settings::{AutoIndentMode, IndentGuideSettings};
+pub use crate::language_settings::AutoIndentMode;
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::{HashMap, HashSet};
@@ -43,7 +43,7 @@ pub use language_core::{
     InjectionPatternConfig, LanguageConfig, LanguageConfigOverride,
     LanguageId, LanguageMatcher, OrderedListConfig, OutlineConfig, Override, OverrideConfig,
     OverrideEntry, PromptResponseContext, RedactionConfig,
-    SoftWrap, Symbol, TaskListConfig, TextObject, TextObjectConfig, ToLspPosition,
+    Symbol, TaskListConfig, TextObject, TextObjectConfig, ToLspPosition,
     WrapCharactersConfig, deserialize_regex,
     deserialize_regex_vec, regex_json_schema, regex_vec_json_schema, serialize_regex,
 };
@@ -97,14 +97,6 @@ pub use syntax_map::{
 pub use text::{AnchorRangeExt, LineEnding};
 pub use tree_sitter::{Node, Parser, QueryCapture, Tree, TreeCursor};
 
-pub(crate) fn to_settings_soft_wrap(value: language_core::SoftWrap) -> settings::SoftWrap {
-    match value {
-        language_core::SoftWrap::None => settings::SoftWrap::None,
-        language_core::SoftWrap::EditorWidth => settings::SoftWrap::EditorWidth,
-        language_core::SoftWrap::Bounded => settings::SoftWrap::Bounded,
-    }
-}
-
 static QUERY_CURSORS: Mutex<Vec<QueryCursor>> = Mutex::new(vec![]);
 static PARSERS: Mutex<Vec<Parser>> = Mutex::new(vec![]);
 
@@ -148,7 +140,6 @@ pub static PLAIN_TEXT: LazyLock<Arc<Language>> = LazyLock::new(|| {
     Arc::new(Language::new(
         LanguageConfig {
             name: "Plain Text".into(),
-            soft_wrap: Some(SoftWrap::EditorWidth),
             matcher: LanguageMatcher {
                 path_suffixes: vec!["txt".to_owned()],
                 first_line_pattern: None,

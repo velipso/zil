@@ -22,7 +22,7 @@ use itertools::Itertools;
 use language::{
     AutoindentMode, Buffer, BufferChunks, BufferEditSource, BufferRow, BufferSnapshot, Capability,
     CharClassifier, CharKind, Chunk, CursorShape, DiagnosticEntryRef, File,
-    IndentGuideSettings, IndentSize, Language, LanguageAwareStyling, LanguageScope, OffsetRangeExt,
+    IndentSize, Language, LanguageAwareStyling, LanguageScope, OffsetRangeExt,
     OffsetUtf16, OutlineItem, Point, PointUtf16, Selection, TextDimension, TextObject,
     ToOffset as _, ToPoint as _, TransactionId, TreeSitterOptions, Unclipped,
     language_settings::{AllLanguageSettings, LanguageSettings},
@@ -1076,7 +1076,6 @@ pub struct IndentGuide {
     pub end_row: MultiBufferRow,
     pub depth: u32,
     pub tab_size: u32,
-    pub settings: IndentGuideSettings,
 }
 
 impl IndentGuide {
@@ -4702,17 +4701,11 @@ impl MultiBufferSnapshot {
     pub fn line_indents(
         &self,
         start_row: MultiBufferRow,
-        buffer_filter: impl Fn(&BufferSnapshot) -> bool,
     ) -> impl Iterator<Item = (MultiBufferRow, LineIndent, &BufferSnapshot)> {
         let max_point = self.max_point();
         let mut cursor = self.cursor::<Point, Point>();
         cursor.seek(&Point::new(start_row.0, 0));
         iter::from_fn(move || {
-            let mut region = cursor.region()?;
-            while !buffer_filter(&region.excerpt.buffer_snapshot(self)) {
-                cursor.next();
-                region = cursor.region()?;
-            }
             let region = cursor.region()?;
             let overshoot = start_row.0.saturating_sub(region.range.start.row);
             let buffer_start_row =
@@ -4744,17 +4737,11 @@ impl MultiBufferSnapshot {
     pub fn reversed_line_indents(
         &self,
         end_row: MultiBufferRow,
-        buffer_filter: impl Fn(&BufferSnapshot) -> bool,
     ) -> impl Iterator<Item = (MultiBufferRow, LineIndent, &BufferSnapshot)> {
         let max_point = self.max_point();
         let mut cursor = self.cursor::<Point, Point>();
         cursor.seek(&Point::new(end_row.0, 0));
         iter::from_fn(move || {
-            let mut region = cursor.region()?;
-            while !buffer_filter(&region.excerpt.buffer_snapshot(self)) {
-                cursor.prev();
-                region = cursor.region()?;
-            }
             let region = cursor.region()?;
 
             let buffer_start_row = region.buffer_range.start.row;
@@ -4821,7 +4808,7 @@ impl MultiBufferSnapshot {
                 MultiBufferRow((max_row.0 + 1).min(target_row.0 + SEARCH_WHITESPACE_ROW_LIMIT));
 
             let mut non_empty_line_above = None;
-            for (row, indent, _) in self.reversed_line_indents(target_row, |_| true) {
+            for (row, indent, _) in self.reversed_line_indents(target_row) {
                 if row < start {
                     break;
                 }
@@ -4837,7 +4824,7 @@ impl MultiBufferSnapshot {
             }
 
             let mut non_empty_line_below = None;
-            for (row, indent, _) in self.line_indents(target_row, |_| true) {
+            for (row, indent, _) in self.line_indents(target_row) {
                 if row > end {
                     break;
                 }
@@ -4873,7 +4860,7 @@ impl MultiBufferSnapshot {
         let end = MultiBufferRow((max_row.0 + 1).min(target_row.0 + SEARCH_ROW_LIMIT));
 
         let mut start_indent = None;
-        for (row, indent, _) in self.reversed_line_indents(target_row, |_| true) {
+        for (row, indent, _) in self.reversed_line_indents(target_row) {
             if row < start {
                 break;
             }
@@ -4890,7 +4877,7 @@ impl MultiBufferSnapshot {
         let (start_row, start_indent_size) = start_indent?;
 
         let mut end_indent = (end, None);
-        for (row, indent, _) in self.line_indents(target_row, |_| true) {
+        for (row, indent, _) in self.line_indents(target_row) {
             if row > end {
                 break;
             }
@@ -4922,44 +4909,23 @@ impl MultiBufferSnapshot {
     pub fn indent_guides_in_range<T: ToPoint>(
         &self,
         range: Range<T>,
-        ignore_disabled_for_language: bool,
         tab_size: NonZeroU32,
-        cx: &App,
     ) -> impl Iterator<Item = IndentGuide> {
         let tab_size = tab_size.get();
         let range = range.start.to_point(self)..range.end.to_point(self);
         let start_row = MultiBufferRow(range.start.row);
         let end_row = MultiBufferRow(range.end.row);
 
-        let mut row_indents = self.line_indents(start_row, |buffer| {
-            let settings = LanguageSettings::for_buffer_snapshot(buffer, None, cx);
-            settings.indent_guides.enabled || ignore_disabled_for_language
-        });
+        let mut row_indents = self.line_indents(start_row);
 
         let mut result = Vec::new();
         let mut indent_stack = SmallVec::<[IndentGuide; 8]>::new();
 
-        let mut prev_settings = None;
         while let Some((first_row, mut line_indent, buffer)) = row_indents.next() {
             if first_row > end_row {
                 break;
             }
             let current_depth = indent_stack.len() as u32;
-
-            // Avoid retrieving the language settings repeatedly for every buffer row.
-            if let Some((prev_buffer_id, _)) = &prev_settings
-                && prev_buffer_id != &buffer.remote_id()
-            {
-                prev_settings.take();
-            }
-            let settings = &prev_settings
-                .get_or_insert_with(|| {
-                    (
-                        buffer.remote_id(),
-                        LanguageSettings::for_buffer_snapshot(buffer, None, cx),
-                    )
-                })
-                .1;
 
             // When encountering empty, continue until found useful line indent
             // then add to the indent stack with the depth found
@@ -5017,7 +4983,6 @@ impl MultiBufferSnapshot {
                             end_row: last_row,
                             depth: next_depth,
                             tab_size,
-                            settings: settings.indent_guides.clone(),
                         });
                     }
                 }

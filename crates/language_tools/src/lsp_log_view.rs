@@ -5,7 +5,7 @@ use gpui::{
     Render, Styled, Subscription, Task, WeakEntity, Window, actions, div,
 };
 use itertools::Itertools as _;
-use language::{LanguageServerId, language_settings::SoftWrap};
+use language::LanguageServerId;
 use lsp::{
     LanguageServer, LanguageServerName, LanguageServerSelector, MessageType, SetTraceParams,
     TraceValue, notification::SetTrace,
@@ -1192,7 +1192,6 @@ fn initialize_new_editor(
         editor.hide_minimap_by_default(window, cx);
         editor.set_text(content, window, cx);
         editor.set_read_only(true);
-        editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
         if move_to_end {
             editor.move_to_end(&MoveToEnd, window, cx);
         }

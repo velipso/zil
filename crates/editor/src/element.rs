@@ -11,7 +11,7 @@ use crate::{
     FocusedBlock, GutterDimensions, HalfPageDown, HalfPageUp, HandleInput, HoveredCursor,
     LineDown, LineHighlight, LineUp, MAX_LINE_LEN, MINIMAP_FONT_SIZE,
     PageDown, PageUp, Point, RowExt, RowRangeExt, Selection, SelectionDragState, SizingBehavior,
-    SoftWrap, ToPoint,
+    ToPoint,
     column_pixels,
     display_map::{
         Block, BlockContext, BlockStyle, ChunkRendererId, DisplaySnapshot, EditorMargins,
@@ -40,7 +40,7 @@ use gpui::{
 };
 use itertools::Itertools;
 use language::{
-    HighlightedText, IndentGuideSettings, LanguageAwareStyling,
+    HighlightedText, LanguageAwareStyling,
     language_settings::ShowWhitespaceSetting,
 };
 use multi_buffer::{
@@ -347,7 +347,6 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_breadcrumb);
         register_action(editor, window, Editor::toggle_line_numbers);
         register_action(editor, window, Editor::toggle_relative_line_numbers);
-        register_action(editor, window, Editor::toggle_indent_guides);
         register_action(editor, window, Editor::toggle_semantic_highlights);
         if editor.read(cx).supports_minimap(cx) {
             register_action(editor, window, Editor::toggle_minimap);
@@ -420,9 +419,6 @@ impl EditorElement {
             register_action(editor, window, Editor::move_line_up);
             register_action(editor, window, Editor::move_line_down);
             register_action(editor, window, Editor::transpose);
-            register_action(editor, window, |editor, _: &crate::Rewrap, _, cx| {
-                editor.rewrap(crate::RewrapOptions::default(), cx);
-            });
             register_action(editor, window, Editor::cut);
             register_action(editor, window, Editor::paste);
             register_action(editor, window, Editor::undo);
@@ -1041,11 +1037,11 @@ impl EditorElement {
         // disabled for the current editor.
         let content_offset = self
             .editor
-            .read(cx)
-            .show_indent_guides
-            .is_none_or(|should_show| should_show)
-            .then_some(content_offset)
-            .unwrap_or_default();
+            .read_with(cx, |editor, cx| {
+                editor.should_show_indent_guides(cx)
+                    .then_some(content_offset)
+                    .unwrap_or_default()
+            });
 
         Some(EditorScrollbars::from_scrollbar_axes(
             ScrollbarAxes {
@@ -1372,7 +1368,6 @@ impl EditorElement {
                             display_row_range,
                             depth: indent_guide.depth,
                             active: active_indent_guide_indices.contains(&i),
-                            settings: indent_guide.settings,
                         })
                     } else {
                         None
@@ -1385,20 +1380,21 @@ impl EditorElement {
     fn depth_zero_indent_guide_padding_for_row(
         indent_guides: &[IndentGuideLayout],
         row: DisplayRow,
+        cx: &mut App,
     ) -> Pixels {
+        let settings = &EditorSettings::get_global(cx).indent_guides;
         indent_guides
             .iter()
             .find(|guide| guide.depth == 0 && guide.display_row_range.contains(&row))
             .and_then(|guide| {
-                guide
-                    .settings
+                settings
                     .visible_line_width(guide.active)
                     .map(|width| px(width as f32 * 2.0))
             })
             .unwrap_or(px(0.0))
     }
 
-    fn layout_wrap_guides(
+    fn layout_rulers(
         &self,
         em_advance: Pixels,
         scroll_position: gpui::Point<f64>,
@@ -1408,7 +1404,7 @@ impl EditorElement {
         hitbox: &Hitbox,
         window: &Window,
         cx: &App,
-    ) -> SmallVec<[(Pixels, bool); 2]> {
+    ) -> Vec<Pixels> {
         let scroll_left = scroll_position.x as f32 * em_advance;
         let content_origin = content_origin.x;
         let horizontal_offset = content_origin - scroll_left;
@@ -1418,15 +1414,16 @@ impl EditorElement {
 
         self.editor
             .read(cx)
-            .wrap_guides(cx)
+            .rulers(cx)
             .into_iter()
-            .flat_map(|(guide, active)| {
-                let wrap_position = column_pixels(&self.style, guide, window);
-                let wrap_guide_x = wrap_position + horizontal_offset;
-                let display_wrap_guide = wrap_guide_x >= content_origin
-                    && wrap_guide_x <= hitbox.bounds.right() - vertical_scrollbar_width;
-
-                display_wrap_guide.then_some((wrap_guide_x, active))
+            .flat_map(|column| {
+                let x = column_pixels(&self.style, column, window);
+                let x = x + horizontal_offset;
+                if x >= content_origin && x <= hitbox.bounds.right() - vertical_scrollbar_width {
+                    Some(x)
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -1988,7 +1985,17 @@ impl EditorElement {
 
                 div()
                     .size_full()
-                    .child(
+                    .child({
+                        let indent_guide_padding = indent_guides
+                            .as_ref()
+                            .map(|guides| {
+                                Self::depth_zero_indent_guide_padding_for_row(
+                                    guides,
+                                    block_row_start,
+                                    cx,
+                                )
+                            })
+                            .unwrap_or(px(0.0));
                         custom.render(&mut BlockContext {
                             window,
                             app: cx,
@@ -2001,17 +2008,9 @@ impl EditorElement {
                             selected,
                             max_width: text_hitbox.size.width.max(*scroll_width),
                             editor_style: &self.style,
-                            indent_guide_padding: indent_guides
-                                .as_ref()
-                                .map(|guides| {
-                                    Self::depth_zero_indent_guide_padding_for_row(
-                                        guides,
-                                        block_row_start,
-                                    )
-                                })
-                                .unwrap_or(px(0.0)),
-                        }),
-                    )
+                            indent_guide_padding,
+                        })
+                    })
                     .into_any()
             }
 
@@ -2110,7 +2109,7 @@ impl EditorElement {
                 let indent_guide_padding = indent_guides
                     .as_ref()
                     .map(|guides| {
-                        Self::depth_zero_indent_guide_padding_for_row(guides, block_row_start)
+                        Self::depth_zero_indent_guide_padding_for_row(guides, block_row_start, cx)
                     })
                     .unwrap_or(px(0.0));
                 Self::render_spacer_block(
@@ -2687,15 +2686,11 @@ impl EditorElement {
                     paint_highlight(range.start, range.end, color, edges);
                 }
 
-                for (guide_x, active) in layout.wrap_guides.iter() {
-                    let color = if *active {
-                        cx.theme().colors().editor_active_wrap_guide
-                    } else {
-                        cx.theme().colors().editor_wrap_guide
-                    };
+                for x in layout.rulers.iter() {
+                    let color = cx.theme().colors().editor_active_wrap_guide;
                     window.paint_quad(fill(
                         window.pixel_snap_bounds(Bounds {
-                            origin: point(*guide_x, layout.position_map.text_hitbox.origin.y),
+                            origin: point(*x, layout.position_map.text_hitbox.origin.y),
                             size: size(px(1.), layout.position_map.text_hitbox.size.height),
                         }),
                         color,
@@ -2721,9 +2716,10 @@ impl EditorElement {
             faded
         };
 
+        let settings = &EditorSettings::get_global(cx).indent_guides;
+
         for indent_guide in indent_guides {
             let indent_accent_colors = cx.theme().accents().color_for_index(indent_guide.depth);
-            let settings = &indent_guide.settings;
 
             // TODO fixed for now, expose them through themes later
             const INDENT_AWARE_ALPHA: f32 = 0.2;
@@ -3872,7 +3868,6 @@ struct Gutter<'a> {
 pub fn render_breadcrumb_text(
     mut segments: Vec<HighlightedText>,
     breadcrumb_font: Option<Font>,
-    prefix: Option<gpui::AnyElement>,
     active_item: &dyn ItemHandle,
     multibuffer_header: bool,
     window: &mut Window,
@@ -3934,12 +3929,6 @@ pub fn render_breadcrumb_text(
         })
         .children(breadcrumbs);
 
-    let breadcrumbs = if let Some(prefix) = prefix {
-        h_flex().gap_1p5().child(prefix).child(breadcrumbs_stack)
-    } else {
-        breadcrumbs_stack
-    };
-
     let editor = active_item
         .downcast::<Editor>()
         .map(|editor| editor.downgrade());
@@ -3950,13 +3939,13 @@ pub fn render_breadcrumb_text(
             .when(!multibuffer_header, |this| this.overflow_x_scroll())
             .child(
                 ButtonLike::new("toggle outline view")
-                    .child(breadcrumbs)
+                    .child(breadcrumbs_stack)
             )
             .into_any_element(),
         None => element
             .h(rems_from_px(22.)) // Match the height and padding of the `ButtonLike` in the other arm.
             .pl_1()
-            .child(breadcrumbs)
+            .child(breadcrumbs_stack)
             .into_any_element(),
     }
 }
@@ -5037,12 +5026,12 @@ impl Element for EditorElement {
                             snapshot
                         } else {
                             let wrap_width = calculate_wrap_width(
-                                editor.soft_wrap_mode(cx),
+                                editor.should_soft_wrap(cx),
                                 editor_width,
                                 em_layout_width,
                             );
 
-                            if editor.set_wrap_width(wrap_width, cx) {
+                            if editor.set_wrap_width(Some(wrap_width), cx) {
                                 editor.snapshot(window, cx)
                             } else {
                                 snapshot
@@ -5760,7 +5749,7 @@ impl Element for EditorElement {
                         )
                     });
 
-                    let wrap_guides = self.layout_wrap_guides(
+                    let rulers = self.layout_rulers(
                         em_advance,
                         scroll_position,
                         content_origin,
@@ -5847,7 +5836,7 @@ impl Element for EditorElement {
                         mode,
                         position_map,
                         visible_display_row_range: start_row..end_row,
-                        wrap_guides,
+                        rulers,
                         indent_guides,
                         hitbox,
                         gutter_hitbox,
@@ -6050,7 +6039,7 @@ pub struct EditorLayout {
     scrollbars_layout: Option<EditorScrollbars>,
     minimap: Option<MinimapLayout>,
     mode: EditorMode,
-    wrap_guides: SmallVec<[(Pixels, bool); 2]>,
+    rulers: Vec<Pixels>,
     indent_guides: Option<Vec<IndentGuideLayout>>,
     visible_display_row_range: Range<DisplayRow>,
     active_rows: BTreeMap<DisplayRow, LineHighlightSpec>,
@@ -6721,7 +6710,6 @@ pub struct IndentGuideLayout {
     display_row_range: Range<DisplayRow>,
     depth: u32,
     active: bool,
-    settings: IndentGuideSettings,
 }
 
 enum NavigationOverlayPaintCommand {
@@ -7052,16 +7040,15 @@ pub fn register_action<T: Action>(
 /// Shared between `prepaint` and `compute_auto_height_layout` to ensure
 /// both full and auto-height editors compute wrap widths consistently.
 fn calculate_wrap_width(
-    soft_wrap: SoftWrap,
+    soft_wrap: bool,
     editor_width: Pixels,
     em_width: Pixels,
-) -> Option<Pixels> {
-    let wrap_width_for = |column: u32| (column as f32 * em_width).ceil();
-
-    match soft_wrap {
-        SoftWrap::None => Some(wrap_width_for(MAX_LINE_LEN as u32 / 2)),
-        SoftWrap::EditorWidth => Some(editor_width),
-        SoftWrap::Bounded(column) => Some(editor_width.min(wrap_width_for(column))),
+) -> Pixels {
+    if soft_wrap {
+        editor_width
+    } else {
+        let column = MAX_LINE_LEN as u32 / 2;
+        (column as f32 * em_width).ceil()
     }
 }
 
@@ -7099,9 +7086,7 @@ fn compute_auto_height_layout(
     let overscroll = size(em_width, px(0.));
 
     let editor_width = text_width - gutter_dimensions.margin - overscroll.width - em_width;
-    let wrap_width = calculate_wrap_width(editor.soft_wrap_mode(cx), editor_width, em_width)
-        .map(|width| width.min(editor_width));
-    if wrap_width.is_some() && editor.set_wrap_width(wrap_width, cx) {
+    if editor.set_wrap_width(Some(editor_width), cx) {
         snapshot = editor.snapshot(window, cx);
     }
 
@@ -7246,7 +7231,7 @@ mod tests {
                 window,
                 cx,
             );
-            editor.set_soft_wrap_mode(language_settings::SoftWrap::EditorWidth, cx);
+            editor.set_soft_wrap(true, cx);
             editor
         });
         let cx = &mut VisualTestContext::from_window(*window, cx);
@@ -7273,7 +7258,7 @@ mod tests {
         let window = cx.add_window(|window, cx| {
             let buffer = MultiBuffer::build_simple(&"a ".to_string().repeat(100), cx);
             let mut editor = Editor::new(EditorMode::full(), buffer, None, window, cx);
-            editor.set_soft_wrap_mode(language_settings::SoftWrap::EditorWidth, cx);
+            editor.set_soft_wrap(true, cx);
             editor
         });
         let cx = &mut VisualTestContext::from_window(*window, cx);
@@ -7393,7 +7378,7 @@ mod tests {
         let window = cx.add_window(|window, cx| {
             let buffer = MultiBuffer::build_simple(&text, cx);
             let mut editor = Editor::new(EditorMode::full(), buffer, None, window, cx);
-            editor.set_soft_wrap_mode(language_settings::SoftWrap::EditorWidth, cx);
+            editor.set_soft_wrap(true, cx);
             editor
         });
         let cx = &mut VisualTestContext::from_window(*window, cx);
@@ -7620,108 +7605,6 @@ mod tests {
         assert_eq!(relative_rows[&DisplayRow(1)], 2);
         assert_eq!(relative_rows[&DisplayRow(2)], 1);
         // current line has no relative number
-        assert!(!relative_rows.contains_key(&DisplayRow(3)));
-        assert_eq!(relative_rows[&DisplayRow(4)], 1);
-        assert_eq!(relative_rows[&DisplayRow(5)], 2);
-    }
-
-    #[gpui::test]
-    fn test_layout_line_numbers_wrapping(cx: &mut TestAppContext) {
-        init_test(cx, |_| {});
-        let window = cx.add_window(|window, cx| {
-            let buffer = MultiBuffer::build_simple(&sample_text(6, 6, 'a'), cx);
-            Editor::new(EditorMode::full(), buffer, None, window, cx)
-        });
-
-        update_test_language_settings(cx, &|s| {
-            s.defaults.preferred_line_length = Some(5_u32);
-            s.defaults.soft_wrap = Some(language_settings::SoftWrap::Bounded);
-        });
-
-        let editor = window.root(cx).unwrap();
-        let style = editor.update(cx, |editor, cx| editor.style(cx).clone());
-        let line_height = window
-            .update(cx, |_, window, _| {
-                style.text.line_height_in_pixels(window.rem_size())
-            })
-            .unwrap();
-        let element = EditorElement::new(&editor, style);
-        let snapshot = window
-            .update(cx, |editor, window, cx| editor.snapshot(window, cx))
-            .unwrap();
-
-        let layouts = cx
-            .update_window(*window, |_, window, cx| {
-                element.layout_line_numbers(
-                    &test_gutter(line_height, &snapshot),
-                    &BTreeMap::default(),
-                    Some(DisplayRow(0)),
-                    window,
-                    cx,
-                )
-            })
-            .unwrap();
-        assert_eq!(layouts.len(), 3);
-
-        let relative_rows = window
-            .update(cx, |editor, window, cx| {
-                let snapshot = editor.snapshot(window, cx);
-                snapshot.calculate_relative_line_numbers(
-                    &(DisplayRow(0)..DisplayRow(6)),
-                    DisplayRow(3),
-                    true,
-                )
-            })
-            .unwrap();
-
-        assert_eq!(relative_rows[&DisplayRow(0)], 3);
-        assert_eq!(relative_rows[&DisplayRow(1)], 2);
-        assert_eq!(relative_rows[&DisplayRow(2)], 1);
-        // current line has no relative number
-        assert!(!relative_rows.contains_key(&DisplayRow(3)));
-        assert_eq!(relative_rows[&DisplayRow(4)], 1);
-        assert_eq!(relative_rows[&DisplayRow(5)], 2);
-
-        let layouts = cx
-            .update_window(*window, |_, window, cx| {
-                element.layout_line_numbers(
-                    &Gutter {
-                        row_infos: &(0..6)
-                            .map(|row| RowInfo {
-                                buffer_row: Some(row),
-                                ..Default::default()
-                            })
-                            .collect::<Vec<_>>(),
-                        ..test_gutter(line_height, &snapshot)
-                    },
-                    &BTreeMap::from_iter([(DisplayRow(0), LineHighlightSpec::default())]),
-                    Some(DisplayRow(0)),
-                    window,
-                    cx,
-                )
-            })
-            .unwrap();
-        assert!(
-            layouts.is_empty(),
-            "Deleted lines should have no line number"
-        );
-
-        let relative_rows = window
-            .update(cx, |editor, window, cx| {
-                let snapshot = editor.snapshot(window, cx);
-                snapshot.calculate_relative_line_numbers(
-                    &(DisplayRow(0)..DisplayRow(6)),
-                    DisplayRow(3),
-                    true,
-                )
-            })
-            .unwrap();
-
-        // Deleted lines should still have relative numbers
-        assert_eq!(relative_rows[&DisplayRow(0)], 3);
-        assert_eq!(relative_rows[&DisplayRow(1)], 2);
-        assert_eq!(relative_rows[&DisplayRow(2)], 1);
-        // current line, even if deleted, has no relative number
         assert!(!relative_rows.contains_key(&DisplayRow(3)));
         assert_eq!(relative_rows[&DisplayRow(4)], 1);
         assert_eq!(relative_rows[&DisplayRow(5)], 2);
@@ -8084,8 +7967,6 @@ mod tests {
                 update_test_language_settings(cx, &|s| {
                     s.defaults.tab_size = NonZeroU32::new(tab_size);
                     s.defaults.show_whitespaces = Some(ShowWhitespaceSetting::All);
-                    s.defaults.preferred_line_length = Some(editor_width as u32);
-                    s.defaults.soft_wrap = Some(language_settings::SoftWrap::Bounded);
                 });
 
                 let actual_invisibles = collect_invisibles_from_new_editor(
@@ -8125,46 +8006,6 @@ mod tests {
                 editor_width += resize_step;
             }
         }
-    }
-
-    fn collect_invisibles_from_new_editor(
-        cx: &mut TestAppContext,
-        editor_mode: EditorMode,
-        input_text: &str,
-        editor_width: Pixels,
-        show_line_numbers: bool,
-    ) -> Vec<Invisible> {
-        info!(
-            "Creating editor with mode {editor_mode:?}, width {}px and text '{input_text}'",
-            f32::from(editor_width)
-        );
-        let window = cx.add_window(|window, cx| {
-            let buffer = MultiBuffer::build_simple(input_text, cx);
-            Editor::new(editor_mode, buffer, None, window, cx)
-        });
-        let cx = &mut VisualTestContext::from_window(*window, cx);
-        let editor = window.root(cx).unwrap();
-
-        let style = editor.update(cx, |editor, cx| editor.style(cx).clone());
-        window
-            .update(cx, |editor, _, cx| {
-                editor.set_soft_wrap_mode(language_settings::SoftWrap::EditorWidth, cx);
-                editor.set_wrap_width(Some(editor_width), cx);
-                editor.set_show_line_numbers(show_line_numbers, cx);
-            })
-            .unwrap();
-        let (_, state) = cx.draw(
-            point(px(500.), px(500.)),
-            size(px(500.), px(500.)),
-            |_, _| EditorElement::new(&editor, style),
-        );
-        state
-            .position_map
-            .line_layouts
-            .iter()
-            .flat_map(|line_with_invisibles| &line_with_invisibles.invisibles)
-            .cloned()
-            .collect()
     }
 
     #[gpui::test]
@@ -8515,30 +8356,5 @@ mod tests {
         let k = line_height / result;
         assert!(k - k.round() < 0.0000001); // approximately integer
         assert!((k.round() as u32).is_multiple_of(2));
-    }
-
-    #[test]
-    fn test_calculate_wrap_width() {
-        let editor_width = px(800.0);
-        let em_width = px(8.0);
-
-        assert_eq!(
-            calculate_wrap_width(SoftWrap::None, editor_width, em_width),
-            Some(px((MAX_LINE_LEN as f32 / 2.0 * 8.0).ceil())),
-        );
-
-        assert_eq!(
-            calculate_wrap_width(SoftWrap::EditorWidth, editor_width, em_width),
-            Some(px(800.0)),
-        );
-
-        assert_eq!(
-            calculate_wrap_width(SoftWrap::Bounded(72), editor_width, em_width),
-            Some(px((72.0 * 8.0_f32).ceil())),
-        );
-        assert_eq!(
-            calculate_wrap_width(SoftWrap::Bounded(200), px(400.0), em_width),
-            Some(px(400.0)),
-        );
     }
 }

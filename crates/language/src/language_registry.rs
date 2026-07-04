@@ -1156,7 +1156,6 @@ impl LanguageRegistryState {
         self.language_settings.languages.0.insert(
             language.name().0.to_string(),
             LanguageSettingsContent {
-                soft_wrap: language.config.soft_wrap.map(crate::to_settings_soft_wrap),
                 auto_indent_on_paste: language.config.auto_indent_on_paste,
                 ..Default::default()
             },

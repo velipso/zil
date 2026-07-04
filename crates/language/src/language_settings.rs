@@ -9,8 +9,8 @@ use settings::{DocumentFoldingRanges, DocumentSymbols, SemanticTokens};
 
 pub use settings::{
     AutoIndentMode,
-    InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode, RewrapBehavior,
-    ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
+    InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode,
+    ShowWhitespaceSetting, WordsCompletionMode,
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, merge_from::MergeFrom};
 use std::{borrow::Cow, sync::Arc};
@@ -46,20 +46,6 @@ pub struct WhitespaceMap {
 /// The settings for a particular language.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LanguageSettings {
-    /// How to soft-wrap long lines of text.
-    pub soft_wrap: settings::SoftWrap,
-    /// The column at which to soft-wrap lines, for buffers where soft-wrap
-    /// is enabled.
-    pub preferred_line_length: u32,
-    /// Whether to show wrap guides (vertical rulers) in the editor.
-    /// Setting this to true will show a guide at the 'preferred_line_length' value
-    /// if softwrap is set to 'preferred_line_length', and will show any
-    /// additional guides as specified by the 'wrap_guides' setting.
-    pub show_wrap_guides: bool,
-    /// Character counts at which to show wrap guides (vertical rulers) in the editor.
-    pub wrap_guides: Vec<usize>,
-    /// Indent guide related settings.
-    pub indent_guides: IndentGuideSettings,
     /// Whether to use language servers to provide code intelligence.
     pub enable_language_server: bool,
     /// The list of language servers to use (or disable) for this language.
@@ -76,11 +62,6 @@ pub struct LanguageSettings {
     pub document_folding_ranges: DocumentFoldingRanges,
     /// Controls the source of document symbols used for outlines and breadcrumbs.
     pub document_symbols: DocumentSymbols,
-    /// Controls where the `editor::Rewrap` action is allowed for this language.
-    ///
-    /// Note: This setting has no effect in Vim mode, as rewrap is already
-    /// allowed everywhere.
-    pub allow_rewrap: RewrapBehavior,
     /// Whether to show tabs and spaces in the editor.
     pub show_whitespaces: settings::ShowWhitespaceSetting,
     /// Visible characters used to render whitespace when show_whitespaces is enabled.
@@ -102,47 +83,6 @@ pub struct LanguageSettings {
     ///
     /// Default: `true`
     pub word_diff_enabled: bool,
-}
-
-/// The settings for indent guides.
-#[derive(Debug, Clone, PartialEq)]
-pub struct IndentGuideSettings {
-    /// Whether to display indent guides in the editor.
-    ///
-    /// Default: true
-    pub enabled: bool,
-    /// The width of the indent guides in pixels, between 1 and 10.
-    ///
-    /// Default: 1
-    pub line_width: u32,
-    /// The width of the active indent guide in pixels, between 1 and 10.
-    ///
-    /// Default: 1
-    pub active_line_width: u32,
-    /// Determines how indent guides are colored.
-    ///
-    /// Default: Fixed
-    pub coloring: settings::IndentGuideColoring,
-    /// Determines how indent guide backgrounds are colored.
-    ///
-    /// Default: Disabled
-    pub background_coloring: settings::IndentGuideBackgroundColoring,
-}
-
-impl IndentGuideSettings {
-    /// Returns the clamped line width in pixels for an indent guide based on
-    /// whether it is active, or `None` when line coloring is disabled.
-    pub fn visible_line_width(&self, active: bool) -> Option<u32> {
-        if self.coloring == settings::IndentGuideColoring::Disabled {
-            return None;
-        }
-        let width = if active {
-            self.active_line_width
-        } else {
-            self.line_width
-        };
-        Some(width.clamp(1, 10))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -369,9 +309,6 @@ fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSetti
         }
     });
 
-    settings
-        .preferred_line_length
-        .merge_from_option(modeline.preferred_line_length.map(u32::from).as_ref());
     let auto_indent_mode = modeline.auto_indent.map(|enabled| {
         if enabled {
             AutoIndentMode::SyntaxAware
@@ -392,28 +329,15 @@ impl settings::Settings for AllLanguageSettings {
         let all_languages = &content.project.all_languages;
 
         fn load_from_content(settings: LanguageSettingsContent) -> LanguageSettings {
-            let indent_guides = settings.indent_guides.unwrap();
             let tasks = settings.tasks.unwrap();
             let whitespace_map = settings.whitespace_map.unwrap();
 
             LanguageSettings {
-                soft_wrap: settings.soft_wrap.unwrap(),
-                preferred_line_length: settings.preferred_line_length.unwrap(),
-                show_wrap_guides: settings.show_wrap_guides.unwrap(),
-                wrap_guides: settings.wrap_guides.unwrap(),
-                indent_guides: IndentGuideSettings {
-                    enabled: indent_guides.enabled.unwrap(),
-                    line_width: indent_guides.line_width.unwrap(),
-                    active_line_width: indent_guides.active_line_width.unwrap(),
-                    coloring: indent_guides.coloring.unwrap(),
-                    background_coloring: indent_guides.background_coloring.unwrap(),
-                },
                 enable_language_server: settings.enable_language_server.unwrap(),
                 language_servers: settings.language_servers.unwrap(),
                 semantic_tokens: settings.semantic_tokens.unwrap(),
                 document_folding_ranges: settings.document_folding_ranges.unwrap(),
                 document_symbols: settings.document_symbols.unwrap(),
-                allow_rewrap: settings.allow_rewrap.unwrap(),
                 show_whitespaces: settings.show_whitespaces.unwrap(),
                 whitespace_map: WhitespaceMap {
                     space: SharedString::new(whitespace_map.space.unwrap().to_string()),

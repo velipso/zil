@@ -609,8 +609,6 @@ actions!(
         ReverseLines,
         /// Reloads the file from disk.
         ReloadFile,
-        /// Rewraps text to fit within the preferred line length.
-        Rewrap,
         /// Rotates selections or lines backward.
         RotateSelectionsBackward,
         /// Rotates selections or lines forward.
@@ -721,8 +719,6 @@ actions!(
         TabWidth8,
         /// Toggles the case of selected text.
         ToggleCase,
-        /// Toggles indent guides display.
-        ToggleIndentGuides,
         /// Toggles semantic highlights display.
         ToggleSemanticHighlights,
         /// Toggles line numbers display.

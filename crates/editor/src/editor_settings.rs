@@ -22,6 +22,9 @@ pub struct EditorSettings {
     pub scrollbar: Scrollbar,
     pub minimap: Minimap,
     pub gutter: Gutter,
+    pub soft_wrap: bool,
+    pub rulers: Vec<usize>,
+    pub indent_guides: IndentGuides,
     pub scroll_beyond_last_line: ScrollBeyondLastLine,
     pub vertical_scroll_margin: f64,
     pub autoscroll_on_clicks: bool,
@@ -101,6 +104,47 @@ pub struct Gutter {
     pub folds: bool,
 }
 
+/// The settings for indent guides.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndentGuides {
+    /// Whether to display indent guides in the editor.
+    ///
+    /// Default: true
+    pub enabled: bool,
+    /// The width of the indent guides in pixels, between 1 and 10.
+    ///
+    /// Default: 1
+    pub line_width: u32,
+    /// The width of the active indent guide in pixels, between 1 and 10.
+    ///
+    /// Default: 1
+    pub active_line_width: u32,
+    /// Determines how indent guides are colored.
+    ///
+    /// Default: Fixed
+    pub coloring: settings::IndentGuideColoring,
+    /// Determines how indent guide backgrounds are colored.
+    ///
+    /// Default: Disabled
+    pub background_coloring: settings::IndentGuideBackgroundColoring,
+}
+
+impl IndentGuides {
+    /// Returns the clamped line width in pixels for an indent guide based on
+    /// whether it is active, or `None` when line coloring is disabled.
+    pub fn visible_line_width(&self, active: bool) -> Option<u32> {
+        if self.coloring == settings::IndentGuideColoring::Disabled {
+            return None;
+        }
+        let width = if active {
+            self.active_line_width
+        } else {
+            self.line_width
+        };
+        Some(width.clamp(1, 10))
+    }
+}
+
 /// Forcefully enable or disable the scrollbar for each axis
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ScrollbarAxes {
@@ -150,6 +194,7 @@ impl Settings for EditorSettings {
         let scrollbar = editor.scrollbar.unwrap();
         let minimap = editor.minimap.unwrap();
         let gutter = editor.gutter.unwrap();
+        let indent_guides = editor.indent_guides.unwrap();
         let toolbar = editor.toolbar.unwrap();
         let search = editor.search.unwrap();
         let drag_and_drop_selection = editor.drag_and_drop_selection.unwrap();
@@ -188,6 +233,15 @@ impl Settings for EditorSettings {
                 min_line_number_digits: gutter.min_line_number_digits.unwrap(),
                 line_numbers: gutter.line_numbers.unwrap(),
                 folds: gutter.folds.unwrap(),
+            },
+            soft_wrap: editor.soft_wrap.unwrap(),
+            rulers: editor.rulers.unwrap(),
+            indent_guides: IndentGuides {
+                enabled: indent_guides.enabled.unwrap(),
+                line_width: indent_guides.line_width.unwrap(),
+                active_line_width: indent_guides.active_line_width.unwrap(),
+                coloring: indent_guides.coloring.unwrap(),
+                background_coloring: indent_guides.background_coloring.unwrap(),
             },
             scroll_beyond_last_line: editor.scroll_beyond_last_line.unwrap(),
             vertical_scroll_margin: editor.vertical_scroll_margin.unwrap() as f64,

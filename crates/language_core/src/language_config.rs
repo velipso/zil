@@ -7,19 +7,6 @@ use schemars::{JsonSchema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{path::Path, sync::Arc};
 
-/// Controls the soft-wrapping behavior in the editor.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum SoftWrap {
-    /// Prefer a single line generally, unless an overly long line is encountered.
-    None,
-    /// Soft wrap lines that exceed the editor width.
-    EditorWidth,
-    /// Soft wrap line at the preferred line length or the editor width (whichever is smaller).
-    #[serde(alias = "preferred_line_length")]
-    Bounded,
-}
-
 /// Top-level configuration for a language, typically loaded from a `config.toml`
 /// shipped alongside the grammar.
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
@@ -82,9 +69,6 @@ pub struct LanguageConfig {
     /// or a whole-word search in buffer search.
     #[serde(default)]
     pub word_characters: HashSet<char>,
-    /// How to soft-wrap long lines of text.
-    #[serde(default)]
-    pub soft_wrap: Option<SoftWrap>,
     /// When set, selections can be wrapped using prefix/suffix pairs on both sides.
     #[serde(default)]
     pub wrap_characters: Option<WrapCharactersConfig>,
@@ -125,7 +109,6 @@ impl Default for LanguageConfig {
             overrides: Default::default(),
             word_characters: Default::default(),
             collapsed_placeholder: Default::default(),
-            soft_wrap: None,
             wrap_characters: None,
             hidden: false,
             debuggers: Default::default(),

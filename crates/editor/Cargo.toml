@@ -72,7 +72,6 @@ time.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
 unicode-segmentation.workspace = true
-unicode-script.workspace = true
 unindent = { workspace = true, optional = true }
 ui.workspace = true
 ui_input.workspace = true

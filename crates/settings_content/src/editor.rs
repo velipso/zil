@@ -65,6 +65,14 @@ pub struct EditorSettingsContent {
     pub minimap: Option<MinimapContent>,
     /// Gutter related settings
     pub gutter: Option<GutterContent>,
+    /// Soft wrap related settings
+    pub soft_wrap: Option<bool>,
+    /// Character counts to show rulers in the editor.
+    ///
+    /// Default: []
+    pub rulers: Option<Vec<usize>>,
+    /// Indent guide related settings.
+    pub indent_guides: Option<IndentGuidesContent>,
     /// Whether the editor will scroll beyond the last line.
     ///
     /// Default: one_page
@@ -329,6 +337,82 @@ pub struct GutterContent {
     ///
     /// Default: true
     pub folds: Option<bool>,
+}
+
+/// The settings for indent guides.
+#[with_fallible_options]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+pub struct IndentGuidesContent {
+    /// Whether to display indent guides in the editor.
+    ///
+    /// Default: true
+    pub enabled: Option<bool>,
+    /// The width of the indent guides in pixels, between 1 and 10.
+    ///
+    /// Default: 1
+    pub line_width: Option<u32>,
+    /// The width of the active indent guide in pixels, between 1 and 10.
+    ///
+    /// Default: 1
+    pub active_line_width: Option<u32>,
+    /// Determines how indent guides are colored.
+    ///
+    /// Default: Fixed
+    pub coloring: Option<IndentGuideColoring>,
+    /// Determines how indent guide backgrounds are colored.
+    ///
+    /// Default: Disabled
+    pub background_coloring: Option<IndentGuideBackgroundColoring>,
+}
+
+/// Determines how indent guides are colored.
+#[derive(
+    Default,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum IndentGuideColoring {
+    /// Do not render any lines for indent guides.
+    Disabled,
+    /// Use the same color for all indentation levels.
+    #[default]
+    Fixed,
+    /// Use a different color for each indentation level.
+    IndentAware,
+}
+
+/// Determines how indent guide backgrounds are colored.
+#[derive(
+    Default,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum IndentGuideBackgroundColoring {
+    /// Do not render any background for indent guides.
+    #[default]
+    Disabled,
+    /// Use a different color for each indentation level.
+    IndentAware,
 }
 
 /// How to render LSP `textDocument/documentColor` colors in the editor.
