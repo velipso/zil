@@ -72,7 +72,7 @@ use ::git::status::FileStatus;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
 use anyhow::{Context as _, Result};
 use blink_manager::BlinkManager;
-use client::{Collaborator, ParticipantIndex, parse_zed_link};
+use client::parse_zed_link;
 use clock::ReplicaId;
 use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
@@ -120,7 +120,7 @@ use project::{
 };
 use rand::seq::SliceRandom;
 use regex::Regex;
-use rpc::{ErrorCode, ErrorExt, proto::PeerId};
+use rpc::{ErrorCode, ErrorExt};
 use scroll::{Autoscroll, OngoingScroll, ScrollAnchor, ScrollManager, SharedScrollAnchor};
 use selections_collection::{MutableSelectionsCollection, SelectionsCollection};
 use serde::{Deserialize, Serialize};
@@ -678,10 +678,8 @@ pub struct Editor {
     hard_wrap: Option<usize>,
     project: Option<Entity<Project>>,
     semantics_provider: Option<Rc<dyn SemanticsProvider>>,
-    collaboration_hub: Option<Box<dyn CollaborationHub>>,
     blink_manager: Entity<BlinkManager>,
     show_cursor_names: bool,
-    hovered_cursors: HashMap<HoveredCursor, Task<()>>,
     pub show_local_selections: bool,
     mode: EditorMode,
     breadcrumbs_visibility: BreadcrumbsVisibility,
@@ -904,12 +902,6 @@ enum SelectionHistoryMode {
     Undoing,
     Redoing,
     Skipping,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct HoveredCursor {
-    replica_id: ReplicaId,
-    selection_id: usize,
 }
 
 #[derive(Debug)]
@@ -1658,7 +1650,6 @@ impl Editor {
             semantics_provider: project
                 .as_ref()
                 .map(|project| Rc::new(project.downgrade()) as _),
-            collaboration_hub: project.clone().map(|project| Box::new(project) as _),
             project,
             blink_manager: blink_manager.clone(),
             show_local_selections: true,
@@ -1717,7 +1708,6 @@ impl Editor {
             gutter_dimensions: GutterDimensions::default(),
             style: None,
             show_cursor_names: false,
-            hovered_cursors: HashMap::default(),
             next_editor_action_id: EditorActionId::default(),
             editor_actions: Rc::default(),
             in_leading_whitespace: false,
@@ -2182,14 +2172,6 @@ impl Editor {
 
     pub fn set_mode(&mut self, mode: EditorMode) {
         self.mode = mode;
-    }
-
-    pub fn collaboration_hub(&self) -> Option<&dyn CollaborationHub> {
-        self.collaboration_hub.as_deref()
-    }
-
-    pub fn set_collaboration_hub(&mut self, hub: Box<dyn CollaborationHub>) {
-        self.collaboration_hub = Some(hub);
     }
 
     pub fn set_custom_context_menu(
@@ -6499,15 +6481,6 @@ impl Editor {
 
                 cx.emit(EditorEvent::BufferEdited);
                 cx.emit(SearchEvent::MatchesInvalidated);
-
-                let Some(project) = &self.project else { return };
-                let (telemetry, is_via_ssh) = {
-                    let project = project.read(cx);
-                    let telemetry = project.client().telemetry().clone();
-                    let is_via_ssh = project.is_via_remote_server();
-                    (telemetry, is_via_ssh)
-                };
-                telemetry.log_edit_event("editor", is_via_ssh);
             }
             multi_buffer::Event::BufferRangesUpdated {
                 buffer,
@@ -7263,28 +7236,6 @@ impl Editor {
     }
 }
 
-pub trait CollaborationHub {
-    fn collaborators<'a>(&self, cx: &'a App) -> &'a HashMap<PeerId, Collaborator>;
-    fn user_participant_indices<'a>(&self, cx: &'a App) -> &'a HashMap<u64, ParticipantIndex>;
-    fn user_names(&self, cx: &App) -> HashMap<u64, SharedString>;
-}
-
-impl CollaborationHub for Entity<Project> {
-    fn collaborators<'a>(&self, cx: &'a App) -> &'a HashMap<PeerId, Collaborator> {
-        self.read(cx).collaborators()
-    }
-
-    fn user_participant_indices<'a>(&self, cx: &'a App) -> &'a HashMap<u64, ParticipantIndex> {
-        self.read(cx).user_store().read(cx).participant_indices()
-    }
-
-    fn user_names(&self, cx: &App) -> HashMap<u64, SharedString> {
-        let this = self.read(cx);
-        let user_ids = this.collaborators().values().map(|c| c.user_id);
-        this.user_store().read(cx).participant_names(user_ids, cx)
-    }
-}
-
 pub trait SemanticsProvider {
     fn hover(
         &self,
@@ -7459,53 +7410,6 @@ fn ending_row(next_selection: &Selection<Point>, display_map: &DisplaySnapshot) 
 }
 
 impl EditorSnapshot {
-    pub fn remote_selections_in_range<'a>(
-        &'a self,
-        range: &'a Range<Anchor>,
-        collaboration_hub: &dyn CollaborationHub,
-        cx: &'a App,
-    ) -> impl 'a + Iterator<Item = RemoteSelection> {
-        let participant_names = collaboration_hub.user_names(cx);
-        let participant_indices = collaboration_hub.user_participant_indices(cx);
-        let collaborators_by_peer_id = collaboration_hub.collaborators(cx);
-        let collaborators_by_replica_id = collaborators_by_peer_id
-            .values()
-            .map(|collaborator| (collaborator.replica_id, collaborator))
-            .collect::<HashMap<_, _>>();
-        self.buffer_snapshot()
-            .selections_in_range(range, false)
-            .filter_map(move |(replica_id, line_mode, cursor_shape, selection)| {
-                if replica_id == ReplicaId::AGENT {
-                    Some(RemoteSelection {
-                        replica_id,
-                        selection,
-                        cursor_shape,
-                        line_mode,
-                        collaborator_id: CollaboratorId::Agent,
-                        user_name: Some("Agent".into()),
-                        color: cx.theme().players().agent(),
-                    })
-                } else {
-                    let collaborator = collaborators_by_replica_id.get(&replica_id)?;
-                    let participant_index = participant_indices.get(&collaborator.user_id).copied();
-                    let user_name = participant_names.get(&collaborator.user_id).cloned();
-                    Some(RemoteSelection {
-                        replica_id,
-                        selection,
-                        cursor_shape,
-                        line_mode,
-                        collaborator_id: CollaboratorId::PeerId(collaborator.peer_id),
-                        user_name,
-                        color: if let Some(index) = participant_index {
-                            cx.theme().players().color_for_participant(index.0)
-                        } else {
-                            cx.theme().players().absent()
-                        },
-                    })
-                }
-            })
-    }
-
     pub fn language_at<T: ToOffset>(&self, position: T) -> Option<&Arc<Language>> {
         self.display_snapshot
             .buffer_snapshot()

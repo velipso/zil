@@ -41,9 +41,7 @@ pub use worktree_store::WorktreePaths;
 
 use anyhow::{Context as _, Result, anyhow};
 use buffer_store::{BufferStore, BufferStoreEvent};
-use client::{
-    Client, Collaborator, UserStore, proto,
-};
+use client::{Client, proto};
 use clock::ReplicaId;
 
 use collections::{HashMap, HashSet};
@@ -176,13 +174,11 @@ pub struct Project {
     collab_client: Arc<client::Client>,
     join_project_response_message_id: u32,
     task_store: Entity<TaskStore>,
-    user_store: Entity<UserStore>,
     fs: Arc<dyn Fs>,
     remote_client: Option<Entity<RemoteClient>>,
     // todo lw explain the client_state x remote_client matrix, its super confusing
     client_state: ProjectClientState,
     git_store: Entity<GitStore>,
-    collaborators: HashMap<proto::PeerId, Collaborator>,
     client_subscriptions: Vec<client::Subscription>,
     worktree_store: Entity<WorktreeStore>,
     buffer_store: Entity<BufferStore>,
@@ -751,7 +747,6 @@ impl Project {
 
     pub fn local(
         client: Arc<Client>,
-        user_store: Entity<UserStore>,
         languages: Arc<LanguageRegistry>,
         fs: Arc<dyn Fs>,
         env: Option<HashMap<String, String>>,
@@ -837,7 +832,6 @@ impl Project {
 
             Self {
                 buffer_ordered_messages_tx: tx,
-                collaborators: Default::default(),
                 worktree_store,
                 buffer_store,
                 image_store,
@@ -851,7 +845,6 @@ impl Project {
                 languages,
                 collab_client: client,
                 task_store,
-                user_store,
                 settings_observer,
                 fs,
                 remote_client: None,
@@ -917,11 +910,9 @@ impl Project {
         let languages = LanguageRegistry::test(fs.clone(), cx.background_executor().clone());
         let http_client = http_client::FakeHttpClient::with_404_response();
         let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
-        let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let project = cx.update(|cx| {
             Project::local(
                 client,
-                user_store,
                 Arc::new(languages),
                 fs,
                 None,
@@ -973,11 +964,9 @@ impl Project {
         let languages = LanguageRegistry::test(fs.clone(), cx.executor());
         let http_client = http_client::FakeHttpClient::with_404_response();
         let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
-        let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let project = cx.update(|cx| {
             Project::local(
                 client,
-                user_store,
                 Arc::new(languages),
                 fs,
                 None,
@@ -1070,11 +1059,6 @@ impl Project {
     #[inline]
     pub fn remote_client(&self) -> Option<Entity<RemoteClient>> {
         self.remote_client.clone()
-    }
-
-    #[inline]
-    pub fn user_store(&self) -> Entity<UserStore> {
-        self.user_store.clone()
     }
 
     #[inline]
@@ -1196,16 +1180,6 @@ impl Project {
             SearchInputKind::Include => &mut self.search_included_history,
             SearchInputKind::Exclude => &mut self.search_excluded_history,
         }
-    }
-
-    #[inline]
-    pub fn collaborators(&self) -> &HashMap<proto::PeerId, Collaborator> {
-        &self.collaborators
-    }
-
-    #[inline]
-    pub fn host(&self) -> Option<&Collaborator> {
-        self.collaborators.values().find(|c| c.is_host)
     }
 
     /// Collect all worktrees, including ones that don't appear in the project panel
@@ -1611,12 +1585,11 @@ impl Project {
 
     pub fn reshared(
         &mut self,
-        message: proto::ResharedProject,
+        _message: proto::ResharedProject,
         cx: &mut Context<Self>,
     ) -> Result<()> {
         self.buffer_store
             .update(cx, |buffer_store, _| buffer_store.forget_shared_buffers());
-        self.set_collaborators_from_proto(message.collaborators, cx)?;
 
         self.worktree_store.update(cx, |worktree_store, cx| {
             worktree_store.send_project_updates(cx);
@@ -1646,7 +1619,6 @@ impl Project {
 
         self.join_project_response_message_id = message_id;
         self.set_worktrees_from_proto(message.worktrees, cx)?;
-        self.set_collaborators_from_proto(message.collaborators, cx)?;
 
         let project = cx.weak_entity();
         self.lsp_store.update(cx, |lsp_store, cx| {
@@ -1673,7 +1645,6 @@ impl Project {
     fn unshare_internal(&mut self, cx: &mut App) -> Result<()> {
         if let ProjectClientState::Shared { remote_id, .. } = self.client_state {
             self.client_state = ProjectClientState::Local;
-            self.collaborators.clear();
             self.client_subscriptions.clear();
             self.worktree_store.update(cx, |store, cx| {
                 store.unshared(cx);
@@ -2274,9 +2245,6 @@ impl Project {
             WorktreeStoreEvent::WorktreeOrderChanged => cx.emit(Event::WorktreeOrderChanged),
             WorktreeStoreEvent::WorktreeUpdateSent(_) => {}
             WorktreeStoreEvent::WorktreeUpdatedEntries(worktree_id, changes) => {
-                self.client()
-                    .telemetry()
-                    .report_discovered_project_type_events(*worktree_id, changes);
                 cx.emit(Event::WorktreeUpdatedEntries(*worktree_id, changes.clone()))
             }
             WorktreeStoreEvent::WorktreeDeletedEntry(worktree_id, id) => {
@@ -3223,25 +3191,6 @@ impl Project {
         self.worktree_store.update(cx, |worktree_store, cx| {
             worktree_store.set_worktrees_from_proto(worktrees, self.replica_id(), cx)
         })
-    }
-
-    fn set_collaborators_from_proto(
-        &mut self,
-        messages: Vec<proto::Collaborator>,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
-        let mut collaborators = HashMap::default();
-        for message in messages {
-            let collaborator = Collaborator::from_proto(message)?;
-            collaborators.insert(collaborator.peer_id, collaborator);
-        }
-        for old_peer_id in self.collaborators.keys() {
-            if !collaborators.contains_key(old_peer_id) {
-                cx.emit(Event::CollaboratorLeft(*old_peer_id));
-            }
-        }
-        self.collaborators = collaborators;
-        Ok(())
     }
 
     pub fn supplementary_language_servers<'a>(

@@ -13,8 +13,6 @@ pub mod path_list {
 pub mod path_link;
 pub mod searchable;
 pub mod security_modal;
-pub mod shared_screen;
-pub use shared_screen::SharedScreen;
 pub mod focus_follows_mouse;
 mod toast_layer;
 mod toolbar;
@@ -36,7 +34,7 @@ pub use toast_layer::{ToastAction, ToastLayer, ToastView};
 
 use anyhow::{Context as _, Result, anyhow};
 use client::{
-    ChannelId, Client, ErrorExt, ParticipantIndex, TypedEnvelope, User, UserStore,
+    ChannelId, Client, ErrorExt, TypedEnvelope,
     proto::{self, ErrorCode, PanelId, PeerId},
 };
 use collections::{HashMap, HashSet, hash_map};
@@ -75,7 +73,6 @@ pub use pane_group::{
     ActivePaneDecorator, HANDLE_HITBOX_SIZE, Member, PaneAxis, PaneGroup, PaneRenderContext,
     SplitDirection,
 };
-use postage::stream::Stream;
 use project::{
     DirectoryLister, Project, ProjectEntryId, ProjectPath, ResolvedPath, Worktree, WorktreeId,
     WorktreeSettings,
@@ -902,7 +899,6 @@ impl SerializableItemRegistry {
 pub struct AppState {
     pub languages: Arc<LanguageRegistry>,
     pub client: Arc<Client>,
-    pub user_store: Entity<UserStore>,
     pub workspace_store: Entity<WorkspaceStore>,
     pub fs: Arc<dyn fs::Fs>,
     pub build_window_options: fn(Option<Uuid>, &mut App) -> WindowOptions,
@@ -990,7 +986,6 @@ impl AppState {
         let http_client = http_client::FakeHttpClient::with_404_response();
         let client = Client::new(http_client, cx);
         let session = cx.new(|cx| AppSession::new(Session::test(), cx));
-        let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let workspace_store = cx.new(|cx| WorkspaceStore::new(client.clone(), cx));
 
         theme_settings::init(theme::LoadThemes::JustBase, cx);
@@ -1000,7 +995,6 @@ impl AppState {
             client,
             fs,
             languages,
-            user_store,
             workspace_store,
             build_window_options: |_, _| Default::default(),
             session,
@@ -1179,7 +1173,6 @@ pub struct Workspace {
     dispatching_keystrokes: Rc<RefCell<DispatchingKeystrokes>>,
     _subscriptions: Vec<Subscription>,
     _apply_leader_updates: Task<Result<()>>,
-    _observe_current_user: Task<Result<()>>,
     _schedule_serialize_ssh_paths: Option<Task<()>>,
     pane_history_timestamp: Arc<AtomicUsize>,
     bounds: Bounds<Pixels>,
@@ -1228,7 +1221,6 @@ impl AutoWatch {
 
 struct FollowerView {
     view: Box<dyn FollowableItemHandle>,
-    location: Option<proto::PanelId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1409,20 +1401,6 @@ impl Workspace {
                 .insert((any_window_handle, weak_handle.clone()));
         });
 
-        let mut current_user = app_state.user_store.read(cx).watch_current_user();
-        let mut connection_status = app_state.client.status();
-        let _observe_current_user = cx.spawn_in(window, async move |this, cx| {
-            current_user.next().await;
-            connection_status.next().await;
-            let mut stream =
-                Stream::map(current_user, drop).merge(Stream::map(connection_status, drop));
-
-            while stream.recv().await.is_some() {
-                this.update(cx, |_, cx| cx.notify())?;
-            }
-            anyhow::Ok(())
-        });
-
         // All leader updates are enqueued and then processed in a single task, so
         // that each asynchronous operation can be run in order.
         let (leader_updates_tx, mut leader_updates_rx) =
@@ -1547,7 +1525,6 @@ impl Workspace {
             active_call,
             database_id: workspace_id,
             app_state,
-            _observe_current_user,
             _apply_leader_updates,
             _schedule_serialize_ssh_paths: None,
             leader_updates_tx,
@@ -1583,7 +1560,6 @@ impl Workspace {
     ) -> Task<anyhow::Result<OpenResult>> {
         let project_handle = Project::local(
             app_state.client.clone(),
-            app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             env,
@@ -2141,10 +2117,6 @@ impl Workspace {
 
     pub fn app_state(&self) -> &Arc<AppState> {
         &self.app_state
-    }
-
-    pub fn user_store(&self) -> &Entity<UserStore> {
-        &self.app_state.user_store
     }
 
     pub fn project(&self) -> &Entity<Project> {
@@ -4212,103 +4184,8 @@ impl Workspace {
             .is_some()
     }
 
-    pub fn open_shared_screen(
-        &mut self,
-        peer_id: PeerId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(shared_screen) =
-            self.shared_screen_for_peer(peer_id, &self.active_pane, window, cx)
-        {
-            self.active_pane.update(cx, |pane, cx| {
-                pane.add_item(Box::new(shared_screen), false, true, None, window, cx)
-            });
-        }
-    }
-
     pub fn auto_watch_state(&self) -> &AutoWatch {
         &self.auto_watch
-    }
-
-    fn next_watched_peer(&self, cx: &App) -> Option<PeerId> {
-        self.active_call()
-            .and_then(|call| call.peer_ids_with_video_tracks(cx).first().copied())
-    }
-
-    pub fn toggle_auto_watch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.auto_watch.enabled() {
-            self.auto_watch = AutoWatch::Off;
-            cx.notify();
-            return;
-        }
-
-        let local_is_sharing = self
-            .active_call()
-            .map_or(false, |call| call.is_sharing_screen(cx));
-
-        if local_is_sharing {
-            self.auto_watch = AutoWatch::Paused;
-        } else {
-            let watched_peer = self.next_watched_peer(cx);
-            self.auto_watch = AutoWatch::Active { watched_peer };
-
-            if let Some(peer_id) = watched_peer {
-                self.open_shared_screen(peer_id, window, cx);
-            }
-        }
-
-        cx.notify();
-    }
-
-    fn handle_auto_watch_video_tracks_changed(
-        &mut self,
-        peer_id: PeerId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let AutoWatch::Active { watched_peer } = self.auto_watch else {
-            return;
-        };
-
-        let peer_is_sharing = self.active_call().map_or(false, |call| {
-            call.peer_ids_with_video_tracks(cx).contains(&peer_id)
-        });
-        let should_watch_peer = peer_is_sharing && watched_peer.is_none();
-        let watched_peer_stopped_sharing = watched_peer == Some(peer_id) && !peer_is_sharing;
-
-        if should_watch_peer || watched_peer_stopped_sharing {
-            let next_watched_peer = if should_watch_peer {
-                Some(peer_id)
-            } else {
-                self.next_watched_peer(cx)
-            };
-
-            self.auto_watch = AutoWatch::Active {
-                watched_peer: next_watched_peer,
-            };
-
-            if let Some(next_watched_peer) = next_watched_peer {
-                self.open_shared_screen(next_watched_peer, window, cx);
-            }
-        }
-    }
-
-    fn handle_auto_watch_local_share_stopped(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let AutoWatch::Paused = self.auto_watch else {
-            return;
-        };
-
-        let watched_peer = self.next_watched_peer(cx);
-        self.auto_watch = AutoWatch::Active { watched_peer };
-
-        if let Some(peer_id) = watched_peer {
-            self.open_shared_screen(peer_id, window, cx);
-        }
     }
 
     pub fn activate_item(
@@ -5422,7 +5299,6 @@ impl Workspace {
             anyhow::bail!("no id for view");
         };
         let id = ViewId::from_proto(id)?;
-        let panel_id = view.panel_id.and_then(proto::PanelId::from_i32);
 
         let pane = this.update(cx, |this, _cx| {
             let state = this
@@ -5494,7 +5370,6 @@ impl Workspace {
                 id,
                 FollowerView {
                     view: item,
-                    location: panel_id,
                 },
             );
 
@@ -5549,7 +5424,6 @@ impl Workspace {
                     view.map(|view| {
                         entry.insert(FollowerView {
                             view,
-                            location: None,
                         })
                     })
                 }
@@ -5736,53 +5610,11 @@ impl Workspace {
 
     fn active_item_for_peer(
         &self,
-        peer_id: PeerId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        _peer_id: PeerId,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
     ) -> Option<(Option<PanelId>, Box<dyn ItemHandle>)> {
-        let call = self.active_call()?;
-        let participant = call.remote_participant_for_peer_id(peer_id, cx)?;
-        let leader_in_this_app;
-        let leader_in_this_project;
-        match participant.location {
-            ParticipantLocation::SharedProject { project_id } => {
-                leader_in_this_app = true;
-                leader_in_this_project = Some(project_id) == self.project.read(cx).remote_id();
-            }
-            ParticipantLocation::UnsharedProject => {
-                leader_in_this_app = true;
-                leader_in_this_project = false;
-            }
-            ParticipantLocation::External => {
-                leader_in_this_app = false;
-                leader_in_this_project = false;
-            }
-        };
-        let state = self.follower_states.get(&peer_id.into())?;
-        let mut item_to_activate = None;
-        if let (Some(active_view_id), true) = (state.active_view_id, leader_in_this_app) {
-            if let Some(item) = state.items_by_leader_view_id.get(&active_view_id)
-                && (leader_in_this_project || !item.view.is_project_item(window, cx))
-            {
-                item_to_activate = Some((item.location, item.view.boxed_clone()));
-            }
-        } else if let Some(shared_screen) =
-            self.shared_screen_for_peer(peer_id, &state.center_pane, window, cx)
-        {
-            item_to_activate = Some((None, Box::new(shared_screen)));
-        }
-        item_to_activate
-    }
-
-    fn shared_screen_for_peer(
-        &self,
-        peer_id: PeerId,
-        pane: &Entity<Pane>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<Entity<SharedScreen>> {
-        self.active_call()?
-            .create_shared_screen(peer_id, pane, window, cx)
+        todo!("active_item_for_peer");
     }
 
     pub fn on_window_activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -5830,7 +5662,6 @@ impl Workspace {
             }
             ActiveCallEvent::RemoteVideoTracksChanged { participant_id } => {
                 self.leader_updated(participant_id, window, cx);
-                self.handle_auto_watch_video_tracks_changed(*participant_id, window, cx);
             }
             ActiveCallEvent::LocalScreenShareStarted => {
                 if let AutoWatch::Active { .. } = self.auto_watch {
@@ -5839,7 +5670,6 @@ impl Workspace {
                 }
             }
             ActiveCallEvent::LocalScreenShareStopped => {
-                self.handle_auto_watch_local_share_stopped(window, cx);
             }
             ActiveCallEvent::RoomLeft => {
                 if self.auto_watch.enabled() {
@@ -6387,7 +6217,6 @@ impl Workspace {
         use session::Session;
 
         let client = project.read(cx).client();
-        let user_store = project.read(cx).user_store();
         let workspace_store = cx.new(|cx| WorkspaceStore::new(client.clone(), cx));
         let session = cx.new(|cx| AppSession::new(Session::test(), cx));
         window.activate_window();
@@ -6395,7 +6224,6 @@ impl Workspace {
             languages: project.read(cx).languages().clone(),
             workspace_store,
             client,
-            user_store,
             fs: project.read(cx).fs().clone(),
             build_window_options: |_, _| Default::default(),
             session,
@@ -6776,7 +6604,6 @@ pub trait AnyActiveCall {
     fn channel_id(&self, _: &App) -> Option<ChannelId>;
     fn hang_up(&self, _: &mut App) -> Task<Result<()>>;
     fn unshare_project(&self, _: Entity<Project>, _: &mut App) -> Result<()>;
-    fn remote_participant_for_peer_id(&self, _: PeerId, _: &App) -> Option<RemoteCollaborator>;
     fn is_sharing_project(&self, _: &App) -> bool;
     fn is_sharing_screen(&self, _: &App) -> bool;
     fn has_remote_participants(&self, _: &App) -> bool;
@@ -6801,13 +6628,6 @@ pub trait AnyActiveCall {
         _: &mut Context<Workspace>,
         _: Box<dyn Fn(&mut Workspace, &ActiveCallEvent, &mut Window, &mut Context<Workspace>)>,
     ) -> Subscription;
-    fn create_shared_screen(
-        &self,
-        _: PeerId,
-        _: &Entity<Pane>,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Option<Entity<SharedScreen>>;
     fn peer_ids_with_video_tracks(&self, _: &App) -> Vec<PeerId>;
 }
 
@@ -6845,15 +6665,6 @@ impl ParticipantLocation {
         }
     }
 }
-/// Workspace-local view of a remote collaborator's state.
-/// This is the subset of `call::RemoteParticipant` that workspace needs.
-#[derive(Clone)]
-pub struct RemoteCollaborator {
-    pub user: Arc<User>,
-    pub peer_id: PeerId,
-    pub location: ParticipantLocation,
-    pub participant_index: ParticipantIndex,
-}
 
 pub enum ActiveCallEvent {
     ParticipantLocationChanged { participant_id: PeerId },
@@ -6864,42 +6675,12 @@ pub enum ActiveCallEvent {
 }
 
 fn leader_border_for_pane(
-    follower_states: &HashMap<CollaboratorId, FollowerState>,
-    pane: &Entity<Pane>,
+    _follower_states: &HashMap<CollaboratorId, FollowerState>,
+    _pane: &Entity<Pane>,
     _: &Window,
-    cx: &App,
+    _cx: &App,
 ) -> Option<Div> {
-    let (leader_id, _follower_state) = follower_states.iter().find_map(|(leader_id, state)| {
-        if state.pane() == pane {
-            Some((*leader_id, state))
-        } else {
-            None
-        }
-    })?;
-
-    let mut leader_color = match leader_id {
-        CollaboratorId::PeerId(leader_peer_id) => {
-            let leader = GlobalAnyActiveCall::try_global(cx)?
-                .0
-                .remote_participant_for_peer_id(leader_peer_id, cx)?;
-
-            cx.theme()
-                .players()
-                .color_for_participant(leader.participant_index.0)
-                .cursor
-        }
-        CollaboratorId::Agent => cx.theme().players().agent().cursor,
-    };
-    leader_color.fade_out(0.3);
-    Some(
-        div()
-            .absolute()
-            .size_full()
-            .left_0()
-            .top_0()
-            .border_2()
-            .border_color(leader_color),
-    )
+    None
 }
 
 fn window_bounds_env_override() -> Option<Bounds<Pixels>> {

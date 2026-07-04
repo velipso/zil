@@ -17,8 +17,8 @@ use util::{RangeExt, debug_panic, post_inc};
 
 use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap, SplitSide};
 use crate::{
-    CURSORS_VISIBLE_FOR, DisplayPoint, DisplayRow, Editor,
-    EditorSettings, EditorSnapshot, GutterHoverButton, HoveredCursor,
+    DisplayPoint, DisplayRow, Editor,
+    EditorSettings, EditorSnapshot, GutterHoverButton,
     SelectPhase, Selection, SelectionDragState,
     display_map::ToDisplayPoint,
     mouse_context_menu, scroll::ScrollPixelOffset,
@@ -110,10 +110,6 @@ impl EditorElement {
                 window,
                 cx,
             );
-
-            if let Some(point) = point_for_position.as_valid() {
-                Self::update_visible_cursor(editor, point, position_map, window, cx);
-            }
         } else {
             editor.hide_hovered_link(cx);
         }
@@ -860,58 +856,6 @@ impl EditorElement {
                 cx,
             );
         }
-    }
-
-    fn update_visible_cursor(
-        editor: &mut Editor,
-        point: DisplayPoint,
-        position_map: &PositionMap,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
-        let snapshot = &position_map.snapshot;
-        let Some(hub) = editor.collaboration_hub() else {
-            return;
-        };
-        let start = snapshot.display_snapshot.clip_point(
-            DisplayPoint::new(point.row(), point.column().saturating_sub(1)),
-            Bias::Left,
-        );
-        let end = snapshot.display_snapshot.clip_point(
-            DisplayPoint::new(
-                point.row(),
-                (point.column() + 1).min(snapshot.line_len(point.row())),
-            ),
-            Bias::Right,
-        );
-
-        let range = snapshot
-            .buffer_snapshot()
-            .anchor_before(start.to_point(&snapshot.display_snapshot))
-            ..snapshot
-                .buffer_snapshot()
-                .anchor_after(end.to_point(&snapshot.display_snapshot));
-
-        let Some(selection) = snapshot.remote_selections_in_range(&range, hub, cx).next() else {
-            return;
-        };
-        let key = HoveredCursor {
-            replica_id: selection.replica_id,
-            selection_id: selection.selection.id,
-        };
-        editor.hovered_cursors.insert(
-            key.clone(),
-            cx.spawn_in(window, async move |editor, cx| {
-                cx.background_executor().timer(CURSORS_VISIBLE_FOR).await;
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.hovered_cursors.remove(&key);
-                        cx.notify();
-                    })
-                    .ok();
-            }),
-        );
-        cx.notify()
     }
 }
 

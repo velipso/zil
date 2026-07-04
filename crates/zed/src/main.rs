@@ -15,7 +15,7 @@ const _: () = assert!(
 
 use anyhow::{Context as _, Result};
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore};
+use client::{Client, ProxySettings};
 use collections::HashMap;
 use editor::Editor;
 use fs::{Fs, RealFs};
@@ -418,7 +418,6 @@ fn main() {
         cx.foreground_executor().block_on(language_reload_task);
 
         languages::init(languages.clone(), fs.clone(), cx);
-        let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
         let workspace_store = cx.new(|cx| WorkspaceStore::new(client.clone(), cx));
 
         Client::set_global(client.clone(), cx);
@@ -429,20 +428,11 @@ fn main() {
 
         let session = cx.foreground_executor().block_on(session);
 
-        let telemetry = client.telemetry();
-        telemetry.start(
-            Some("asdf".to_string()),
-            Some("asdf".to_string()),
-            session.id().to_owned(),
-            cx,
-        );
-
         let app_session = cx.new(|cx| AppSession::new(session, cx));
 
         let app_state = Arc::new(AppState {
             languages,
             client: client.clone(),
-            user_store,
             fs: fs.clone(),
             build_window_options,
             workspace_store,
@@ -454,11 +444,6 @@ fn main() {
         command_palette::init(cx);
 
         language_model::init(cx);
-        RefreshLlmTokenListener::register(
-            app_state.client.clone(),
-            app_state.user_store.clone(),
-            cx,
-        );
         zed::remote_debug::init(cx);
 
         load_embedded_fonts(cx);
@@ -496,8 +481,6 @@ fn main() {
         which_key::init(cx);
 
         cx.observe_global::<SettingsStore>({
-            let http = app_state.client.http_client();
-            let client = app_state.client.clone();
             move |cx| {
                 for &mut window in cx.windows().iter_mut() {
                     let background_appearance = cx.theme().window_background_appearance();
@@ -519,14 +502,6 @@ fn main() {
                         }
                     },
                 );
-
-                let new_host = &client::ClientSettings::get_global(cx).server_url;
-                if &http.base_url() != new_host {
-                    http.set_base_url(new_host);
-                    if client.status().borrow().is_connected() {
-                        client.reconnect(&cx.to_async());
-                    }
-                }
             }
         })
         .detach();
@@ -683,9 +658,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
 
 async fn authenticate(client: Arc<Client>, cx: &AsyncApp) -> Result<()> {
     if stdout_is_a_pty() {
-        if client::IMPERSONATE_LOGIN.is_some() {
-            client.sign_in_with_optional_connect(false, cx).await?;
-        } else if client.has_credentials(cx).await {
+        if client.has_credentials(cx).await {
             client.sign_in_with_optional_connect(true, cx).await?;
         }
     } else if client.has_credentials(cx).await {

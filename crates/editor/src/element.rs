@@ -4,7 +4,7 @@ use crate::{
     BlockId, ChunkRendererContext, ChunkReplacement,
     CursorShape, CustomBlockId, DisplayPoint, DisplayRow,
     Editor, EditorMode, EditorSettings, EditorSnapshot, EditorStyle, FILE_HEADER_HEIGHT,
-    FocusedBlock, GutterDimensions, HalfPageDown, HalfPageUp, HandleInput, HoveredCursor,
+    FocusedBlock, GutterDimensions, HalfPageDown, HalfPageUp, HandleInput,
     LineDown, LineHighlight, LineUp, MAX_LINE_LEN, MINIMAP_FONT_SIZE,
     PageDown, PageUp, Point, RowExt, RowRangeExt, Selection, SelectionDragState, SizingBehavior,
     ToPoint,
@@ -54,7 +54,7 @@ use std::{
     cmp::{self, Ordering},
     fmt::{self, Write},
     iter, mem,
-    ops::{Deref, Range},
+    ops::Range,
     rc::Rc,
     sync::Arc,
     time::Duration,
@@ -66,10 +66,7 @@ use ui::utils::ensure_minimum_contrast;
 use ui::{ButtonLike, prelude::*};
 use unicode_segmentation::UnicodeSegmentation;
 use util::{ResultExt, debug_panic};
-use workspace::{
-    CollaboratorId, ItemHandle,
-    item::{Item, ItemBufferKind},
-};
+use workspace::{ItemHandle, item::{Item, ItemBufferKind}};
 
 /// Determines what kinds of highlights should be applied to a lines background.
 #[derive(Clone, Copy, Default)]
@@ -555,69 +552,7 @@ impl EditorElement {
                 }
             }
 
-            if let Some(collaboration_hub) = &editor.collaboration_hub {
-                // When following someone, render the local selections in their color.
-                if let Some(leader_id) = editor.leader_id {
-                    match leader_id {
-                        CollaboratorId::PeerId(peer_id) => {
-                            if let Some(collaborator) =
-                                collaboration_hub.collaborators(cx).get(&peer_id)
-                                && let Some(participant_index) = collaboration_hub
-                                    .user_participant_indices(cx)
-                                    .get(&collaborator.user_id)
-                                && let Some((local_selection_style, _)) = selections.first_mut()
-                            {
-                                *local_selection_style = cx
-                                    .theme()
-                                    .players()
-                                    .color_for_participant(participant_index.0);
-                            }
-                        }
-                        CollaboratorId::Agent => {
-                            if let Some((local_selection_style, _)) = selections.first_mut() {
-                                *local_selection_style = cx.theme().players().agent();
-                            }
-                        }
-                    }
-                }
-
-                let mut remote_selections = HashMap::default();
-                for selection in snapshot.remote_selections_in_range(
-                    &(start_anchor..end_anchor),
-                    collaboration_hub.as_ref(),
-                    cx,
-                ) {
-                    // Don't re-render the leader's selections, since the local selections
-                    // match theirs.
-                    if Some(selection.collaborator_id) == editor.leader_id {
-                        continue;
-                    }
-                    let key = HoveredCursor {
-                        replica_id: selection.replica_id,
-                        selection_id: selection.selection.id,
-                    };
-
-                    let is_shown =
-                        editor.show_cursor_names || editor.hovered_cursors.contains_key(&key);
-
-                    remote_selections
-                        .entry(selection.replica_id)
-                        .or_insert((selection.color, Vec::new()))
-                        .1
-                        .push(SelectionLayout::new(
-                            selection.selection,
-                            selection.line_mode,
-                            editor.cursor_offset_on_selection,
-                            selection.cursor_shape,
-                            &snapshot.display_snapshot,
-                            false,
-                            false,
-                            if is_shown { selection.user_name } else { None },
-                        ));
-                }
-
-                selections.extend(remote_selections.into_values());
-            } else if !editor.is_focused(window) && editor.show_cursor_when_unfocused {
+            if !editor.is_focused(window) && editor.show_cursor_when_unfocused {
                 let cursor_offset_on_selection = editor.cursor_offset_on_selection;
 
                 let layouts = snapshot
@@ -659,39 +594,19 @@ impl EditorElement {
     ) -> Vec<(DisplayPoint, Hsla)> {
         let editor = self.editor.read(cx);
         let mut cursors = Vec::new();
-        let mut skip_local = false;
         let mut add_cursor = |anchor: Anchor, color| {
             cursors.push((anchor.to_display_point(&snapshot.display_snapshot), color));
         };
-        // Remote cursors
-        if let Some(collaboration_hub) = &editor.collaboration_hub {
-            for remote_selection in snapshot.remote_selections_in_range(
-                &(Anchor::Min..Anchor::Max),
-                collaboration_hub.deref(),
-                cx,
-            ) {
-                add_cursor(
-                    remote_selection.selection.head(),
-                    remote_selection.color.cursor,
-                );
-                if Some(remote_selection.collaborator_id) == editor.leader_id {
-                    skip_local = true;
-                }
-            }
-        }
-        // Local cursors
-        if !skip_local {
-            let color = cx.theme().players().local().cursor;
-            editor
-                .selections
-                .disjoint_anchors()
-                .iter()
-                .for_each(|selection| {
-                    add_cursor(selection.head(), color);
-                });
-            if let Some(ref selection) = editor.selections.pending_anchor() {
+        let color = cx.theme().players().local().cursor;
+        editor
+            .selections
+            .disjoint_anchors()
+            .iter()
+            .for_each(|selection| {
                 add_cursor(selection.head(), color);
-            }
+            });
+        if let Some(ref selection) = editor.selections.pending_anchor() {
+            add_cursor(selection.head(), color);
         }
         cursors
     }

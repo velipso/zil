@@ -364,50 +364,8 @@ impl PaneLeaderDecorator for ActivePaneDecorator<'_> {
 }
 
 impl PaneLeaderDecorator for PaneRenderContext<'_> {
-    fn decorate(&self, pane: &Entity<Pane>, cx: &App) -> LeaderDecoration {
-        let follower_state = self.follower_states.iter().find_map(|(leader_id, state)| {
-            if state.center_pane == *pane {
-                Some((*leader_id, state))
-            } else {
-                None
-            }
-        });
-        let Some((leader_id, follower_state)) = follower_state else {
-            return LeaderDecoration::default();
-        };
-
-        let mut leader_color;
-        match leader_id {
-            CollaboratorId::PeerId(peer_id) => {
-                let Some(leader) = self
-                    .active_call
-                    .as_ref()
-                    .and_then(|call| call.remote_participant_for_peer_id(peer_id, cx))
-                else {
-                    return LeaderDecoration::default();
-                };
-                leader_color = cx
-                    .theme()
-                    .players()
-                    .color_for_participant(leader.participant_index.0)
-                    .cursor;
-            }
-            CollaboratorId::Agent => {
-                leader_color = cx.theme().players().agent().cursor;
-            }
-        }
-
-        let is_in_panel = follower_state.dock_pane.is_some();
-        if is_in_panel {
-            leader_color.fade_out(0.75);
-        } else {
-            leader_color.fade_out(0.3);
-        }
-
-        LeaderDecoration {
-            status_box: None,
-            border: Some(leader_color),
-        }
+    fn decorate(&self, _pane: &Entity<Pane>, _cx: &App) -> LeaderDecoration {
+        LeaderDecoration::default()
     }
 
     fn active_pane(&self) -> &Entity<Pane> {

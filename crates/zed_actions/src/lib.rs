@@ -54,8 +54,6 @@ actions!(
         /// Opens the keymap editor.
         #[action(deprecated_aliases = ["zed_actions::OpenKeymapEditor"])]
         OpenKeymap,
-        /// Opens account settings.
-        OpenAccountSettings,
         /// Quits the application.
         Quit,
         /// Shows information about Zed.
