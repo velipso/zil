@@ -21,10 +21,9 @@ mod workspace_settings;
 pub use crate::notifications::NotificationFrame;
 pub use dock::Panel;
 pub use multi_workspace::{
-    CloseWorkspaceSidebar, DraggedSidebar, FocusWorkspaceSidebar, MoveProjectToNewWindow,
-    MultiWorkspace, MultiWorkspaceEvent, NewThread, NextProject, NextThread, PreviousProject,
-    PreviousThread, ProjectGroup, ProjectGroupKey, SerializedProjectGroupState, Sidebar,
-    SidebarHandle, SidebarRenderState, SidebarSide, ToggleWorkspaceSidebar,
+    DraggedSidebar, MultiWorkspace, MultiWorkspaceEvent,
+    ProjectGroup, ProjectGroupKey, SerializedProjectGroupState, Sidebar,
+    SidebarHandle, SidebarRenderState, SidebarSide,
 };
 pub use path_list::{PathList, SerializedPathList};
 pub use remote::{
@@ -1197,8 +1196,6 @@ struct FollowerView {
 pub enum OpenMode {
     /// Open the workspace in a new window.
     NewWindow,
-    /// Add to the window's multi workspace without activating it (used during deserialization).
-    Add,
     /// Add to the window's multi workspace and activate it.
     #[default]
     Activate,
@@ -1568,9 +1565,6 @@ impl Workspace {
                         match open_mode {
                             OpenMode::Activate => {
                                 multi_workspace.activate(workspace.clone(), None, window, cx);
-                            }
-                            OpenMode::Add => {
-                                multi_workspace.add(workspace.clone(), &*window, cx);
                             }
                             OpenMode::NewWindow => {
                                 unreachable!()
