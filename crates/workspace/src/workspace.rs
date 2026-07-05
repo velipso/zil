@@ -20,11 +20,7 @@ mod workspace_settings;
 
 pub use crate::notifications::NotificationFrame;
 pub use dock::Panel;
-pub use multi_workspace::{
-    DraggedSidebar, MultiWorkspace, MultiWorkspaceEvent,
-    ProjectGroup, ProjectGroupKey, SerializedProjectGroupState, Sidebar,
-    SidebarHandle, SidebarRenderState, SidebarSide,
-};
+pub use multi_workspace::{MultiWorkspace, MultiWorkspaceEvent};
 pub use path_list::{PathList, SerializedPathList};
 pub use remote::{
     RemoteConnectionIdentity, remote_connection_identity, same_remote_connection_identity,
@@ -1564,7 +1560,7 @@ impl Workspace {
                         });
                         match open_mode {
                             OpenMode::Activate => {
-                                multi_workspace.activate(workspace.clone(), None, window, cx);
+                                multi_workspace.activate(workspace.clone(), window, cx);
                             }
                             OpenMode::NewWindow => {
                                 unreachable!()
@@ -1669,10 +1665,6 @@ impl Workspace {
         self.project.update(cx, |project, cx| {
             project.on_update_default_tab_settings(default_tab_size, default_hard_tabs, cx);
         });
-    }
-
-    pub fn project_group_key(&self, cx: &App) -> ProjectGroupKey {
-        self.project.read(cx).project_group_key(cx)
     }
 
     pub fn weak_handle(&self) -> WeakEntity<Self> {
@@ -4238,13 +4230,7 @@ impl Workspace {
             .as_ref()
             .map(|h| Target::Sidebar(h.clone()));
 
-        let sidebar_on_right = self
-            .multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map_or(false, |mw| {
-                mw.read(cx).sidebar_side(cx) == SidebarSide::Right
-            });
+        let sidebar_on_right = false;
 
         let away_from_sidebar = if sidebar_on_right {
             SplitDirection::Left
@@ -6901,7 +6887,7 @@ pub fn open_paths(
                 .update(cx, |multi_workspace, window, cx| {
                     cx.activate(true);
                     window.activate_window();
-                    multi_workspace.activate(target_workspace.clone(), None, window, cx);
+                    multi_workspace.activate(target_workspace.clone(), window, cx);
                     target_workspace.update(cx, |workspace, cx| {
                         workspace.open_paths(
                             abs_paths,

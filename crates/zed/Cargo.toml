@@ -107,7 +107,6 @@ settings_profile_selector.workspace = true
 settings_ui.workspace = true
 strum.workspace = true
 tab_switcher.workspace = true
-task.workspace = true
 tempfile = { workspace = true, optional = true }
 theme.workspace = true
 theme_settings.workspace = true

@@ -17,8 +17,8 @@ use futures::{StreamExt, channel::mpsc, select_biased};
 use gpui::{
     Action, App, AppContext as _, ClipboardItem, Context, DismissEvent, Element, Entity,
     FocusHandle, Focusable, Image, ImageFormat, KeyBinding, ParentElement, PathPromptOptions,
-    PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt, TitlebarOptions, UpdateGlobal,
-    WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, actions,
+    PromptLevel, ReadGlobal, SharedString, Size, TaskExt, TitlebarOptions, UpdateGlobal,
+    Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, actions,
     image_cache, img, point, px, retain_all,
 };
 use language::Capability;
@@ -319,27 +319,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                 })
                 .unwrap_or(true)
         });
-
-        let multi_workspace_handle = cx.entity();
-        cx.subscribe_in(
-            &multi_workspace_handle,
-            window,
-            |this, _multi_workspace, event: &workspace::MultiWorkspaceEvent, window, cx| {
-                let workspace::MultiWorkspaceEvent::ActiveWorkspaceChanged { source_workspace } =
-                    event
-                else {
-                    return;
-                };
-
-                let active_workspace = this.workspace().clone();
-                let source_workspace = source_workspace.clone();
-                active_workspace.update(cx, |workspace, cx| {
-                    ensure_agent_panel_for_workspace(workspace, source_workspace, window, cx)
-                        .detach_and_log_err(cx);
-                });
-            },
-        )
-        .detach();
     })
     .detach();
 
@@ -493,16 +472,6 @@ fn show_software_emulation_warning_if_needed(
         })
         .detach()
     }
-}
-
-fn ensure_agent_panel_for_workspace(
-    _workspace: &mut Workspace,
-    _source_workspace: Option<WeakEntity<Workspace>>,
-    _window: &mut Window,
-    _cx: &mut Context<Workspace>,
-) -> Task<anyhow::Result<()>> {
-    // VELIPSO: delete function
-    Task::ready(Ok(()))
 }
 
 fn register_actions(
@@ -1076,7 +1045,7 @@ fn quit(_: &Quit, cx: &mut App) {
             for workspace in workspaces {
                 if let Some(should_close) = window
                     .update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.activate(workspace.clone(), None, window, cx);
+                        multi_workspace.activate(workspace.clone(), window, cx);
                         window.activate_window();
                         workspace.update(cx, |workspace, cx| {
                             workspace.prepare_to_close(CloseIntent::Quit, window, cx)

@@ -12749,7 +12749,6 @@ dependencies = [
  "settings_ui",
  "strum",
  "tab_switcher",
- "task",
  "tempfile",
  "theme",
  "theme_settings",

@@ -76,13 +76,6 @@ pub enum ParseStatus {
     Failed { error: String },
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum SidebarSide {
-    #[default]
-    Left,
-    Right,
-}
-
 /// Determines when the mouse cursor should be hidden in response to keyboard
 /// input.
 ///

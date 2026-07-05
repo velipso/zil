@@ -12,7 +12,7 @@ use ui::{
     prelude::*,
     utils::{TRAFFIC_LIGHT_PADDING, platform_title_bar_height},
 };
-use workspace::{MultiWorkspace, SidebarRenderState, SidebarSide};
+use workspace::MultiWorkspace;
 
 use crate::{
     platforms::{platform_linux, platform_windows},
@@ -98,14 +98,6 @@ impl PlatformTitleBar {
     pub fn init(cx: &mut App) {
         SystemWindowTabs::init(cx);
     }
-
-    fn sidebar_render_state(&self, cx: &App) -> SidebarRenderState {
-        self.multi_workspace
-            .as_ref()
-            .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).sidebar_render_state(cx))
-            .unwrap_or_default()
-    }
 }
 
 /// Renders the platform-appropriate left-side window controls (e.g. Ubuntu/GNOME close button).
@@ -184,7 +176,6 @@ impl Render for PlatformTitleBar {
         let children = mem::take(&mut self.children);
 
         let button_layout = self.effective_button_layout(&decorations, cx);
-        let sidebar = self.sidebar_render_state(cx);
 
         let title_bar = h_flex()
             .window_control_area(WindowControlArea::Drag)
@@ -232,7 +223,7 @@ impl Render for PlatformTitleBar {
                     })
             })
             .map(|this| {
-                let show_left_controls = !(sidebar.open && sidebar.side == SidebarSide::Left);
+                let show_left_controls = true;
 
                 if window.is_fullscreen() {
                     this.pl_2()
@@ -257,13 +248,11 @@ impl Render for PlatformTitleBar {
                 Decorations::Server => el,
                 Decorations::Client { tiling, .. } => el
                     .when(
-                        !(tiling.top || tiling.right)
-                            && !(sidebar.open && sidebar.side == SidebarSide::Right),
+                        !(tiling.top || tiling.right),
                         |el| el.rounded_tr(theme::CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     .when(
-                        !(tiling.top || tiling.left)
-                            && !(sidebar.open && sidebar.side == SidebarSide::Left),
+                        !(tiling.top || tiling.left),
                         |el| el.rounded_tl(theme::CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     // this border is to avoid a transparent gap in the rounded corners
@@ -286,7 +275,7 @@ impl Render for PlatformTitleBar {
                     .children(children),
             )
             .when(!window.is_fullscreen(), |title_bar| {
-                let show_right_controls = !(sidebar.open && sidebar.side == SidebarSide::Right);
+                let show_right_controls = true;
 
                 let title_bar = title_bar.children(
                     show_right_controls
