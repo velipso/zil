@@ -40,7 +40,6 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
-use client::proto;
 use clock::Global;
 use collections::{BTreeMap, BTreeSet, HashMap, HashSet, btree_map};
 use futures::{
@@ -54,7 +53,6 @@ use gpui::{
     App, AppContext, AsyncApp, Context, Entity, EventEmitter, PromptLevel, SharedString,
     Subscription, Task, WeakEntity,
 };
-use http_client::HttpClient;
 use itertools::Itertools as _;
 use language::{
     Bias, BinaryStatus, Buffer, CachedLspAdapter, Capability, CodeLabel,
@@ -192,7 +190,6 @@ struct DynamicRegistrations {
 pub struct LocalLspStore {
     weak: WeakEntity<LspStore>,
     pub worktree_store: Entity<WorktreeStore>,
-    http_client: Arc<dyn HttpClient>,
     environment: Entity<ProjectEnvironment>,
     fs: Arc<dyn Fs>,
     languages: Arc<LanguageRegistry>,
@@ -2392,7 +2389,6 @@ impl LspStore {
         environment: Entity<ProjectEnvironment>,
         manifest_tree: Entity<ManifestTree>,
         languages: Arc<LanguageRegistry>,
-        http_client: Arc<dyn HttpClient>,
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -2425,7 +2421,6 @@ impl LspStore {
                 language_server_dynamic_registrations: Default::default(),
                 buffer_snapshots: Default::default(),
                 environment,
-                http_client,
                 fs,
                 yarn,
                 _subscription: cx.on_app_quit(|this, _| {
@@ -3097,7 +3092,6 @@ impl LspStore {
             let environment = local.environment.clone();
             let weak = local.weak.clone();
             let worktree_store = local.worktree_store.clone();
-            let http_client = local.http_client.clone();
             let fs = local.fs.clone();
             move |worktree_id, cx: &mut App| {
                 let worktree = worktree_store.read(cx).worktree_for_id(worktree_id, cx)?;
@@ -3106,7 +3100,6 @@ impl LspStore {
                     &environment,
                     weak.clone(),
                     &worktree,
-                    http_client.clone(),
                     fs.clone(),
                     cx,
                 ))
@@ -3413,7 +3406,6 @@ impl LspStore {
                                         &local.environment,
                                         cx.weak_entity(),
                                         &worktree,
-                                        local.http_client.clone(),
                                         local.fs.clone(),
                                         cx,
                                     )
@@ -3546,36 +3538,6 @@ impl LspStore {
             let to_remove = local.remove_worktree(id_to_remove, cx);
             for server in to_remove {
                 self.language_server_statuses.remove(&server);
-            }
-        }
-    }
-
-    pub fn shared(
-        &mut self,
-        project_id: u64,
-        downstream_client: AnyProtoClient,
-        _: &mut Context<Self>,
-    ) {
-        self.downstream_client = Some((downstream_client.clone(), project_id));
-
-        for (server_id, status) in &self.language_server_statuses {
-            if let Some(server) = self.language_server_for_id(*server_id) {
-                downstream_client
-                    .send(proto::StartLanguageServer {
-                        project_id,
-                        server: Some(proto::LanguageServer {
-                            id: server_id.to_proto(),
-                            name: status.name.to_string(),
-                            worktree_id: status.worktree.map(|id| id.to_proto()),
-                            language_name: status
-                                .language_name
-                                .as_ref()
-                                .map(|name| name.to_proto()),
-                        }),
-                        capabilities: serde_json::to_string(&server.capabilities())
-                            .expect("serializing server LSP capabilities"),
-                    })
-                    .log_err();
             }
         }
     }
@@ -4486,21 +4448,6 @@ impl LspStore {
         ));
 
         let server_capabilities = language_server.capabilities();
-        if let Some((downstream_client, project_id)) = self.downstream_client.as_ref() {
-            downstream_client
-                .send(proto::StartLanguageServer {
-                    project_id: *project_id,
-                    server: Some(proto::LanguageServer {
-                        id: server_id.to_proto(),
-                        name: language_server.name().to_string(),
-                        worktree_id: Some(key.worktree_id.to_proto()),
-                        language_name: Some(language_name.to_proto()),
-                    }),
-                    capabilities: serde_json::to_string(&server_capabilities)
-                        .expect("serializing server LSP capabilities"),
-                })
-                .log_err();
-        }
         self.lsp_server_capabilities
             .insert(server_id, server_capabilities);
 
@@ -5179,22 +5126,9 @@ fn subscribe_to_binary_statuses(
 ) -> Task<()> {
     let mut server_statuses = languages.language_server_binary_statuses();
     cx.spawn(async move |lsp_store, cx| {
-        while let Some((server_name, binary_status)) = server_statuses.next().await {
+        while let Some((server_name, _)) = server_statuses.next().await {
             if lsp_store
                 .update(cx, |_, cx| {
-                    let _binary_status = match binary_status {
-                        BinaryStatus::None => proto::ServerBinaryStatus::None,
-                        BinaryStatus::CheckingForUpdate => {
-                            proto::ServerBinaryStatus::CheckingForUpdate
-                        }
-                        BinaryStatus::Downloading => proto::ServerBinaryStatus::Downloading,
-                        BinaryStatus::Starting => proto::ServerBinaryStatus::Starting,
-                        BinaryStatus::Stopping => proto::ServerBinaryStatus::Stopping,
-                        BinaryStatus::Stopped => proto::ServerBinaryStatus::Stopped,
-                        BinaryStatus::Failed { error: _ } => {
-                            proto::ServerBinaryStatus::Failed
-                        }
-                    };
                     cx.emit(LspStoreEvent::LanguageServerUpdate {
                         // Binary updates are about the binary that might not have any language server id at that point.
                         // Reuse `LanguageServerUpdate` for them and provide a fake id that won't be used on the receiver side.
@@ -5700,7 +5634,6 @@ pub struct LocalLspAdapterDelegate {
     lsp_store: WeakEntity<LspStore>,
     worktree: worktree::Snapshot,
     fs: Arc<dyn Fs>,
-    http_client: Arc<dyn HttpClient>,
     language_registry: Arc<LanguageRegistry>,
     load_shell_env_task: Shared<Task<Option<HashMap<String, String>>>>,
 }
@@ -5711,7 +5644,6 @@ impl LocalLspAdapterDelegate {
         environment: &Entity<ProjectEnvironment>,
         lsp_store: WeakEntity<LspStore>,
         worktree: &Entity<Worktree>,
-        http_client: Arc<dyn HttpClient>,
         fs: Arc<dyn Fs>,
         cx: &mut App,
     ) -> Arc<Self> {
@@ -5722,7 +5654,6 @@ impl LocalLspAdapterDelegate {
             lsp_store,
             worktree: worktree.read(cx).snapshot(),
             fs,
-            http_client,
             language_registry,
             load_shell_env_task,
         })
@@ -5738,7 +5669,6 @@ impl LocalLspAdapterDelegate {
             &local.environment,
             local.weak.clone(),
             worktree,
-            local.http_client.clone(),
             local.fs.clone(),
             cx,
         )
@@ -5753,10 +5683,6 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
                 cx.emit(LspStoreEvent::Notification(message.to_owned()))
             })
             .ok();
-    }
-
-    fn http_client(&self) -> Arc<dyn HttpClient> {
-        self.http_client.clone()
     }
 
     fn worktree_id(&self) -> WorktreeId {

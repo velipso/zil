@@ -3422,13 +3422,7 @@ impl SettingsWindow {
                             .workspace()
                             .clone()
                             .update(cx, |workspace, cx| {
-                                workspace
-                                    .with_local_or_wsl_workspace(
-                                        window,
-                                        cx,
-                                        open_user_settings_in_workspace,
-                                    )
-                                    .detach();
+                                open_user_settings_in_workspace(workspace, window, cx)
                             });
                     })
                     .ok();
@@ -3830,10 +3824,8 @@ fn all_projects(
                 .and_then(|handle| handle.read(cx).ok())
                 .into_iter()
                 .flat_map(|multi_workspace| {
-                    multi_workspace
-                        .workspaces()
-                        .map(|workspace| workspace.read(cx).project().clone())
-                        .collect::<Vec<_>>()
+                    let workspace = multi_workspace.workspace();
+                    vec![workspace.read(cx).project().clone()]
                 }),
         )
         .filter(move |project| seen_project_ids.insert(project.entity_id()))
@@ -3847,14 +3839,11 @@ fn open_user_settings_in_workspace(
     let project = workspace.project().clone();
 
     cx.spawn_in(window, async move |workspace, cx| {
-        let (config_dir, settings_file) = project.update(cx, |project, cx| {
+        let (config_dir, settings_file) =
             (
-                project.try_windows_path_to_wsl(paths::config_dir().as_path(), cx),
-                project.try_windows_path_to_wsl(paths::settings_file().as_path(), cx),
-            )
-        });
-        let config_dir = config_dir.await?;
-        let settings_file = settings_file.await?;
+                paths::config_dir().as_path(),
+                paths::settings_file().as_path(),
+            );
         project
             .update(cx, |project, cx| {
                 project.find_or_create_worktree(&config_dir, false, cx)
@@ -3864,7 +3853,7 @@ fn open_user_settings_in_workspace(
         workspace
             .update_in(cx, |workspace, window, cx| {
                 workspace.open_paths(
-                    vec![settings_file],
+                    vec![settings_file.to_path_buf()],
                     OpenOptions {
                         visible: Some(OpenVisible::None),
                         ..Default::default()

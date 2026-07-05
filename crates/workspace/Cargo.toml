@@ -34,7 +34,6 @@ futures-lite.workspace = true
 fs.workspace = true
 futures.workspace = true
 gpui.workspace = true
-http_client.workspace = true
 itertools.workspace = true
 language.workspace = true
 log.workspace = true

@@ -46,9 +46,6 @@ impl std::fmt::Display for ChannelId {
     }
 }
 
-pub fn init(_client: &Arc<Client>, _cx: &mut App) {
-}
-
 pub type MessageToClientHandler = Box<dyn Fn(&MessageToClient, &mut App) + Send + Sync + 'static>;
 
 struct GlobalClient(Arc<Client>);
@@ -267,7 +264,7 @@ impl<T: 'static> Drop for PendingEntitySubscription<T> {
 }
 
 impl Client {
-    pub fn new(
+    pub fn new1(
         http: Arc<HttpClientWithUrl>,
         cx: &mut App,
     ) -> Arc<Self> {
@@ -289,13 +286,13 @@ impl Client {
         })
     }
 
-    pub fn production(cx: &mut App) -> Arc<Self> {
+    pub fn production1(cx: &mut App) -> Arc<Self> {
         let http = Arc::new(HttpClientWithUrl::new_url(
             cx.http_client(),
             "asdf",
             cx.http_client().proxy().cloned(),
         ));
-        Self::new(http, cx)
+        Self::new1(http, cx)
     }
 
     pub fn id(&self) -> u64 {

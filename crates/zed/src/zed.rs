@@ -1032,30 +1032,28 @@ fn quit(_: &Quit, cx: &mut App) {
         // If the user cancels any save prompt, then keep the app open.
         for window in &workspace_windows {
             let window = *window;
-            let workspaces = window
+            let workspace = window
                 .update(cx, |multi_workspace, _, _cx| {
-                    multi_workspace.workspaces().cloned().collect::<Vec<_>>()
+                    multi_workspace.workspace().clone()
                 })
                 .log_err();
 
-            let Some(workspaces) = workspaces else {
+            let Some(workspace) = workspace else {
                 continue;
             };
 
-            for workspace in workspaces {
-                if let Some(should_close) = window
-                    .update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.activate(workspace.clone(), window, cx);
-                        window.activate_window();
-                        workspace.update(cx, |workspace, cx| {
-                            workspace.prepare_to_close(CloseIntent::Quit, window, cx)
-                        })
+            if let Some(should_close) = window
+                .update(cx, |multi_workspace, window, cx| {
+                    multi_workspace.focus_active_workspace(window, cx);
+                    window.activate_window();
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.prepare_to_close(CloseIntent::Quit, window, cx)
                     })
-                    .log_err()
-                {
-                    if !should_close.await? {
-                        return Ok(());
-                    }
+                })
+                .log_err()
+            {
+                if !should_close.await? {
+                    return Ok(());
                 }
             }
         }
@@ -1486,40 +1484,33 @@ fn open_settings_file(
     cx.spawn_in(window, async move |workspace, cx| {
         workspace
             .update_in(cx, |workspace, window, cx| {
-                workspace.with_local_or_wsl_workspace(window, cx, move |workspace, window, cx| {
-                    let project = workspace.project().clone();
+                let project = workspace.project().clone();
 
-                    cx.spawn_in(window, async move |workspace, cx| {
-                        let config_dir = project
-                            .update(cx, |project, cx| {
-                                project.try_windows_path_to_wsl(paths::config_dir().as_path(), cx)
-                            })
-                            .await?;
-                        // Set up a dedicated worktree for settings, since
-                        // otherwise we're dropping and re-starting LSP servers
-                        // for each file inside on every settings file
-                        // close/open
+                cx.spawn_in(window, async move |workspace, cx| {
+                    let config_dir = paths::config_dir().as_path();
+                    // Set up a dedicated worktree for settings, since
+                    // otherwise we're dropping and re-starting LSP servers
+                    // for each file inside on every settings file
+                    // close/open
 
-                        // TODO: Do note that all other external files (e.g.
-                        // drag and drop from OS) still have their worktrees
-                        // released on file close, causing LSP servers'
-                        // restarts.
-                        let (_worktree, _) = project
-                            .update(cx, |project, cx| {
-                                project.find_or_create_worktree(&config_dir, false, cx)
-                            })
-                            .await?;
+                    // TODO: Do note that all other external files (e.g.
+                    // drag and drop from OS) still have their worktrees
+                    // released on file close, causing LSP servers'
+                    // restarts.
+                    let (_worktree, _) = project
+                        .update(cx, |project, cx| {
+                            project.find_or_create_worktree(&config_dir, false, cx)
+                        })
+                        .await?;
 
-                        workspace
-                            .update_in(cx, |_, window, cx| {
-                                create_and_open_local_file(abs_path, window, cx, default_content)
-                            })?
-                            .await?;
-                        anyhow::Ok(())
-                    })
+                    workspace
+                        .update_in(cx, |_, window, cx| {
+                            create_and_open_local_file(abs_path, window, cx, default_content)
+                        })?
+                        .await?;
+                    anyhow::Ok(())
                 })
             })?
-            .await?
             .await?;
         anyhow::Ok(())
     })

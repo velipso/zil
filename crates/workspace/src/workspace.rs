@@ -20,7 +20,7 @@ mod workspace_settings;
 
 pub use crate::notifications::NotificationFrame;
 pub use dock::Panel;
-pub use multi_workspace::{MultiWorkspace, MultiWorkspaceEvent};
+pub use multi_workspace::MultiWorkspace;
 pub use path_list::{PathList, SerializedPathList};
 pub use remote::{
     RemoteConnectionIdentity, remote_connection_identity, same_remote_connection_identity,
@@ -28,10 +28,7 @@ pub use remote::{
 pub use toast_layer::{ToastAction, ToastLayer, ToastView};
 
 use anyhow::{Context as _, Result, anyhow};
-use client::{
-    Client, ErrorExt,
-    proto::{self, ErrorCode, PanelId, PeerId},
-};
+use client::{ErrorExt, proto::{self, ErrorCode, PanelId, PeerId}};
 use collections::{HashMap, HashSet, hash_map};
 use dock::{Dock, DockPosition, PanelHandle, RESIZE_HANDLE_SIZE};
 use futures::{
@@ -878,7 +875,6 @@ impl SerializableItemRegistry {
 
 pub struct AppState {
     pub languages: Arc<LanguageRegistry>,
-    pub client: Arc<Client>,
     pub workspace_store: Entity<WorkspaceStore>,
     pub fs: Arc<dyn fs::Fs>,
     pub build_window_options: fn(Option<Uuid>, &mut App) -> WindowOptions,
@@ -955,16 +951,12 @@ impl AppState {
         let fs = fs::FakeFs::new(cx.background_executor().clone());
         <dyn Fs>::set_global(fs.clone(), cx);
         let languages = Arc::new(LanguageRegistry::test(fs.clone(), cx.background_executor().clone()));
-        let http_client = http_client::FakeHttpClient::with_404_response();
-        let client = Client::new(http_client, cx);
         let session = cx.new(|cx| AppSession::new(Session::test(), cx));
         let workspace_store = cx.new(|_cx| WorkspaceStore::new());
 
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        client::init(&client, cx);
 
         Arc::new(Self {
-            client,
             fs,
             languages,
             workspace_store,
@@ -1168,7 +1160,6 @@ pub struct ViewId {
 }
 
 pub struct FollowerState {
-    items_by_leader_view_id: HashMap<ViewId, FollowerView>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1182,10 +1173,6 @@ impl AutoWatch {
     pub fn enabled(&self) -> bool {
         matches!(self, AutoWatch::Active { .. } | AutoWatch::Paused)
     }
-}
-
-struct FollowerView {
-    view: Box<dyn FollowableItemHandle>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1232,10 +1219,6 @@ impl Workspace {
             match event {
                 project::Event::RemoteIdChanged(_) => {
                     this.update_window_title(window, cx);
-                }
-
-                project::Event::CollaboratorLeft(peer_id) => {
-                    this.collaborator_left(*peer_id, window, cx);
                 }
 
                 &project::Event::WorktreeRemoved(_) => {
@@ -1493,7 +1476,6 @@ impl Workspace {
         cx: &mut App,
     ) -> Task<anyhow::Result<OpenResult>> {
         let project_handle = Project::local(
-            app_state.client.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             env,
@@ -1560,7 +1542,7 @@ impl Workspace {
                         });
                         match open_mode {
                             OpenMode::Activate => {
-                                multi_workspace.activate(workspace.clone(), window, cx);
+                                multi_workspace.focus_active_workspace(window, cx);
                             }
                             OpenMode::NewWindow => {
                                 unreachable!()
@@ -2369,10 +2351,6 @@ impl Workspace {
         )
     }
 
-    pub fn client(&self) -> &Arc<Client> {
-        &self.app_state.client
-    }
-
     pub fn set_titlebar_item(&mut self, item: AnyView, _: &mut Window, cx: &mut Context<Self>) {
         self.titlebar_item = Some(item);
         cx.notify();
@@ -2512,47 +2490,6 @@ impl Workspace {
         F: 'static + FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) -> T,
     {
         if self.project.read(cx).is_local() {
-            Task::ready(Ok(callback(self, window, cx)))
-        } else {
-            let env = self.project.read(cx).cli_environment(cx);
-            let task = Self::new_local(
-                Vec::new(),
-                self.app_state.clone(),
-                None,
-                env,
-                None,
-                OpenMode::Activate,
-                cx,
-            );
-            cx.spawn_in(window, async move |_vh, cx| {
-                let OpenResult {
-                    window: multi_workspace_window,
-                    ..
-                } = task.await?;
-                multi_workspace_window.update(cx, |multi_workspace, window, cx| {
-                    let workspace = multi_workspace.workspace().clone();
-                    workspace.update(cx, |workspace, cx| callback(workspace, window, cx))
-                })
-            })
-        }
-    }
-
-    /// Call the given callback with a workspace whose project is local or remote via WSL (allowing host access).
-    ///
-    /// If the given workspace has a local project, then it will be passed
-    /// to the callback. Otherwise, a new empty window will be created.
-    pub fn with_local_or_wsl_workspace<T, F>(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        callback: F,
-    ) -> Task<Result<T>>
-    where
-        T: 'static,
-        F: 'static + FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) -> T,
-    {
-        let project = self.project.read(cx);
-        if project.is_local() || project.is_via_wsl_with_host_interop(cx) {
             Task::ready(Ok(callback(self, window, cx)))
         } else {
             let env = self.project.read(cx).cli_environment(cx);
@@ -4845,20 +4782,6 @@ impl Workspace {
         TabBarSettings::get_global(cx).show_tab_bar_stacked
     }
 
-    fn collaborator_left(&mut self, peer_id: PeerId, window: &mut Window, cx: &mut Context<Self>) {
-        self.follower_states.retain(|leader_id, state| {
-            if *leader_id == CollaboratorId::PeerId(peer_id) {
-                for item in state.items_by_leader_view_id.values() {
-                    item.view.set_leader_id(None, window, cx);
-                }
-                false
-            } else {
-                true
-            }
-        });
-        cx.notify();
-    }
-
     pub(crate) fn active_item_path_changed(
         &mut self,
         focus_changed: bool,
@@ -6679,14 +6602,13 @@ pub fn workspace_windows_for_location(
         .filter_map(|window| window.downcast::<MultiWorkspace>())
         .filter(|multi_workspace| {
             multi_workspace.read(cx).is_ok_and(|multi_workspace| {
-                multi_workspace.workspaces().any(|workspace| {
-                    match workspace.read(cx).workspace_location(cx) {
-                        WorkspaceLocation::Location => {
-                            true
-                        }
-                        _ => false,
+                let workspace = multi_workspace.workspace();
+                match workspace.read(cx).workspace_location(cx) {
+                    WorkspaceLocation::Location => {
+                        true
                     }
-                })
+                    _ => false,
+                }
             })
         })
         .collect()
@@ -6708,22 +6630,21 @@ pub async fn find_existing_workspace(
         cx.update(|cx| {
             for window in workspace_windows_for_location(cx) {
                 if let Ok(multi_workspace) = window.read(cx) {
-                    for workspace in multi_workspace.workspaces() {
-                        let project = workspace.read(cx).project.read(cx);
-                        let m = project.visibility_for_paths(
-                            abs_paths,
-                            open_options.workspace_matching != WorkspaceMatching::MatchSubdirectory,
-                            cx,
-                        );
-                        if m > best_match {
-                            existing = Some((window, workspace.clone()));
-                            best_match = m;
-                        } else if best_match.is_none()
-                            && open_options.workspace_matching
-                                == WorkspaceMatching::MatchSubdirectory
-                        {
-                            existing = Some((window, workspace.clone()))
-                        }
+                    let workspace = multi_workspace.workspace();
+                    let project = workspace.read(cx).project.read(cx);
+                    let m = project.visibility_for_paths(
+                        abs_paths,
+                        open_options.workspace_matching != WorkspaceMatching::MatchSubdirectory,
+                        cx,
+                    );
+                    if m > best_match {
+                        existing = Some((window, workspace.clone()));
+                        best_match = m;
+                    } else if best_match.is_none()
+                        && open_options.workspace_matching
+                            == WorkspaceMatching::MatchSubdirectory
+                    {
+                        existing = Some((window, workspace.clone()))
                     }
                 }
             }
@@ -6887,7 +6808,7 @@ pub fn open_paths(
                 .update(cx, |multi_workspace, window, cx| {
                     cx.activate(true);
                     window.activate_window();
-                    multi_workspace.activate(target_workspace.clone(), window, cx);
+                    multi_workspace.focus_active_workspace(window, cx);
                     target_workspace.update(cx, |workspace, cx| {
                         workspace.open_paths(
                             abs_paths,
@@ -7017,38 +6938,31 @@ pub fn create_and_open_local_file(
             fs.save(path, &default_content(), Default::default())
                 .await?;
         }
+        let path = PathBuf::from(path);
 
         workspace
-            .update_in(cx, |workspace, window, cx| {
-                workspace.with_local_or_wsl_workspace(window, cx, |workspace, window, cx| {
-                    let path = workspace
-                        .project
-                        .read_with(cx, |project, cx| project.try_windows_path_to_wsl(path, cx));
-                    cx.spawn_in(window, async move |workspace, cx| {
-                        let path = path.await?;
+            .update_in(cx, |_workspace, window, cx| {
+                cx.spawn_in(window, async move |workspace, cx| {
+                    let path = fs.canonicalize(&path).await.unwrap_or(path);
 
-                        let path = fs.canonicalize(&path).await.unwrap_or(path);
-
-                        let mut items = workspace
-                            .update_in(cx, |workspace, window, cx| {
-                                workspace.open_paths(
-                                    vec![path.to_path_buf()],
-                                    OpenOptions {
-                                        visible: Some(OpenVisible::None),
-                                        ..Default::default()
-                                    },
-                                    None,
-                                    window,
-                                    cx,
-                                )
-                            })?
-                            .await;
-                        let item = items.pop().flatten();
-                        item.with_context(|| format!("path {path:?} is not a file"))?
-                    })
+                    let mut items = workspace
+                        .update_in(cx, |workspace, window, cx| {
+                            workspace.open_paths(
+                                vec![path.to_path_buf()],
+                                OpenOptions {
+                                    visible: Some(OpenVisible::None),
+                                    ..Default::default()
+                                },
+                                None,
+                                window,
+                                cx,
+                            )
+                        })?
+                        .await;
+                    let item = items.pop().flatten();
+                    item.with_context(|| format!("path {path:?} is not a file"))?
                 })
             })?
-            .await?
             .await
     })
 }

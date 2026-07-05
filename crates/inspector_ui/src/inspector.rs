@@ -26,7 +26,6 @@ pub fn init(app_state: Arc<AppState>, cx: &mut App) {
 
     // Project used for editor buffers with LSP support
     let project = project::Project::local(
-        app_state.client.clone(),
         app_state.languages.clone(),
         app_state.fs.clone(),
         None,

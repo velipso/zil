@@ -1,9 +1,7 @@
-pub mod editor_test_context;
-
 use std::{rc::Rc, sync::LazyLock};
 
 use crate::{
-    DisplayPoint, Editor, EditorMode, FoldPlaceholder, MultiBuffer, SelectionEffects, Size,
+    DisplayPoint, Editor, FoldPlaceholder, MultiBuffer, SelectionEffects, Size,
     display_map::{
         Block, BlockPlacement, CustomBlockId, DisplayMap, DisplayRow, DisplaySnapshot,
         ToDisplayPoint,
@@ -16,7 +14,6 @@ use gpui::{
 };
 use multi_buffer::{MultiBufferOffset, ToPoint};
 use pretty_assertions::assert_eq;
-use project::{Project};
 use ui::{App, BorrowAppContext, IntoElement, px};
 use util::test::{generate_marked_text, marked_text_offsets, marked_text_ranges};
 
@@ -118,15 +115,6 @@ pub fn assert_text_with_selections(
         marked_text.contains("«"),
     );
     assert_eq!(actual, marked_text, "Selections don't match");
-}
-
-pub(crate) fn build_editor_with_project(
-    project: Entity<Project>,
-    buffer: Entity<MultiBuffer>,
-    window: &mut Window,
-    cx: &mut Context<Editor>,
-) -> Editor {
-    Editor::new(EditorMode::full(), buffer, Some(project), window, cx)
 }
 
 #[derive(Default)]

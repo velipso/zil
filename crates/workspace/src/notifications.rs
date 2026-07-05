@@ -1050,15 +1050,14 @@ pub fn show_app_notification<V: Notification + 'static>(
             if let Some(multi_workspace) = window.downcast::<MultiWorkspace>() {
                 multi_workspace
                     .update(cx, |multi_workspace, _window, cx| {
-                        for workspace in multi_workspace.workspaces() {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.show_notification_without_handling_dismiss_events(
-                                    &id,
-                                    cx,
-                                    |cx| build_notification(cx),
-                                );
-                            });
-                        }
+                        let workspace = multi_workspace.workspace();
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.show_notification_without_handling_dismiss_events(
+                                &id,
+                                cx,
+                                |cx| build_notification(cx),
+                            );
+                        });
                     })
                     .ok(); // Doesn't matter if the windows are dropped
             }
@@ -1076,11 +1075,10 @@ pub fn dismiss_app_notification(id: &NotificationId, cx: &mut App) {
                 let id = id.clone();
                 multi_workspace
                     .update(cx, |multi_workspace, _window, cx| {
-                        for workspace in multi_workspace.workspaces() {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.dismiss_notification(&id, cx)
-                            });
-                        }
+                        let workspace = multi_workspace.workspace();
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.dismiss_notification(&id, cx)
+                        });
                     })
                     .ok();
             }

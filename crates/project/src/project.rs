@@ -22,7 +22,7 @@ use git_store::{Repository, RepositoryId};
 pub mod search_history;
 pub mod yarn;
 
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 
 use crate::{
     git_store::GitStore,
@@ -41,7 +41,6 @@ pub use worktree_store::WorktreePaths;
 
 use anyhow::{Context as _, Result, anyhow};
 use buffer_store::{BufferStore, BufferStoreEvent};
-use client::{Client, proto};
 use clock::ReplicaId;
 
 use collections::{HashMap, HashSet};
@@ -73,7 +72,7 @@ use project_settings::ProjectSettings;
 #[cfg(target_os = "windows")]
 use remote::wsl_path_to_windows_path;
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
-use rpc::{ErrorCode, proto::REMOTE_SERVER_PROJECT_ID};
+use rpc::ErrorCode;
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
 use settings::{RegisterSetting, Settings, SettingsLocation};
@@ -162,12 +161,8 @@ pub enum OpenedBufferEvent {
 pub struct Project {
     active_entry: Option<ProjectEntryId>,
     languages: Arc<LanguageRegistry>,
-
     task_store: Entity<TaskStore>,
     fs: Arc<dyn Fs>,
-    remote_client: Option<Entity<RemoteClient>>,
-    // todo lw explain the client_state x remote_client matrix, its super confusing
-    client_state: ProjectClientState,
     git_store: Entity<GitStore>,
     worktree_store: Entity<WorktreeStore>,
     buffer_store: Entity<BufferStore>,
@@ -217,12 +212,6 @@ impl Drop for RemotelyCreatedModelGuard {
             }
         }
     }
-}
-
-#[derive(Debug)]
-enum ProjectClientState {
-    /// Single-player mode.
-    Local,
 }
 
 /// A link to display in a toast notification, useful to point to documentation.
@@ -278,12 +267,6 @@ pub enum Event {
     },
     Closed,
     DeletedEntry(WorktreeId, ProjectEntryId),
-    CollaboratorUpdated {
-        old_peer_id: proto::PeerId,
-        new_peer_id: proto::PeerId,
-    },
-    CollaboratorJoined(proto::PeerId),
-    CollaboratorLeft(proto::PeerId),
     HostReshared,
     Reshared,
     Rejoined,
@@ -318,20 +301,6 @@ impl ProjectPath {
         ProjectPath {
             worktree_id: value.worktree_id(cx),
             path: value.path().clone(),
-        }
-    }
-
-    pub fn from_proto(p: proto::ProjectPath) -> Option<Self> {
-        Some(Self {
-            worktree_id: WorktreeId::from_proto(p.worktree_id),
-            path: RelPath::from_proto(&p.path).log_err()?,
-        })
-    }
-
-    pub fn to_proto(&self) -> proto::ProjectPath {
-        proto::ProjectPath {
-            worktree_id: self.worktree_id.to_proto(),
-            path: self.path.as_ref().to_proto(),
         }
     }
 
@@ -711,7 +680,6 @@ impl DisableAiSettings {
 
 impl Project {
     pub fn local(
-        client: Arc<Client>,
         languages: Arc<LanguageRegistry>,
         fs: Arc<dyn Fs>,
         env: Option<HashMap<String, String>>,
@@ -772,7 +740,6 @@ impl Project {
                     environment.clone(),
                     manifest_tree,
                     languages.clone(),
-                    client.http_client(),
                     fs.clone(),
                     cx,
                 )
@@ -785,14 +752,12 @@ impl Project {
                 buffer_store,
                 image_store,
                 lsp_store,
-                client_state: ProjectClientState::Local,
                 git_store,
                 _subscriptions: vec![cx.on_release(Self::release)],
                 active_entry: None,
                 languages,
                 task_store,
                 fs,
-                remote_client: None,
 
                 buffers_needing_diff: Default::default(),
                 git_diff_debouncer: DebouncedDelay::new(),
@@ -816,112 +781,7 @@ impl Project {
         )
     }
 
-    fn release(&mut self, cx: &mut App) {
-        if let Some(client) = self.remote_client.take() {
-            let shutdown = client.update(cx, |client, cx| {
-                client.shutdown_processes(
-                    Some(proto::ShutdownRemoteServer {}),
-                    cx.background_executor().clone(),
-                )
-            });
-
-            cx.background_spawn(async move {
-                if let Some(shutdown) = shutdown {
-                    shutdown.await;
-                }
-            })
-            .detach()
-        }
-    }
-
-    #[cfg(feature = "test-support")]
-    pub async fn example(
-        root_paths: impl IntoIterator<Item = &Path>,
-        cx: &mut AsyncApp,
-    ) -> Entity<Project> {
-        let fs = Arc::new(RealFs::new(None, cx.background_executor().clone()));
-        let languages = LanguageRegistry::test(fs.clone(), cx.background_executor().clone());
-        let http_client = http_client::FakeHttpClient::with_404_response();
-        let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
-        let project = cx.update(|cx| {
-            Project::local(
-                client,
-                Arc::new(languages),
-                fs,
-                None,
-                LocalProjectFlags {
-                    init_worktree_trust: false,
-                    ..Default::default()
-                },
-                cx,
-            )
-        });
-        for path in root_paths {
-            let (tree, _): (Entity<Worktree>, _) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(path, true, cx)
-                })
-                .await
-                .unwrap();
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
-        }
-        project
-    }
-
-    #[cfg(feature = "test-support")]
-    pub async fn test(
-        fs: Arc<dyn Fs>,
-        root_paths: impl IntoIterator<Item = &Path>,
-        cx: &mut gpui::TestAppContext,
-    ) -> Entity<Project> {
-        Self::test_project(fs, root_paths, false, cx).await
-    }
-
-    #[cfg(feature = "test-support")]
-    pub async fn test_with_worktree_trust(
-        fs: Arc<dyn Fs>,
-        root_paths: impl IntoIterator<Item = &Path>,
-        cx: &mut gpui::TestAppContext,
-    ) -> Entity<Project> {
-        Self::test_project(fs, root_paths, true, cx).await
-    }
-
-    #[cfg(feature = "test-support")]
-    async fn test_project(
-        fs: Arc<dyn Fs>,
-        root_paths: impl IntoIterator<Item = &Path>,
-        init_worktree_trust: bool,
-        cx: &mut gpui::TestAppContext,
-    ) -> Entity<Project> {
-        let languages = LanguageRegistry::test(fs.clone(), cx.executor());
-        let http_client = http_client::FakeHttpClient::with_404_response();
-        let client = cx.update(|cx| client::Client::new(http_client.clone(), cx));
-        let project = cx.update(|cx| {
-            Project::local(
-                client,
-                Arc::new(languages),
-                fs,
-                None,
-                LocalProjectFlags {
-                    init_worktree_trust,
-                    ..Default::default()
-                },
-                cx,
-            )
-        });
-        for path in root_paths {
-            let (tree, _) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(path, true, cx)
-                })
-                .await
-                .unwrap();
-
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
-        }
-        project
+    fn release(&mut self, _cx: &mut App) {
     }
 
     #[inline]
@@ -952,7 +812,7 @@ impl Project {
 
     #[inline]
     pub fn remote_client(&self) -> Option<Entity<RemoteClient>> {
-        self.remote_client.clone()
+        None
     }
 
     #[inline]
@@ -1002,17 +862,13 @@ impl Project {
     }
 
     #[inline]
-    pub fn remote_connection_state(&self, cx: &App) -> Option<remote::ConnectionState> {
-        self.remote_client
-            .as_ref()
-            .map(|remote| remote.read(cx).connection_state())
+    pub fn remote_connection_state(&self, _cx: &App) -> Option<remote::ConnectionState> {
+        None
     }
 
     #[inline]
-    pub fn remote_connection_options(&self, cx: &App) -> Option<RemoteConnectionOptions> {
-        self.remote_client
-            .as_ref()
-            .map(|remote| remote.read(cx).connection_options())
+    pub fn remote_connection_options(&self, _cx: &App) -> Option<RemoteConnectionOptions> {
+        None
     }
 
     /// Reveals the given path in the system file manager.
@@ -1038,11 +894,7 @@ impl Project {
 
     #[inline]
     pub fn replica_id(&self) -> ReplicaId {
-        if self.remote_client.is_some() {
-            ReplicaId::REMOTE_SERVER
-        } else {
-            ReplicaId::LOCAL
-        }
+        ReplicaId::LOCAL
     }
 
     #[inline]
@@ -1421,21 +1273,8 @@ impl Project {
     }
 
     #[inline]
-    pub fn is_disconnected(&self, cx: &App) -> bool {
-        match &self.client_state {
-            ProjectClientState::Local if self.is_via_remote_server() => {
-                self.remote_client_is_disconnected(cx)
-            }
-            _ => false,
-        }
-    }
-
-    #[inline]
-    fn remote_client_is_disconnected(&self, cx: &App) -> bool {
-        self.remote_client
-            .as_ref()
-            .map(|remote| remote.read(cx).is_disconnected())
-            .unwrap_or(false)
+    pub fn is_disconnected(&self, _cx: &App) -> bool {
+        false
     }
 
     #[inline]
@@ -1450,13 +1289,13 @@ impl Project {
 
     #[inline]
     pub fn is_local(&self) -> bool {
-        self.remote_client.is_none()
+        true
     }
 
     /// Whether this project is a remote server (not counting collab).
     #[inline]
     pub fn is_via_remote_server(&self) -> bool {
-        self.remote_client.is_some()
+        false
     }
 
     /// `!self.is_local()`
@@ -1467,14 +1306,6 @@ impl Project {
             self.is_via_remote_server()
         );
         !self.is_local()
-    }
-
-    #[inline]
-    pub fn is_via_wsl_with_host_interop(&self, cx: &App) -> bool {
-        matches!(
-            &self.remote_client, Some(remote_client)
-            if remote_client.read(cx).has_wsl_interop()
-        )
     }
 
     pub fn disable_worktree_scanner(&mut self, cx: &mut Context<Self>) {
@@ -1732,18 +1563,6 @@ impl Project {
             BufferStoreEvent::BufferAdded(buffer) => {
                 self.register_buffer(buffer, cx).log_err();
             }
-            BufferStoreEvent::BufferDropped(buffer_id) => {
-                if let Some(ref remote_client) = self.remote_client {
-                    remote_client
-                        .read(cx)
-                        .proto_client()
-                        .send(proto::CloseBuffer {
-                            project_id: 0,
-                            buffer_id: buffer_id.to_proto(),
-                        })
-                        .log_err();
-                }
-            }
             _ => {}
         }
     }
@@ -1831,8 +1650,7 @@ impl Project {
                 cx.emit(Event::WorktreeRemoved(*id));
                 self.emit_group_key_changed_if_needed(cx);
             }
-            WorktreeStoreEvent::WorktreeReleased(_, id) => {
-                self.on_worktree_released(*id, cx);
+            WorktreeStoreEvent::WorktreeReleased(_, _) => {
             }
             WorktreeStoreEvent::WorktreeOrderChanged => cx.emit(Event::WorktreeOrderChanged),
             WorktreeStoreEvent::WorktreeUpdateSent(_) => {}
@@ -1855,18 +1673,6 @@ impl Project {
         let mut remotely_created_models = self.remotely_created_models.lock();
         if remotely_created_models.retain_count > 0 {
             remotely_created_models.worktrees.push(worktree.clone())
-        }
-    }
-
-    fn on_worktree_released(&mut self, id_to_remove: WorktreeId, cx: &mut Context<Self>) {
-        if let Some(remote) = &self.remote_client {
-            remote
-                .read(cx)
-                .proto_client()
-                .send(proto::RemoveWorktree {
-                    worktree_id: id_to_remove.to_proto(),
-                })
-                .log_err();
         }
     }
 
@@ -2227,31 +2033,6 @@ impl Project {
         })
     }
 
-    /// Attempts to convert the input path to a WSL path if this is a wsl remote project and the input path is a host windows path.
-    pub fn try_windows_path_to_wsl(
-        &self,
-        abs_path: &Path,
-        cx: &App,
-    ) -> impl Future<Output = Result<PathBuf>> + use<> {
-        let fut = if cfg!(windows)
-            && let (
-                ProjectClientState::Local,
-                Some(remote_client),
-            ) = (&self.client_state, &self.remote_client)
-            && let RemoteConnectionOptions::Wsl(wsl) = remote_client.read(cx).connection_options()
-        {
-            Either::Left(wsl.abs_windows_path_to_wsl_path(abs_path))
-        } else {
-            Either::Right(abs_path.to_owned())
-        };
-        async move {
-            match fut {
-                Either::Left(fut) => fut.await.map(Into::into),
-                Either::Right(path) => Ok(path),
-            }
-        }
-    }
-
     pub fn find_or_create_worktree(
         &mut self,
         abs_path: impl AsRef<Path>,
@@ -2308,25 +2089,6 @@ impl Project {
                     path: expanded.to_string_lossy().into_owned(),
                     is_dir: metadata.is_dir,
                 })
-            })
-        } else if let Some(ssh_client) = self.remote_client.as_ref() {
-            let request = ssh_client
-                .read(cx)
-                .proto_client()
-                .request(proto::GetPathMetadata {
-                    project_id: REMOTE_SERVER_PROJECT_ID,
-                    path: path.into(),
-                });
-            cx.background_spawn(async move {
-                let response = request.await.log_err()?;
-                if response.exists {
-                    Some(ResolvedPath::AbsPath {
-                        path: response.path,
-                        is_dir: response.is_dir,
-                    })
-                } else {
-                    None
-                }
             })
         } else {
             Task::ready(None)
@@ -2416,28 +2178,6 @@ impl Project {
     ) -> Task<Result<Vec<DirectoryItem>>> {
         if self.is_local() {
             DirectoryLister::Local(cx.entity(), self.fs.clone()).list_directory(query, cx)
-        } else if let Some(session) = self.remote_client.as_ref() {
-            let request = proto::ListRemoteDirectory {
-                dev_server_id: REMOTE_SERVER_PROJECT_ID,
-                path: query,
-                config: Some(proto::ListRemoteDirectoryConfig { is_dir: true }),
-            };
-
-            let response = session.read(cx).proto_client().request(request);
-            cx.background_spawn(async move {
-                let proto::ListRemoteDirectoryResponse {
-                    entries,
-                    entry_info,
-                } = response.await?;
-                Ok(entries
-                    .into_iter()
-                    .zip(entry_info)
-                    .map(|(entry, info)| DirectoryItem {
-                        path: PathBuf::from(entry),
-                        is_dir: info.is_dir,
-                    })
-                    .collect())
-            })
         } else {
             Task::ready(Err(anyhow!("cannot list directory in remote project")))
         }
@@ -2718,10 +2458,6 @@ impl Project {
         RemotelyCreatedModelGuard {
             remote_models: Arc::downgrade(&models),
         }
-    }
-
-    pub fn worktree_metadata_protos(&self, cx: &App) -> Vec<proto::WorktreeMetadata> {
-        self.worktree_store.read(cx).worktree_metadata_protos(cx)
     }
 
     /// Iterator of all open buffers that have unsaved changes

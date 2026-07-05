@@ -390,14 +390,13 @@ async fn resolve_open_behavior(
             for window in cx.windows() {
                 if let Some(multi_workspace) = window.downcast::<MultiWorkspace>() {
                     if let Ok(multi_workspace) = multi_workspace.read(cx) {
-                        for workspace in multi_workspace.workspaces() {
-                            let project = workspace.read(cx).project().read(cx);
-                            if project
-                                .visibility_for_paths(&paths_as_pathbufs, false, cx)
-                                .is_some()
-                            {
-                                return true;
-                            }
+                        let workspace = multi_workspace.workspace();
+                        let project = workspace.read(cx).project().read(cx);
+                        if project
+                            .visibility_for_paths(&paths_as_pathbufs, false, cx)
+                            .is_some()
+                        {
+                            return true;
                         }
                     }
                 }

@@ -15,7 +15,6 @@ const _: () = assert!(
 
 use anyhow::{Context as _, Result};
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-use client::Client;
 use collections::HashMap;
 use editor::Editor;
 use fs::{Fs, RealFs};
@@ -409,8 +408,6 @@ fn main() {
 
         OpenListener::set_global(cx, open_listener.clone());
 
-        let client = Client::production(cx);
-        cx.set_http_client(client.http_client());
         let languages = LanguageRegistry::new(fs.clone(), cx.background_executor().clone());
         let languages = Arc::new(languages);
         let language_reload_task = languages.clone().reload_languages_from_config(cx);
@@ -419,10 +416,7 @@ fn main() {
         languages::init(languages.clone(), fs.clone(), cx);
         let workspace_store = cx.new(|_cx| WorkspaceStore::new());
 
-        Client::set_global(client.clone(), cx);
-
         zed::init(cx);
-        client::init(&client, cx);
 
         let session = cx.foreground_executor().block_on(session);
 
@@ -430,7 +424,6 @@ fn main() {
 
         let app_state = Arc::new(AppState {
             languages,
-            client: client.clone(),
             fs: fs.clone(),
             build_window_options,
             workspace_store,
@@ -522,12 +515,6 @@ fn main() {
         initialize_workspace(app_state.clone(), cx);
 
         cx.activate(true);
-
-        cx.spawn({
-            let client = app_state.client.clone();
-            async move |cx| authenticate(client, cx).await
-        })
-        .detach_and_log_err(cx);
 
         let app_state = app_state.clone();
 
@@ -652,18 +639,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
         })
         .detach();
     }
-}
-
-async fn authenticate(client: Arc<Client>, cx: &AsyncApp) -> Result<()> {
-    if stdout_is_a_pty() {
-        if client.has_credentials(cx).await {
-            client.sign_in_with_optional_connect(true, cx).await?;
-        }
-    } else if client.has_credentials(cx).await {
-        client.sign_in_with_optional_connect(true, cx).await?;
-    }
-
-    Ok(())
 }
 
 pub(crate) async fn restore_or_create_workspace(
