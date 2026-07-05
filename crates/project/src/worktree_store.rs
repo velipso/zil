@@ -212,18 +212,6 @@ pub enum WorktreeStoreEvent {
 impl EventEmitter<WorktreeStoreEvent> for WorktreeStore {}
 
 impl WorktreeStore {
-    pub fn init(client: &AnyProtoClient) {
-        client.add_entity_request_handler(Self::handle_create_project_entry);
-        client.add_entity_request_handler(Self::handle_copy_project_entry);
-        client.add_entity_request_handler(Self::handle_delete_project_entry);
-        client.add_entity_request_handler(Self::handle_expand_project_entry);
-        client.add_entity_request_handler(Self::handle_expand_all_for_project_entry);
-    }
-
-    pub fn init_remote(client: &AnyProtoClient) {
-        client.add_entity_request_handler(Self::handle_allocate_worktree_id);
-    }
-
     pub fn local(
         retain_worktrees: bool,
         fs: Arc<dyn Fs>,

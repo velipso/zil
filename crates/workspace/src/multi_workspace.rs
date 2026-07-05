@@ -1275,24 +1275,6 @@ impl MultiWorkspace {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    pub fn test_new(project: Entity<Project>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let workspace = cx.new(|cx| Workspace::test_new(project, window, cx));
-        Self::new(workspace, window, cx)
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn test_add_workspace(
-        &mut self,
-        project: Entity<Project>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<Workspace> {
-        let workspace = cx.new(|cx| Workspace::test_new(project, window, cx));
-        self.activate(workspace.clone(), None, window, cx);
-        workspace
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
     pub fn test_add_project_group(&mut self, group: ProjectGroup) {
         self.project_groups.push(ProjectGroupState {
             key: group.key,

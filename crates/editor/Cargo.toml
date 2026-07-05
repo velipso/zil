@@ -32,7 +32,6 @@ anyhow.workspace = true
 assets.workspace = true
 base64.workspace = true
 breadcrumbs.workspace = true
-client.workspace = true
 clock.workspace = true
 collections.workspace = true
 convert_case.workspace = true

@@ -51,33 +51,12 @@ impl EncodingSelector {
             .active_buffer(cx)?;
 
         let buffer_handle = buffer.read(cx);
-        let project = workspace.project().read(cx);
 
         if buffer_handle.is_dirty() {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
                     "Save file to change encoding",
-                ),
-                cx,
-            );
-            return Some(());
-        }
-        if project.is_shared() {
-            workspace.show_toast(
-                Toast::new(
-                    NotificationId::unique::<EncodingSelector>(),
-                    "Cannot change encoding during collaboration",
-                ),
-                cx,
-            );
-            return Some(());
-        }
-        if project.is_via_remote_server() {
-            workspace.show_toast(
-                Toast::new(
-                    NotificationId::unique::<EncodingSelector>(),
-                    "Cannot change encoding of remote server file",
                 ),
                 cx,
             );

@@ -48,9 +48,6 @@ pub enum TaskSettingsLocation<'a> {
 }
 
 impl TaskStore {
-    pub fn init(_client: Option<&AnyProtoClient>) {
-    }
-
     pub fn local(
         worktree_store: Entity<WorktreeStore>,
         environment: Entity<ProjectEnvironment>,

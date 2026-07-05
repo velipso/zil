@@ -49,17 +49,13 @@ use debounced_delay::DebouncedDelay;
 
 pub use environment::ProjectEnvironment;
 
-use futures::{
-    StreamExt,
-    channel::mpsc::{self, UnboundedReceiver},
-    future::try_join_all,
-};
+use futures::{StreamExt, future::try_join_all};
 pub use image_store::{ImageItem, ImageStore};
 use image_store::{ImageItemEvent, ImageStoreEvent};
 
 use ::git::{blame::Blame, status::FileStatus};
 use gpui::{
-    App, AppContext, AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, SharedString,
+    App, AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString,
     Task, TaskExt, WeakEntity,
 };
 use language::{
@@ -73,17 +69,14 @@ use lsp_command::*;
 use lsp_store::OpenLspBufferHandle;
 pub use manifest_tree::ManifestProvidersStore;
 use parking_lot::Mutex;
-use project_settings::{ProjectSettings, SettingsObserver, SettingsObserverEvent};
+use project_settings::ProjectSettings;
 #[cfg(target_os = "windows")]
 use remote::wsl_path_to_windows_path;
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
-use rpc::{
-    AnyProtoClient, ErrorCode,
-    proto::REMOTE_SERVER_PROJECT_ID,
-};
+use rpc::{ErrorCode, proto::REMOTE_SERVER_PROJECT_ID};
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
-use settings::{InvalidSettingsError, RegisterSetting, Settings, SettingsLocation, SettingsStore};
+use settings::{RegisterSetting, Settings, SettingsLocation};
 use std::{
     borrow::Cow,
     future::Future,
@@ -168,18 +161,14 @@ pub enum OpenedBufferEvent {
 /// Can be either local (for the project opened on the same host) or remote.(for collab projects, browsed by multiple remote users).
 pub struct Project {
     active_entry: Option<ProjectEntryId>,
-    buffer_ordered_messages_tx: mpsc::UnboundedSender<BufferOrderedMessage>,
     languages: Arc<LanguageRegistry>,
 
-    collab_client: Arc<client::Client>,
-    join_project_response_message_id: u32,
     task_store: Entity<TaskStore>,
     fs: Arc<dyn Fs>,
     remote_client: Option<Entity<RemoteClient>>,
     // todo lw explain the client_state x remote_client matrix, its super confusing
     client_state: ProjectClientState,
     git_store: Entity<GitStore>,
-    client_subscriptions: Vec<client::Subscription>,
     worktree_store: Entity<WorktreeStore>,
     buffer_store: Entity<BufferStore>,
     image_store: Entity<ImageStore>,
@@ -192,7 +181,6 @@ pub struct Project {
     search_included_history: SearchHistory,
     search_excluded_history: SearchHistory,
     environment: Entity<ProjectEnvironment>,
-    settings_observer: Entity<SettingsObserver>,
     agent_location: Option<AgentLocation>,
     last_worktree_paths: WorktreePaths,
 }
@@ -230,23 +218,11 @@ impl Drop for RemotelyCreatedModelGuard {
         }
     }
 }
-/// Message ordered with respect to buffer operations
-#[derive(Debug)]
-enum BufferOrderedMessage {
-    Operation {
-        buffer_id: BufferId,
-        operation: proto::Operation,
-    },
-    LanguageServerUpdate,
-    Resync,
-}
 
 #[derive(Debug)]
 enum ProjectClientState {
     /// Single-player mode.
     Local,
-    /// Multi-player mode but still a local project.
-    Shared { remote_id: u64 },
 }
 
 /// A link to display in a toast notification, useful to point to documentation.
@@ -734,17 +710,6 @@ impl DisableAiSettings {
 }
 
 impl Project {
-    pub fn init(client: &Arc<Client>, _cx: &mut App) {
-        let client: AnyProtoClient = client.clone().into();
-
-        WorktreeStore::init(&client);
-        BufferStore::init(&client);
-        LspStore::init(&client);
-        GitStore::init(&client);
-        SettingsObserver::init(&client);
-        TaskStore::init(Some(&client));
-    }
-
     pub fn local(
         client: Arc<Client>,
         languages: Arc<LanguageRegistry>,
@@ -754,9 +719,6 @@ impl Project {
         cx: &mut App,
     ) -> Entity<Self> {
         cx.new(|cx: &mut Context<Self>| {
-            let (tx, rx) = mpsc::unbounded();
-            cx.spawn(async move |this, cx| Self::send_buffer_ordered_messages(this, rx, cx).await)
-                .detach();
             let worktree_store =
                 cx.new(|cx| WorktreeStore::local(false, fs.clone(), WorktreeIdCounter::get(cx)));
             if flags.init_worktree_trust {
@@ -803,18 +765,6 @@ impl Project {
                 )
             });
 
-            let settings_observer = cx.new(|cx| {
-                SettingsObserver::new_local(
-                    fs.clone(),
-                    worktree_store.clone(),
-                    task_store.clone(),
-                    flags.watch_global_configs,
-                    cx,
-                )
-            });
-            cx.subscribe(&settings_observer, Self::on_settings_observer_event)
-                .detach();
-
             let lsp_store = cx.new(|cx| {
                 LspStore::new_local(
                     buffer_store.clone(),
@@ -831,21 +781,16 @@ impl Project {
             cx.subscribe(&lsp_store, Self::on_lsp_store_event).detach();
 
             Self {
-                buffer_ordered_messages_tx: tx,
                 worktree_store,
                 buffer_store,
                 image_store,
                 lsp_store,
-                join_project_response_message_id: 0,
                 client_state: ProjectClientState::Local,
                 git_store,
-                client_subscriptions: Vec::new(),
                 _subscriptions: vec![cx.on_release(Self::release)],
                 active_entry: None,
                 languages,
-                collab_client: client,
                 task_store,
-                settings_observer,
                 fs,
                 remote_client: None,
 
@@ -887,18 +832,6 @@ impl Project {
             })
             .detach()
         }
-
-        match &self.client_state {
-            ProjectClientState::Local => {}
-            ProjectClientState::Shared { .. } => {
-                let _ = self.unshare_internal(cx);
-            }
-        }
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn client_subscriptions(&self) -> &Vec<client::Subscription> {
-        &self.client_subscriptions
     }
 
     #[cfg(feature = "test-support")]
@@ -991,40 +924,6 @@ impl Project {
         project
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn add_test_remote_worktree(
-        &mut self,
-        abs_path: &str,
-        cx: &mut Context<Self>,
-    ) -> Entity<Worktree> {
-        use rpc::NoopProtoClient;
-        use util::paths::PathStyle;
-
-        let root_name = std::path::Path::new(abs_path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let client = AnyProtoClient::new(NoopProtoClient::new());
-        let worktree = Worktree::remote(
-            0,
-            ReplicaId::new(1),
-            proto::WorktreeMetadata {
-                id: 100 + self.visible_worktrees(cx).count() as u64,
-                root_name,
-                visible: true,
-                abs_path: abs_path.to_string(),
-                root_repo_common_dir: None,
-            },
-            client,
-            PathStyle::Posix,
-            cx,
-        );
-        self.worktree_store
-            .update(cx, |store, cx| store.add(&worktree, cx));
-        worktree
-    }
-
     #[inline]
     pub fn lsp_store(&self) -> Entity<LspStore> {
         self.lsp_store.clone()
@@ -1049,11 +948,6 @@ impl Project {
     #[inline]
     pub fn languages(&self) -> &Arc<LanguageRegistry> {
         &self.languages
-    }
-
-    #[inline]
-    pub fn client(&self) -> Arc<Client> {
-        self.collab_client.clone()
     }
 
     #[inline]
@@ -1100,14 +994,6 @@ impl Project {
     #[inline]
     pub fn fs(&self) -> &Arc<dyn Fs> {
         &self.fs
-    }
-
-    #[inline]
-    pub fn remote_id(&self) -> Option<u64> {
-        match self.client_state {
-            ProjectClientState::Local => None,
-            ProjectClientState::Shared { remote_id, .. } => Some(remote_id),
-        }
     }
 
     #[inline]
@@ -1529,151 +1415,6 @@ impl Project {
         }))
     }
 
-    pub fn shared(&mut self, project_id: u64, cx: &mut Context<Self>) -> Result<()> {
-        anyhow::ensure!(
-            matches!(self.client_state, ProjectClientState::Local),
-            "project was already shared"
-        );
-
-        self.client_subscriptions.extend([
-            self.collab_client
-                .subscribe_to_entity(project_id)?
-                .set_entity(&cx.entity(), &cx.to_async()),
-            self.collab_client
-                .subscribe_to_entity(project_id)?
-                .set_entity(&self.worktree_store, &cx.to_async()),
-            self.collab_client
-                .subscribe_to_entity(project_id)?
-                .set_entity(&self.buffer_store, &cx.to_async()),
-            self.collab_client
-                .subscribe_to_entity(project_id)?
-                .set_entity(&self.lsp_store, &cx.to_async()),
-            self.collab_client
-                .subscribe_to_entity(project_id)?
-                .set_entity(&self.settings_observer, &cx.to_async()),
-            self.collab_client
-                .subscribe_to_entity(project_id)?
-                .set_entity(&self.git_store, &cx.to_async()),
-        ]);
-
-        self.buffer_store.update(cx, |buffer_store, cx| {
-            buffer_store.shared(project_id, self.collab_client.clone().into(), cx)
-        });
-        self.worktree_store.update(cx, |worktree_store, cx| {
-            worktree_store.shared(project_id, self.collab_client.clone().into(), cx);
-        });
-        self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.shared(project_id, self.collab_client.clone().into(), cx)
-        });
-        self.task_store.update(cx, |task_store, cx| {
-            task_store.shared(project_id, self.collab_client.clone().into(), cx);
-        });
-        self.settings_observer.update(cx, |settings_observer, cx| {
-            settings_observer.shared(project_id, self.collab_client.clone().into(), cx)
-        });
-        self.git_store.update(cx, |git_store, cx| {
-            git_store.shared(project_id, self.collab_client.clone().into(), cx)
-        });
-
-        self.client_state = ProjectClientState::Shared {
-            remote_id: project_id,
-        };
-
-        cx.emit(Event::RemoteIdChanged(Some(project_id)));
-        Ok(())
-    }
-
-    pub fn reshared(
-        &mut self,
-        _message: proto::ResharedProject,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.buffer_store
-            .update(cx, |buffer_store, _| buffer_store.forget_shared_buffers());
-
-        self.worktree_store.update(cx, |worktree_store, cx| {
-            worktree_store.send_project_updates(cx);
-        });
-        if let Some(remote_id) = self.remote_id() {
-            self.git_store.update(cx, |git_store, cx| {
-                git_store.shared(remote_id, self.collab_client.clone().into(), cx)
-            });
-        }
-        cx.emit(Event::Reshared);
-        Ok(())
-    }
-
-    pub fn rejoined(
-        &mut self,
-        message: proto::RejoinedProject,
-        message_id: u32,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
-        cx.update_global::<SettingsStore, _>(|store, cx| {
-            for worktree_metadata in &message.worktrees {
-                store
-                    .clear_local_settings(WorktreeId::from_proto(worktree_metadata.id), cx)
-                    .log_err();
-            }
-        });
-
-        self.join_project_response_message_id = message_id;
-        self.set_worktrees_from_proto(message.worktrees, cx)?;
-
-        let project = cx.weak_entity();
-        self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.set_language_server_statuses_from_proto(
-                project,
-                message.language_servers,
-                message.language_server_capabilities,
-                cx,
-            )
-        });
-        self.enqueue_buffer_ordered_message(BufferOrderedMessage::Resync)
-            .unwrap();
-        cx.emit(Event::Rejoined);
-        Ok(())
-    }
-
-    #[inline]
-    pub fn unshare(&mut self, cx: &mut Context<Self>) -> Result<()> {
-        self.unshare_internal(cx)?;
-        cx.emit(Event::RemoteIdChanged(None));
-        Ok(())
-    }
-
-    fn unshare_internal(&mut self, cx: &mut App) -> Result<()> {
-        if let ProjectClientState::Shared { remote_id, .. } = self.client_state {
-            self.client_state = ProjectClientState::Local;
-            self.client_subscriptions.clear();
-            self.worktree_store.update(cx, |store, cx| {
-                store.unshared(cx);
-            });
-            self.buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store.forget_shared_buffers();
-                buffer_store.unshared(cx)
-            });
-            self.task_store.update(cx, |task_store, cx| {
-                task_store.unshared(cx);
-            });
-            self.settings_observer.update(cx, |settings_observer, cx| {
-                settings_observer.unshared(cx);
-            });
-            self.git_store.update(cx, |git_store, cx| {
-                git_store.unshared(cx);
-            });
-
-            self.collab_client
-                .send(proto::UnshareProject {
-                    project_id: remote_id,
-                })
-                .ok();
-            Ok(())
-        } else {
-            anyhow::bail!("attempted to unshare an unshared project");
-        }
-    }
-
     #[inline]
     pub fn close(&mut self, cx: &mut Context<Self>) {
         cx.emit(Event::Closed);
@@ -1981,93 +1722,6 @@ impl Project {
         })
     }
 
-     async fn send_buffer_ordered_messages(
-        project: WeakEntity<Self>,
-        rx: UnboundedReceiver<BufferOrderedMessage>,
-        cx: &mut AsyncApp,
-     ) -> Result<()> {
-        const MAX_BATCH_SIZE: usize = 128;
-
-        let mut operations_by_buffer_id = HashMap::default();
-        async fn flush_operations(
-            this: &WeakEntity<Project>,
-            operations_by_buffer_id: &mut HashMap<BufferId, Vec<proto::Operation>>,
-            needs_resync_with_host: &mut bool,
-            is_local: bool,
-            cx: &mut AsyncApp,
-        ) -> Result<()> {
-            for (buffer_id, operations) in operations_by_buffer_id.drain() {
-                let request = this.read_with(cx, |this, _| {
-                    let project_id = this.remote_id()?;
-                    Some(this.collab_client.request(proto::UpdateBuffer {
-                        buffer_id: buffer_id.into(),
-                        project_id,
-                        operations,
-                    }))
-                })?;
-                if let Some(request) = request
-                    && request.await.is_err()
-                    && !is_local
-                {
-                    *needs_resync_with_host = true;
-                    break;
-                }
-            }
-            Ok(())
-        }
-
-        let mut needs_resync_with_host = false;
-        let mut changes = rx.ready_chunks(MAX_BATCH_SIZE);
-
-        while let Some(changes) = changes.next().await {
-            let is_local = project.read_with(cx, |this, _| this.is_local())?;
-
-            for change in changes {
-                match change {
-                    BufferOrderedMessage::Operation {
-                        buffer_id,
-                        operation,
-                    } => {
-                        if needs_resync_with_host {
-                            continue;
-                        }
-
-                        operations_by_buffer_id
-                            .entry(buffer_id)
-                            .or_insert(Vec::new())
-                            .push(operation);
-                    }
-
-                    BufferOrderedMessage::Resync => {
-                        operations_by_buffer_id.clear();
-                    }
-
-                    BufferOrderedMessage::LanguageServerUpdate => {
-                        flush_operations(
-                            &project,
-                            &mut operations_by_buffer_id,
-                            &mut needs_resync_with_host,
-                            is_local,
-                            cx,
-                        )
-                        .await?;
-                    }
-                }
-            }
-
-            flush_operations(
-                &project,
-                &mut operations_by_buffer_id,
-                &mut needs_resync_with_host,
-                is_local,
-                cx,
-            )
-            .await?;
-        }
-
-        Ok(())
-     }
-
     fn on_buffer_store_event(
         &mut self,
         _: Entity<BufferStore>,
@@ -2149,12 +1803,6 @@ impl Project {
                 language_server_id: _,
                 name: _,
             } => {
-                if self.is_local() {
-                    self.enqueue_buffer_ordered_message(
-                        BufferOrderedMessage::LanguageServerUpdate{},
-                    )
-                    .ok();
-                }
             }
             LspStoreEvent::Notification(message) => cx.emit(Event::Toast {
                 notification_id: "lsp".into(),
@@ -2164,62 +1812,6 @@ impl Project {
             LspStoreEvent::WorkspaceEditApplied(transaction) => {
                 cx.emit(Event::WorkspaceEditApplied(transaction.clone()))
             }
-        }
-    }
-
-    fn on_settings_observer_event(
-        &mut self,
-        _: Entity<SettingsObserver>,
-        event: &SettingsObserverEvent,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            SettingsObserverEvent::LocalSettingsUpdated(result) => match result {
-                Err(InvalidSettingsError::LocalSettings { message, path }) => {
-                    let message = format!("Failed to set local settings in {path:?}:\n{message}");
-                    cx.emit(Event::Toast {
-                        notification_id: format!("local-settings-{path:?}").into(),
-                        link: None,
-                        message,
-                    });
-                }
-                Ok(path) => cx.emit(Event::HideToast {
-                    notification_id: format!("local-settings-{path:?}").into(),
-                }),
-                Err(_) => {}
-            },
-            SettingsObserverEvent::LocalTasksUpdated(result) => match result {
-                Err(InvalidSettingsError::Tasks { message, path }) => {
-                    let message = format!("Failed to set local tasks in {path:?}:\n{message}");
-                    cx.emit(Event::Toast {
-                        notification_id: format!("local-tasks-{path:?}").into(),
-                        link: Some(ToastLink {
-                            label: "Open Tasks Documentation",
-                            url: "https://zed.dev/docs/tasks",
-                        }),
-                        message,
-                    });
-                }
-                Ok(path) => cx.emit(Event::HideToast {
-                    notification_id: format!("local-tasks-{path:?}").into(),
-                }),
-                Err(_) => {}
-            },
-            SettingsObserverEvent::LocalDebugScenariosUpdated(result) => match result {
-                Err(InvalidSettingsError::Debug { message, path }) => {
-                    let message =
-                        format!("Failed to set local debug scenarios in {path:?}:\n{message}");
-                    cx.emit(Event::Toast {
-                        notification_id: format!("local-debug-scenarios-{path:?}").into(),
-                        link: None,
-                        message,
-                    });
-                }
-                Ok(path) => cx.emit(Event::HideToast {
-                    notification_id: format!("local-debug-scenarios-{path:?}").into(),
-                }),
-                Err(_) => {}
-            },
         }
     }
 
@@ -2292,37 +1884,11 @@ impl Project {
             cx.emit(Event::BufferEdited { source: *source });
         }
 
-        let buffer_id = buffer.read(cx).remote_id();
         match event {
             BufferEvent::ReloadNeeded => {
                 self.reload_buffers([buffer.clone()].into_iter().collect(), true, cx)
                     .detach_and_log_err(cx);
             }
-            BufferEvent::Operation {
-                operation,
-                is_local: true,
-            } => {
-                let operation = language::proto::serialize_operation(operation);
-
-                if let Some(remote) = &self.remote_client {
-                    remote
-                        .read(cx)
-                        .proto_client()
-                        .send(proto::UpdateBuffer {
-                            project_id: 0,
-                            buffer_id: buffer_id.to_proto(),
-                            operations: vec![operation.clone()],
-                        })
-                        .ok();
-                }
-
-                self.enqueue_buffer_ordered_message(BufferOrderedMessage::Operation {
-                    buffer_id,
-                    operation,
-                })
-                .ok();
-            }
-
             _ => {}
         }
 
@@ -2461,12 +2027,6 @@ impl Project {
         self.lsp_store.update(cx, |lsp_store, cx| {
             lsp_store.cancel_language_server_work(server_id, token_to_cancel, cx)
         })
-    }
-
-    fn enqueue_buffer_ordered_message(&mut self, message: BufferOrderedMessage) -> Result<()> {
-        self.buffer_ordered_messages_tx
-            .unbounded_send(message)
-            .map_err(|e| anyhow!(e))
     }
 
     pub fn language_server_statuses<'a>(
@@ -2675,7 +2235,7 @@ impl Project {
     ) -> impl Future<Output = Result<PathBuf>> + use<> {
         let fut = if cfg!(windows)
             && let (
-                ProjectClientState::Local | ProjectClientState::Shared { .. },
+                ProjectClientState::Local,
                 Some(remote_client),
             ) = (&self.client_state, &self.remote_client)
             && let RemoteConnectionOptions::Wsl(wsl) = remote_client.read(cx).connection_options()
@@ -2709,13 +2269,6 @@ impl Project {
         cx: &App,
     ) -> Option<(Entity<Worktree>, Arc<RelPath>)> {
         self.worktree_store.read(cx).find_worktree(abs_path, cx)
-    }
-
-    pub fn is_shared(&self) -> bool {
-        match &self.client_state {
-            ProjectClientState::Shared { .. } => true,
-            ProjectClientState::Local => false,
-        }
     }
 
     /// Returns the resolved version of `path`, that was found in `buffer`, if it exists.
@@ -3180,16 +2733,6 @@ impl Project {
             } else {
                 None
             }
-        })
-    }
-
-    fn set_worktrees_from_proto(
-        &mut self,
-        worktrees: Vec<proto::WorktreeMetadata>,
-        cx: &mut Context<Project>,
-    ) -> Result<()> {
-        self.worktree_store.update(cx, |worktree_store, cx| {
-            worktree_store.set_worktrees_from_proto(worktrees, self.replica_id(), cx)
         })
     }
 
@@ -3741,3 +3284,4 @@ impl ProjectItem for Buffer {
         self.is_dirty()
     }
 }
+

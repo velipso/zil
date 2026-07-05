@@ -592,9 +592,6 @@ impl GitStore {
         }
     }
 
-    pub fn init(_client: &AnyProtoClient) {
-    }
-
     pub fn is_local(&self) -> bool {
         matches!(self.state, GitStoreState::Local { .. })
     }

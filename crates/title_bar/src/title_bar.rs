@@ -208,7 +208,6 @@ impl TitleBar {
             }),
         );
 
-        subscriptions.push(cx.observe_window_activation(window, Self::window_activation_changed));
         subscriptions.push(
             cx.subscribe(&git_store, move |_, _, event, cx| match event {
                 GitStoreEvent::ActiveRepositoryChanged(_)
@@ -273,13 +272,5 @@ impl TitleBar {
         }
 
         project.visible_worktrees(cx).next()
-    }
-
-    fn window_activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.workspace
-            .update(cx, |workspace, cx| {
-                workspace.update_active_view_for_followers(window, cx);
-            })
-            .ok();
     }
 }

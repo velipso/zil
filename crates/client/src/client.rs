@@ -8,24 +8,19 @@ use futures::{
     future::BoxFuture,
     stream::BoxStream,
 };
-use gpui::{App, AsyncApp, Entity, Global, Task, WeakEntity, actions};
-use http_client::{HttpClientWithUrl, read_proxy_from_env};
+use gpui::{App, AsyncApp, Entity, Global, Task, WeakEntity};
+use http_client::HttpClientWithUrl;
 use parking_lot::{Mutex, RwLock};
 use postage::watch;
 use rpc::proto::{AnyTypedEnvelope, EnvelopedMessage, PeerId, RequestMessage};
-use serde::Deserialize;
-use settings::{RegisterSetting, Settings};
 use std::{
     any::TypeId,
     future::Future,
     marker::PhantomData,
-    path::PathBuf,
-    sync::{
-        Arc, LazyLock, Weak,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::{Duration, Instant},
+    sync::{Arc, Weak, atomic::{AtomicU64, Ordering}},
+    time::Instant,
 };
+#[cfg(any(test, feature = "test-support"))]
 use url::Url;
 use util::{ConnectionResult, ResultExt};
 
@@ -48,102 +43,6 @@ pub struct ChannelId(pub u64);
 impl std::fmt::Display for ChannelId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-static ZED_SERVER_URL: LazyLock<Option<String>> =
-    LazyLock::new(|| std::env::var("ZED_SERVER_URL").ok());
-
-pub static USE_WEB_LOGIN: LazyLock<bool> = LazyLock::new(|| std::env::var("ZED_WEB_LOGIN").is_ok());
-
-pub static ADMIN_API_TOKEN: LazyLock<Option<String>> = LazyLock::new(|| {
-    std::env::var("ZED_ADMIN_API_TOKEN")
-        .ok()
-        .and_then(|s| if s.is_empty() { None } else { Some(s) })
-});
-
-pub static ZED_APP_PATH: LazyLock<Option<PathBuf>> =
-    LazyLock::new(|| std::env::var("ZED_APP_PATH").ok().map(PathBuf::from));
-
-pub static ZED_ALWAYS_ACTIVE: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("ZED_ALWAYS_ACTIVE").is_ok_and(|e| !e.is_empty()));
-
-pub const INITIAL_RECONNECTION_DELAY: Duration = Duration::from_millis(500);
-pub const MAX_RECONNECTION_DELAY: Duration = Duration::from_secs(30);
-pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(20);
-
-actions!(
-    client,
-    [
-        /// Signs in to Zed account.
-        SignIn,
-        /// Signs out of Zed account.
-        SignOut,
-        /// Reconnects to the collaboration server.
-        Reconnect
-    ]
-);
-
-#[derive(Deserialize, RegisterSetting)]
-pub struct ClientSettings {
-    pub server_url: String,
-    /// Overrides the key used to store credentials in the system keychain.
-    /// Defaults to `server_url` when unset.
-    ///
-    /// Useful when running multiple Zed instances side by side without them
-    /// overwriting each other's keychain entries.
-    ///
-    /// Note: changing this after signing in will require signing in again, as
-    /// existing credentials are stored under the old key.
-    pub credentials_url: Option<String>,
-}
-
-impl Settings for ClientSettings {
-    fn from_settings(content: &settings::SettingsContent) -> Self {
-        if let Some(server_url) = &*ZED_SERVER_URL {
-            return Self {
-                server_url: server_url.clone(),
-                credentials_url: content.credentials_url.clone(),
-            };
-        }
-        Self {
-            server_url: content.server_url.clone().unwrap(),
-            credentials_url: content.credentials_url.clone(),
-        }
-    }
-}
-
-#[derive(Deserialize, Default, RegisterSetting)]
-pub struct ProxySettings {
-    pub proxy: Option<String>,
-}
-
-impl ProxySettings {
-    pub fn proxy_url(&self) -> Option<Url> {
-        self.proxy
-            .as_deref()
-            .map(str::trim)
-            .filter(|input| !input.is_empty())
-            .and_then(|input| {
-                input
-                    .parse::<Url>()
-                    .inspect_err(|e| log::error!("Error parsing proxy settings: {}", e))
-                    .ok()
-            })
-            .or_else(read_proxy_from_env)
-    }
-}
-
-impl Settings for ProxySettings {
-    fn from_settings(content: &settings::SettingsContent) -> Self {
-        Self {
-            proxy: content
-                .proxy
-                .as_deref()
-                .map(str::trim)
-                .filter(|proxy| !proxy.is_empty())
-                .map(ToOwned::to_owned),
-        }
     }
 }
 
@@ -393,7 +292,7 @@ impl Client {
     pub fn production(cx: &mut App) -> Arc<Self> {
         let http = Arc::new(HttpClientWithUrl::new_url(
             cx.http_client(),
-            &ClientSettings::get_global(cx).server_url,
+            "asdf",
             cx.http_client().proxy().cloned(),
         ));
         Self::new(http, cx)
@@ -823,65 +722,4 @@ impl ProtoClient for Client {
     fn has_wsl_interop(&self) -> bool {
         false
     }
-}
-
-/// prefix for the zed:// url scheme
-pub const ZED_URL_SCHEME: &str = "zed";
-
-/// A parsed Zed link that can be handled internally by the application.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ZedLink {
-    /// Join a channel: `zed.dev/channel/channel-name-123` or `zed://channel/channel-name-123`
-    Channel { channel_id: u64 },
-    /// Open channel notes: `zed.dev/channel/channel-name-123/notes` or with heading `notes#heading`
-    ChannelNotes {
-        channel_id: u64,
-        heading: Option<String>,
-    },
-}
-
-/// Parses the given link into a Zed link.
-///
-/// Returns a [`Some`] containing the parsed link if the link is a recognized Zed link
-/// that should be handled internally by the application.
-/// Returns [`None`] for links that should be opened in the browser.
-pub fn parse_zed_link(link: &str, cx: &App) -> Option<ZedLink> {
-    let server_url = &ClientSettings::get_global(cx).server_url;
-    let path = link
-        .strip_prefix(server_url)
-        .and_then(|result| result.strip_prefix('/'))
-        .or_else(|| {
-            link.strip_prefix(ZED_URL_SCHEME)
-                .and_then(|result| result.strip_prefix("://"))
-        })?;
-
-    let mut parts = path.split('/');
-
-    if parts.next() != Some("channel") {
-        return None;
-    }
-
-    let slug = parts.next()?;
-    let id_str = slug.split('-').next_back()?;
-    let channel_id = id_str.parse::<u64>().ok()?;
-
-    let Some(next) = parts.next() else {
-        return Some(ZedLink::Channel { channel_id });
-    };
-
-    if let Some(heading) = next.strip_prefix("notes#") {
-        return Some(ZedLink::ChannelNotes {
-            channel_id,
-            heading: Some(heading.to_string()),
-        });
-    }
-
-    if next == "notes" {
-        return Some(ZedLink::ChannelNotes {
-            channel_id,
-            heading: None,
-        });
-    }
-
-    None
 }

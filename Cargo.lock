@@ -303,12 +303,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ascii"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d92bec98840b8f03a5ff5413de5293bfcd8bf96467cf5452609f939ec6f5de16"
-
-[[package]]
 name = "ascii-canvas"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -623,9 +617,6 @@ dependencies = [
  "futures-util",
  "log",
  "pin-project-lite",
- "rustls-pki-types",
- "tokio",
- "tokio-rustls",
  "tungstenite",
 ]
 
@@ -1216,12 +1207,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chunked_transfer"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
-
-[[package]]
 name = "ciborium"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1333,52 +1318,27 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-channel 2.5.0",
- "async-tungstenite",
- "base64 0.22.1",
- "chrono",
- "clock",
  "cloud_api_client",
- "cloud_api_types",
- "cloud_llm_client",
- "collections",
  "credentials_provider",
- "derive_more",
  "fs",
  "futures",
  "gpui",
- "gpui_tokio",
  "http_client",
- "http_client_tls",
- "httparse",
  "log",
  "objc2-foundation 0.3.2",
  "parking_lot",
- "paths",
  "postage",
- "rand 0.9.4",
- "release_channel",
  "rpc",
  "rustls-pki-types",
  "semver",
  "serde",
- "serde_json",
- "serde_urlencoded",
  "settings",
- "sha2",
- "smol",
- "text",
- "thiserror 2.0.17",
  "time",
- "tiny_http",
- "tokio",
  "tokio-native-tls",
  "tokio-rustls",
- "tokio-socks",
  "url",
  "util",
  "windows 0.61.3",
- "worktree",
  "zed_credentials_provider",
 ]
 
@@ -2552,7 +2512,6 @@ dependencies = [
  "base64 0.22.1",
  "breadcrumbs",
  "buffer_diff",
- "client",
  "clock",
  "collections",
  "convert_case 0.11.0",
@@ -4360,12 +4319,6 @@ name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
-
-[[package]]
-name = "httpdate"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hyper"
@@ -9938,18 +9891,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tiny_http"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "389915df6413a2e74fb181895f933386023c71110878cd0825588928e64cdc82"
-dependencies = [
- "ascii",
- "chunked_transfer",
- "httpdate",
- "log",
-]
-
-[[package]]
 name = "tinystr"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10059,7 +10000,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d4770b8024672c1101b3f6733eab95b18007dbe0847a8afe341fcf79e06043f"
 dependencies = [
  "either",
- "futures-io",
  "futures-util",
  "thiserror 1.0.69",
  "tokio",
@@ -10315,8 +10255,6 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.4",
- "rustls",
- "rustls-pki-types",
  "sha1",
  "thiserror 2.0.17",
  "utf-8",
@@ -12368,7 +12306,6 @@ dependencies = [
  "markdown",
  "menu",
  "parking_lot",
- "postage",
  "pretty_assertions",
  "project",
  "proptest",

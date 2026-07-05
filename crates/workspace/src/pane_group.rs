@@ -1,5 +1,5 @@
 use crate::{
-    AnyActiveCall, AppState, CollaboratorId, FollowerState, Pane, Workspace,
+    AppState, CollaboratorId, FollowerState, Pane, Workspace,
     WorkspaceSettings,
     pane_group::element::pane_axis,
     workspace_settings::{PaneSplitDirectionHorizontal, PaneSplitDirectionVertical},
@@ -318,7 +318,6 @@ impl Member {
 pub struct PaneRenderContext<'a> {
     pub project: &'a Entity<Project>,
     pub follower_states: &'a HashMap<CollaboratorId, FollowerState>,
-    pub active_call: Option<&'a dyn AnyActiveCall>,
     pub active_pane: &'a Entity<Pane>,
     pub app_state: &'a Arc<AppState>,
     pub workspace: &'a WeakEntity<Workspace>,

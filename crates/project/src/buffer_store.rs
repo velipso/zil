@@ -482,9 +482,6 @@ impl LocalBufferStore {
 }
 
 impl BufferStore {
-    pub fn init(_client: &AnyProtoClient) {
-    }
-
     /// Creates a buffer store, optionally retaining its buffers.
     pub fn local(worktree_store: Entity<WorktreeStore>, cx: &mut Context<Self>) -> Self {
         Self {

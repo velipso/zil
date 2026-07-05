@@ -15,7 +15,7 @@ const _: () = assert!(
 
 use anyhow::{Context as _, Result};
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-use client::{Client, ProxySettings};
+use client::Client;
 use collections::HashMap;
 use editor::Editor;
 use fs::{Fs, RealFs};
@@ -394,11 +394,10 @@ fn main() {
             std::env::consts::OS,
             std::env::consts::ARCH
         );
-        let proxy_url = ProxySettings::get_global(cx).proxy_url();
         let http = {
             let _guard = Tokio::handle(cx).enter();
 
-            ReqwestClient::proxy_and_user_agent(proxy_url, &user_agent)
+            ReqwestClient::proxy_and_user_agent(None, &user_agent)
                 .expect("could not start HTTP client")
         };
         cx.set_http_client(Arc::new(http));
@@ -418,12 +417,11 @@ fn main() {
         cx.foreground_executor().block_on(language_reload_task);
 
         languages::init(languages.clone(), fs.clone(), cx);
-        let workspace_store = cx.new(|cx| WorkspaceStore::new(client.clone(), cx));
+        let workspace_store = cx.new(|_cx| WorkspaceStore::new());
 
         Client::set_global(client.clone(), cx);
 
         zed::init(cx);
-        project::Project::init(&client, cx);
         client::init(&client, cx);
 
         let session = cx.foreground_executor().block_on(session);

@@ -2429,9 +2429,6 @@
     // Delay in milliseconds before showing the which-key popup.
     "delay_ms": 1000,
   },
-  // The server to connect to. If the environment variable
-  // ZED_SERVER_URL is set, it will override this setting.
-  "server_url": "https://zed.dev",
   // Settings overrides to use when using Zed Preview.
   // Mostly useful for developers who are managing multiple instances of Zed.
   "preview": {
@@ -2467,33 +2464,7 @@
   // Settings overrides to use when using macOS.
   "macos": {},
   // Settings overrides to use when using Windows.
-  "windows": {
-    "languages": {
-      "PHP": {
-        "language_servers": ["intelephense", "!phpactor", "!phptools", "..."],
-      },
-    },
-  },
-  // Whether to show full labels in line indicator or short ones
-  //
-  // Values:
-  //   - `short`: "2 s, 15 l, 32 c"
-  //   - `long`: "2 selections, 15 lines, 32 characters"
-  // Default: long
-  "line_indicator_format": "long",
-  // Set a proxy to use. The proxy protocol is specified by the URI scheme.
-  //
-  // Supported URI scheme: `http`, `https`, `socks4`, `socks4a`, `socks5`,
-  // `socks5h`. `http` will be used when no scheme is specified.
-  //
-  // By default no proxy will be used, or Zed will try get proxy settings from
-  // environment variables. If certain hosts should not be proxied,
-  // set the `no_proxy` environment variable and provide a comma-separated list.
-  //
-  // Examples:
-  //   - "proxy": "socks5h://localhost:10808"
-  //   - "proxy": "http://127.0.0.1:10809"
-  "proxy": "",
+  "windows": {},
   // Set to configure aliases for the command palette.
   // When typing a query which is a key of this object, the value will be used instead.
   //

@@ -3,17 +3,14 @@ use collections::HashMap;
 use fs::Fs;
 use futures::StreamExt as _;
 use git::repository::DEFAULT_WORKTREE_DIRECTORY;
-use gpui::{AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, Subscription, Task};
+use gpui::{BorrowAppContext, Context, Entity, EventEmitter, Subscription, Task};
 use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT_SECS, LanguageServerName};
 use paths::{
     local_debug_file_relative_path, local_settings_file_relative_path,
     local_tasks_file_relative_path, local_vscode_launch_file_relative_path,
     local_vscode_tasks_file_relative_path, task_file_name,
 };
-use rpc::{
-    AnyProtoClient, TypedEnvelope,
-    proto::{self, REMOTE_SERVER_PROJECT_ID},
-};
+use rpc::{AnyProtoClient, proto::{self, REMOTE_SERVER_PROJECT_ID}};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 pub use settings::BinarySettings;
@@ -522,11 +519,6 @@ pub struct SettingsObserver {
 /// In ssh mode it also monitors ~/.config/zed/{settings, task}.json and sends the content
 /// upstream.
 impl SettingsObserver {
-    pub fn init(client: &AnyProtoClient) {
-        client.add_entity_message_handler(Self::handle_update_worktree_settings);
-        client.add_entity_message_handler(Self::handle_update_user_settings);
-    }
-
     pub fn new_local(
         fs: Arc<dyn Fs>,
         worktree_store: Entity<WorktreeStore>,
@@ -704,65 +696,6 @@ impl SettingsObserver {
 
     pub fn unshared(&mut self, _: &mut Context<Self>) {
         self.downstream_client = None;
-    }
-
-    async fn handle_update_worktree_settings(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::UpdateWorktreeSettings>,
-        mut cx: AsyncApp,
-    ) -> anyhow::Result<()> {
-        let kind = match envelope.payload.kind {
-            Some(kind) => proto::LocalSettingsKind::from_i32(kind)
-                .with_context(|| format!("unknown kind {kind}"))?,
-            None => proto::LocalSettingsKind::Settings,
-        };
-
-        let path = LocalSettingsPath::from_proto(
-            &envelope.payload.path,
-            envelope.payload.outside_worktree.unwrap_or(false),
-        )?;
-
-        this.update(&mut cx, |this, cx| {
-            let is_via_collab = match &this.mode {
-                SettingsObserverMode::Local(..) => false,
-                SettingsObserverMode::Remote { via_collab } => *via_collab,
-            };
-            let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-            let Some(worktree) = this
-                .worktree_store
-                .read(cx)
-                .worktree_for_id(worktree_id, cx)
-            else {
-                return;
-            };
-
-            this.update_settings(
-                worktree,
-                [(
-                    path,
-                    local_settings_kind_from_proto(kind),
-                    envelope.payload.content,
-                )],
-                is_via_collab,
-                cx,
-            );
-        });
-        Ok(())
-    }
-
-    async fn handle_update_user_settings(
-        _: Entity<Self>,
-        envelope: TypedEnvelope<proto::UpdateUserSettings>,
-        cx: AsyncApp,
-    ) -> anyhow::Result<()> {
-        cx.update_global(|settings_store: &mut SettingsStore, cx| {
-            settings_store
-                .set_user_settings(&envelope.payload.contents, cx)
-                .result()
-                .context("setting new user settings")?;
-            anyhow::Ok(())
-        })?;
-        Ok(())
     }
 
     fn on_worktree_store_event(

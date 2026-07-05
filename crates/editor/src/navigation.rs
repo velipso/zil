@@ -943,12 +943,8 @@ impl Editor {
             };
 
             if let Some(url) = url {
-                cx.update(|window, cx| {
-                    if parse_zed_link(&url, cx).is_some() {
-                        window.dispatch_action(Box::new(zed_actions::OpenZedUrl { url }), cx);
-                    } else {
-                        cx.open_url(&url);
-                    }
+                cx.update(|_window, cx| {
+                    cx.open_url(&url);
                 })?;
             }
 

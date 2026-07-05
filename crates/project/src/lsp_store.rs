@@ -20,14 +20,13 @@ use self::document_colors::DocumentColorData;
 use self::document_symbols::DocumentSymbolsData;
 use crate::{
     Hover,
-    ManifestProvidersStore, Project, ProjectPath, ProjectTransaction,
+    ManifestProvidersStore, ProjectPath, ProjectTransaction,
     Symbol,
     buffer_store::{BufferStore, BufferStoreEvent},
     environment::ProjectEnvironment,
     lsp_command::*,
     lsp_store::{
         folding_ranges::FoldingRangeData,
-        log_store::{GlobalLogStore, LanguageServerKind},
         semantic_tokens::{SemanticTokenConfig, SemanticTokensData},
     },
     manifest_tree::{
@@ -2375,9 +2374,6 @@ fn should_log_lsp_request_failure(message: &str) -> bool {
 }
 
 impl LspStore {
-    pub fn init(_client: &AnyProtoClient) {
-    }
-
     pub fn as_local(&self) -> Option<&LocalLspStore> {
         match &self.mode {
             LspStoreMode::Local(local_lsp_store) => Some(local_lsp_store),
@@ -3581,103 +3577,6 @@ impl LspStore {
                     })
                     .log_err();
             }
-        }
-    }
-
-    pub(crate) fn set_language_server_statuses_from_proto(
-        &mut self,
-        project: WeakEntity<Project>,
-        language_servers: Vec<proto::LanguageServer>,
-        server_capabilities: Vec<String>,
-        cx: &mut Context<Self>,
-    ) {
-        let lsp_logs = cx
-            .try_global::<GlobalLogStore>()
-            .map(|lsp_store| lsp_store.0.clone());
-
-        self.language_server_statuses = language_servers
-            .into_iter()
-            .zip(server_capabilities)
-            .map(|(server, server_capabilities)| {
-                let server_id = LanguageServerId(server.id as usize);
-                if let Ok(server_capabilities) = serde_json::from_str(&server_capabilities) {
-                    self.lsp_server_capabilities
-                        .insert(server_id, server_capabilities);
-                }
-
-                let name = LanguageServerName::from_proto(server.name);
-                let worktree = server.worktree_id.map(WorktreeId::from_proto);
-                let language_name = server.language_name.map(LanguageName::from_proto);
-
-                if let Some(lsp_logs) = &lsp_logs {
-                    lsp_logs.update(cx, |lsp_logs, cx| {
-                        lsp_logs.add_language_server(
-                            // Only remote clients get their language servers set from proto
-                            LanguageServerKind::Remote {
-                                project: project.clone(),
-                            },
-                            server_id,
-                            Some(name.clone()),
-                            worktree,
-                            None,
-                            cx,
-                        );
-                    });
-                }
-
-                if let Some(ref lang_name) = language_name {
-                    self.try_register_remote_adapter_locally(&name, lang_name);
-                }
-
-                (
-                    server_id,
-                    LanguageServerStatus {
-                        name,
-                        language_name: language_name,
-                        server_version: None,
-                        server_readable_version: None,
-                        pending_work: Default::default(),
-                        progress_tokens: Default::default(),
-                        worktree,
-                        binary: None,
-                        configuration: None,
-                        workspace_folders: BTreeSet::new(),
-                        process_id: None,
-                    },
-                )
-            })
-            .collect();
-    }
-
-    fn try_register_remote_adapter_locally(
-        &self,
-        server_name: &LanguageServerName,
-        language_name: &LanguageName,
-    ) {
-        let already_registered = self
-            .languages
-            .lsp_adapters(language_name)
-            .iter()
-            .any(|adapter| adapter.name() == *server_name);
-
-        if already_registered {
-            return;
-        }
-
-        if let Some(adapter) = self.languages.load_available_lsp_adapter(server_name) {
-            log::info!(
-                "Registering LSP adapter '{}' for language '{}' on local client",
-                server_name.0,
-                language_name.0
-            );
-            self.languages
-                .register_lsp_adapter(language_name.clone(), adapter.adapter.clone());
-        } else {
-            log::warn!(
-                "LSP adapter '{}' for language '{}' not available locally",
-                server_name.0,
-                language_name.0
-            );
         }
     }
 
