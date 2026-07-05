@@ -1589,8 +1589,12 @@ impl BlockMapWriter<'_> {
 
             let start = block.placement.start().to_point(&buffer);
             let end = block.placement.end().to_point(&buffer);
-            let start_wrap_row = wrap_snapshot.make_wrap_point(start, Bias::Left).row();
-            let end_wrap_row = wrap_snapshot.make_wrap_point(end, Bias::Left).row();
+            let start_wrap_row = wrap_snapshot
+                .make_wrap_point(Point::new(start.row, 0), Bias::Left)
+                .row();
+            let end_wrap_row = wrap_snapshot
+                .make_wrap_point(Point::new(end.row, 0), Bias::Left)
+                .row();
 
             let (start_row, end_row) = {
                 previous_wrap_row_range.take_if(|range| {
@@ -1739,8 +1743,12 @@ impl BlockMapWriter<'_> {
                 let end = block.placement.end().to_point(buffer);
                 if last_block_buffer_row != Some(end.row) {
                     last_block_buffer_row = Some(end.row);
-                    let start_wrap_row = wrap_snapshot.make_wrap_point(start, Bias::Left).row();
-                    let end_wrap_row = wrap_snapshot.make_wrap_point(end, Bias::Left).row();
+                    let start_wrap_row = wrap_snapshot
+                        .make_wrap_point(Point::new(start.row, 0), Bias::Left)
+                        .row();
+                    let end_wrap_row = wrap_snapshot
+                        .make_wrap_point(Point::new(end.row, 0), Bias::Left)
+                        .row();
                     let (start_row, end_row) = {
                         previous_wrap_row_range.take_if(|range| {
                             !range.contains(&start_wrap_row) || !range.contains(&end_wrap_row)
