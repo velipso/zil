@@ -18,6 +18,23 @@ fn dumb_innermost_enclosing_bracket_ranges(
         return None;
     }
 
+    fn result(
+        start: usize,
+        end: usize
+    ) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
+        Some((
+            MultiBufferOffset(start)..MultiBufferOffset(start + 1),
+            MultiBufferOffset(end)..MultiBufferOffset(end + 1),
+        ))
+    }
+
+    #[derive(PartialEq, Debug)]
+    enum NearChar {
+        None,
+        Start,
+        End(usize),
+    }
+
     let mut curly_count = 0;
     let mut square_count = 0;
     let mut paren_count = 0;
@@ -26,6 +43,10 @@ fn dumb_innermost_enclosing_bracket_ranges(
     let mut curly_start: Option<usize> = None;
     let mut square_start: Option<usize> = None;
     let mut paren_start: Option<usize> = None;
+
+    let mut curly_left: NearChar = NearChar::None;
+    let mut square_left: NearChar = NearChar::None;
+    let mut paren_left: NearChar = NearChar::None;
 
     for c in buffer_snapshot.reversed_chars_at(range.start) {
         offset = offset.saturating_sub(c.len_utf8());
@@ -36,8 +57,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
                     curly_start = Some(offset);
                 } else {
                     curly_count -= 1;
+                    if curly_left == NearChar::Start && curly_count == 0 {
+                        curly_left = NearChar::End(offset);
+                    }
                 }
             } else if c == '}' {
+                if offset == range.start.0 - 1 && curly_left == NearChar::None {
+                    curly_left = NearChar::Start;
+                }
                 curly_count += 1;
             }
         }
@@ -48,8 +75,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
                     square_start = Some(offset);
                 } else {
                     square_count -= 1;
+                    if square_left == NearChar::Start && square_count == 0 {
+                        square_left = NearChar::End(offset);
+                    }
                 }
             } else if c == ']' {
+                if offset == range.start.0 - 1 && square_left == NearChar::None {
+                    square_left = NearChar::Start;
+                }
                 square_count += 1;
             }
         }
@@ -60,8 +93,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
                     paren_start = Some(offset);
                 } else {
                     paren_count -= 1;
+                    if paren_left == NearChar::Start && paren_count == 0 {
+                        paren_left = NearChar::End(offset);
+                    }
                 }
             } else if c == ')' {
+                if offset == range.start.0 - 1 && paren_left == NearChar::None {
+                    paren_left = NearChar::Start;
+                }
                 paren_count += 1;
             }
         }
@@ -72,10 +111,6 @@ fn dumb_innermost_enclosing_bracket_ranges(
         {
             break;
         }
-    }
-
-    if curly_start.is_none() && square_start.is_none() && paren_start.is_none() {
-        return None;
     }
 
     let mut curly_count = 0;
@@ -87,6 +122,10 @@ fn dumb_innermost_enclosing_bracket_ranges(
     let mut square_end: Option<usize> = None;
     let mut paren_end: Option<usize> = None;
 
+    let mut curly_right: NearChar = NearChar::None;
+    let mut square_right: NearChar = NearChar::None;
+    let mut paren_right: NearChar = NearChar::None;
+
     for c in buffer_snapshot.chars_at(range.end) {
         if curly_enable && curly_end.is_none() {
             if c == '}' {
@@ -94,8 +133,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
                     curly_end = Some(offset);
                 } else {
                     curly_count -= 1;
+                    if curly_right == NearChar::Start && curly_count == 0 {
+                        curly_right = NearChar::End(offset);
+                    }
                 }
             } else if c == '{' {
+                if offset == range.end.0 && curly_right == NearChar::None {
+                    curly_right = NearChar::Start;
+                }
                 curly_count += 1;
             }
         }
@@ -106,8 +151,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
                     square_end = Some(offset);
                 } else {
                     square_count -= 1;
+                    if square_right == NearChar::Start && square_count == 0 {
+                        square_right = NearChar::End(offset);
+                    }
                 }
             } else if c == '[' {
+                if offset == range.end.0 && square_right == NearChar::None {
+                    square_right = NearChar::Start;
+                }
                 square_count += 1;
             }
         }
@@ -118,8 +169,14 @@ fn dumb_innermost_enclosing_bracket_ranges(
                     paren_end = Some(offset);
                 } else {
                     paren_count -= 1;
+                    if paren_right == NearChar::Start && paren_count == 0 {
+                        paren_right = NearChar::End(offset);
+                    }
                 }
             } else if c == '(' {
+                if offset == range.end.0 && paren_right == NearChar::None {
+                    paren_right = NearChar::Start;
+                }
                 paren_count += 1;
             }
         }
@@ -131,13 +188,6 @@ fn dumb_innermost_enclosing_bracket_ranges(
             break;
         }
         offset += c.len_utf8();
-    }
-
-    if curly_end.is_none()
-        && square_end.is_none()
-        && paren_end.is_none()
-    {
-        return None;
     }
 
     // score each entry based on how far they are from the cursor
@@ -157,16 +207,6 @@ fn dumb_innermost_enclosing_bracket_ranges(
     } else {
         None
     };
-
-    fn result(
-        start: usize,
-        end: usize
-    ) -> Option<(Range<MultiBufferOffset>, Range<MultiBufferOffset>)> {
-        Some((
-            MultiBufferOffset(start)..MultiBufferOffset(start + 1),
-            MultiBufferOffset(end)..MultiBufferOffset(end + 1),
-        ))
-    }
 
     // find the best match (lowest score)
     if let Some(curly) = curly {
@@ -212,7 +252,22 @@ fn dumb_innermost_enclosing_bracket_ranges(
     } else if let Some(paren) = paren {
         result(paren.0, paren.1)
     } else {
-        None
+        // not inside a bracket, so check for brackets immediately outside
+        if let NearChar::End(curly_left) = curly_left {
+            result(curly_left, range.start.0 - 1)
+        } else if let NearChar::End(square_left) = square_left {
+            result(square_left, range.start.0 - 1)
+        } else if let NearChar::End(paren_left) = paren_left {
+            result(paren_left, range.start.0 - 1)
+        } else if let NearChar::End(curly_right) = curly_right {
+            result(range.end.0, curly_right)
+        } else if let NearChar::End(square_right) = square_right {
+            result(range.end.0, square_right)
+        } else if let NearChar::End(paren_right) = paren_right {
+            result(range.end.0, paren_right)
+        } else {
+            None
+        }
     }
 }
 

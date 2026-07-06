@@ -2350,11 +2350,11 @@ impl Buffer {
                     edit = Some(match earliest_trailing_newline {
                         Some(newline_offset) => {
                             // Collapse everything after the first trailing newline.
-                            newline_offset + 1..len
+                            (true, newline_offset + 1..len)
                         }
                         None => {
                             // No trailing newline existed; add one.
-                            len..len
+                            (false, len..len)
                         }
                     });
 
@@ -2364,13 +2364,13 @@ impl Buffer {
 
             // Entire buffer was whitespace.
             edit = Some(match earliest_trailing_newline {
-                Some(newline_offset) => newline_offset + 1..len,
-                None => len..len,
+                Some(newline_offset) => (true, newline_offset + 1..len),
+                None => (false, len..len),
             });
         }
 
-        if let Some(range) = edit {
-            let replacement = if range.start == len { "\n" } else { "" };
+        if let Some((has_newline, range)) = edit {
+            let replacement = if has_newline { "" } else { "\n" };
             self.edit([(range, replacement)], None, cx);
         }
     }
