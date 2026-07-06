@@ -2115,14 +2115,10 @@ impl Pane {
                 let new_path = pane.update_in(cx, |pane, window, cx| {
                     pane.activate_item(item_ix, true, true, window, cx);
                     pane.workspace.update(cx, |workspace, cx| {
-                        let lister = if workspace.project().read(cx).is_local() {
-                            DirectoryLister::Local(
-                                workspace.project().clone(),
-                                workspace.app_state().fs.clone(),
-                            )
-                        } else {
-                            DirectoryLister::Project(workspace.project().clone())
-                        };
+                        let lister = DirectoryLister::new(
+                            workspace.project().clone(),
+                            workspace.app_state().fs.clone(),
+                        );
                         workspace.prompt_for_new_path(lister, Some(suggested_name), window, cx)
                     })
                 })??;

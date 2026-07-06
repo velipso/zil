@@ -59,7 +59,6 @@ pub enum IconName {
     Replace,
     ReplaceAll,
     ReplaceNext,
-    ReplyArrowRight,
     Return,
     RotateCcw,
     RotateCw,
