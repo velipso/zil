@@ -4993,7 +4993,6 @@ impl Repository {
         _updates_tx: Option<mpsc::UnboundedSender<DownstreamUpdate>>,
         _cx: &mut Context<Self>,
     ) {
-        todo!("schedule_scan");
     }
 
     fn spawn_local_git_worker(

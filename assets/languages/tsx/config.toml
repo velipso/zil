@@ -8,8 +8,8 @@ documentation_comment = { start = "/**", prefix = "* ", end = "*/", tab_size = 1
 wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", end_suffix = ">" }
 word_characters = ["#", "$"]
 scope_opt_in_language_servers = ["tailwindcss-language-server", "emmet-language-server"]
-auto_indent_strings = [">", "{", "[", "("]
-auto_outdent_strings = ["<", "}", "]", ")"]
+auto_indent_strings = ["{", "[", "("]
+auto_outdent_strings = ["}", "]", ")"]
 
 [overrides.element]
 line_comments = { remove = true }
@@ -18,4 +18,3 @@ opt_into_language_servers = ["emmet-language-server"]
 
 [overrides.string]
 opt_into_language_servers = ["tailwindcss-language-server"]
-

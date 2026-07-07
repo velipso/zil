@@ -10,8 +10,8 @@ wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", e
 word_characters = ["#", "$"]
 debuggers = ["JavaScript"]
 scope_opt_in_language_servers = ["tailwindcss-language-server"]
-auto_indent_strings = [">", "{", "[", "("]
-auto_outdent_strings = ["<", "}", "]", ")"]
+auto_indent_strings = ["{", "[", "("]
+auto_outdent_strings = ["}", "]", ")"]
 
 [overrides.string]
 opt_into_language_servers = ["tailwindcss-language-server"]

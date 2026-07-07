@@ -209,62 +209,61 @@ fn dumb_innermost_enclosing_bracket_ranges(
     };
 
     // find the best match (lowest score)
-    if let Some(curly) = curly {
-        if let Some(square) = square {
-            if let Some(paren) = paren {
-                // three-way sort
-                if curly.2 <= square.2 && curly.2 <= paren.2 {
+    if let NearChar::End(curly_left) = curly_left {
+        result(curly_left, range.start.0 - 1)
+    } else if let NearChar::End(square_left) = square_left {
+        result(square_left, range.start.0 - 1)
+    } else if let NearChar::End(paren_left) = paren_left {
+        result(paren_left, range.start.0 - 1)
+    } else if let NearChar::End(curly_right) = curly_right {
+        result(range.end.0, curly_right)
+    } else if let NearChar::End(square_right) = square_right {
+        result(range.end.0, square_right)
+    } else if let NearChar::End(paren_right) = paren_right {
+        result(range.end.0, paren_right)
+    } else {
+        if let Some(curly) = curly {
+            if let Some(square) = square {
+                if let Some(paren) = paren {
+                    // three-way sort
+                    if curly.2 <= square.2 && curly.2 <= paren.2 {
+                        result(curly.0, curly.1)
+                    } else if square.2 <= paren.2 {
+                        result(square.0, square.1)
+                    } else {
+                        result(paren.0, paren.1)
+                    }
+                } else {
+                    // two-way sort
+                    if curly.2 <= square.2 {
+                        result(curly.0, curly.1)
+                    } else {
+                        result(square.0, square.1)
+                    }
+                }
+            } else if let Some(paren) = paren {
+                // two-way sort
+                if curly.2 <= paren.2 {
                     result(curly.0, curly.1)
-                } else if square.2 <= paren.2 {
+                } else {
+                    result(paren.0, paren.1)
+                }
+            } else {
+                result(curly.0, curly.1)
+            }
+        } else if let Some(square) = square {
+            if let Some(paren) = paren {
+                // two-way sort
+                if square.2 <= paren.2 {
                     result(square.0, square.1)
                 } else {
                     result(paren.0, paren.1)
                 }
             } else {
-                // two-way sort
-                if curly.2 <= square.2 {
-                    result(curly.0, curly.1)
-                } else {
-                    result(square.0, square.1)
-                }
+                result(square.0, square.1)
             }
         } else if let Some(paren) = paren {
-            // two-way sort
-            if curly.2 <= paren.2 {
-                result(curly.0, curly.1)
-            } else {
-                result(paren.0, paren.1)
-            }
-        } else {
-            result(curly.0, curly.1)
-        }
-    } else if let Some(square) = square {
-        if let Some(paren) = paren {
-            // two-way sort
-            if square.2 <= paren.2 {
-                result(square.0, square.1)
-            } else {
-                result(paren.0, paren.1)
-            }
-        } else {
-            result(square.0, square.1)
-        }
-    } else if let Some(paren) = paren {
-        result(paren.0, paren.1)
-    } else {
-        // not inside a bracket, so check for brackets immediately outside
-        if let NearChar::End(curly_left) = curly_left {
-            result(curly_left, range.start.0 - 1)
-        } else if let NearChar::End(square_left) = square_left {
-            result(square_left, range.start.0 - 1)
-        } else if let NearChar::End(paren_left) = paren_left {
-            result(paren_left, range.start.0 - 1)
-        } else if let NearChar::End(curly_right) = curly_right {
-            result(range.end.0, curly_right)
-        } else if let NearChar::End(square_right) = square_right {
-            result(range.end.0, square_right)
-        } else if let NearChar::End(paren_right) = paren_right {
-            result(range.end.0, paren_right)
+            result(paren.0, paren.1)
         } else {
             None
         }
