@@ -58,8 +58,6 @@ actions!(
         Quit,
         /// Shows information about Zed.
         About,
-        /// Opens the documentation website.
-        OpenDocs,
         /// Opens the performance profiler.
         OpenPerformanceProfiler,
     ]

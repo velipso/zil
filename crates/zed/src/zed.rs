@@ -60,12 +60,7 @@ use workspace::{
     CloseIntent, CloseWindow, with_active_or_new_workspace,
 };
 use workspace::{Pane};
-use zed_actions::{
-    About, OpenBrowser, OpenDocs, OpenSettingsFile,
-    OpenZedUrl, Quit,
-};
-
-const DOCS_URL: &str = "https://zed.dev/docs/";
+use zed_actions::{About, OpenBrowser, OpenSettingsFile, OpenZedUrl, Quit};
 
 actions!(
     zed,
@@ -481,7 +476,6 @@ fn register_actions(
     _cx: &mut Context<Workspace>,
 ) {
     workspace
-        .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
         .register_action(|_, _: &Minimize, window, _| {
             window.minimize_window();
         })

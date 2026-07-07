@@ -105,7 +105,7 @@ impl Editor {
                             })
                             .log_err();
                     }));
-                    return None;
+                    return self.stale_active_indent.clone();
                 }
             }
         }
@@ -128,7 +128,8 @@ impl Editor {
                 matches.insert(i);
             }
         }
-        Some(matches)
+        self.stale_active_indent = Some(matches);
+        self.stale_active_indent.clone()
     }
 }
 
