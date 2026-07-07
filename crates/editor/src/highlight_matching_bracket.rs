@@ -181,9 +181,9 @@ fn dumb_innermost_enclosing_bracket_ranges(
             }
         }
 
-        if (!curly_enable || curly_start.is_some())
-            && (!square_enable || square_start.is_some())
-            && (!paren_enable || paren_start.is_some())
+        if (!curly_enable || curly_end.is_some())
+            && (!square_enable || square_end.is_some())
+            && (!paren_enable || paren_end.is_some())
         {
             break;
         }
