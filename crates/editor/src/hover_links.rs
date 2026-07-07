@@ -1,8 +1,6 @@
 use crate::{
     Anchor, Editor, EditorSnapshot,
-    GotoDefinitionKind,
     HighlightKey, Navigated, PointForPosition, SelectPhase,
-    scroll::ScrollAmount,
 };
 use gpui::{
     AsyncWindowContext, Context, Entity, HighlightStyle, Modifiers, Pixels, Task,
@@ -10,10 +8,9 @@ use gpui::{
 };
 use language::{Bias, ToOffset};
 use linkify::{LinkFinder, LinkKind};
-use lsp::LanguageServerId;
-use project::{InlayId, LocationLink, Project, ResolvedPath};
+use project::{InlayId, Project, ResolvedPath};
 use regex::Regex;
-use std::{ops::Range, str::FromStr as _, sync::LazyLock};
+use std::{ops::Range, sync::LazyLock};
 use text::OffsetRangeExt;
 use theme::ActiveTheme as _;
 use util::{ResultExt, TryFutureExt as _, paths::PathWithPosition};
@@ -21,7 +18,6 @@ use util::{ResultExt, TryFutureExt as _, paths::PathWithPosition};
 #[derive(Debug)]
 pub struct HoveredLinkState {
     pub last_trigger_point: TriggerPoint,
-    pub preferred_kind: GotoDefinitionKind,
     pub symbol_range: Option<RangeInEditor>,
     pub links: Vec<HoverLink>,
     pub task: Option<Task<Option<()>>>,
@@ -60,53 +56,6 @@ impl RangeInEditor {
 pub enum HoverLink {
     Url(String),
     File(ResolvedFileTarget),
-    Text(LocationLink),
-    /// Navigate to an LSP-given location whose buffer may not be loaded yet.
-    /// Used by inlay-hint hover, code-lens references, and document-link
-    /// targets that point inside a workspace file (e.g. `file:///foo#9,16`).
-    LspLocation(lsp::Location, LanguageServerId),
-}
-
-/// Convert a `documentLink` target URI into a [`HoverLink`], reusing the
-/// existing navigation paths: `file://` URIs go through the LSP location
-/// pipeline (so an optional `#line[,column]` fragment is honored), while
-/// any other scheme is opened as a regular URL.
-pub fn document_link_target_to_hover_link(target: &str, server_id: LanguageServerId) -> HoverLink {
-    if let Ok(url) = url::Url::parse(target)
-        && url.scheme() == "file"
-        && let Ok(uri) = lsp::Uri::from_str(target)
-    {
-        let position = url
-            .fragment()
-            .and_then(parse_uri_fragment_position)
-            .unwrap_or_default();
-        return HoverLink::LspLocation(
-            lsp::Location {
-                uri,
-                range: lsp::Range::new(position, position),
-            },
-            server_id,
-        );
-    }
-    HoverLink::Url(target.to_string())
-}
-
-/// Parse a URI fragment such as `9,16`, `9:16`, `L9`, or `L9:16` into an
-/// LSP position (1-based input, 0-based output). Servers like the JSON
-/// language server attach this fragment to `file://` document link
-/// targets to point at a specific row/column inside the file.
-fn parse_uri_fragment_position(fragment: &str) -> Option<lsp::Position> {
-    let stripped = fragment.strip_prefix('L').unwrap_or(fragment);
-    let (line_str, column_str) = match stripped.split_once([',', ':']) {
-        Some((line, column)) => (line, Some(column)),
-        None => (stripped, None),
-    };
-    let line = line_str.parse::<u32>().ok()?.checked_sub(1)?;
-    let character = column_str
-        .and_then(|column| column.parse::<u32>().ok())
-        .and_then(|column| column.checked_sub(1))
-        .unwrap_or(0);
-    Some(lsp::Position { line, character })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,10 +107,10 @@ impl Editor {
                         .anchor_before(point.to_offset(&snapshot.display_snapshot, Bias::Left)),
                 );
 
-                show_link_definition(modifiers.shift, self, trigger_point, snapshot, window, cx);
+                self.show_link_definition(trigger_point, snapshot, window, cx);
             }
             None => {
-                // do nothing
+                self.hide_hovered_link(cx);
             }
         }
     }
@@ -175,28 +124,23 @@ impl Editor {
         &mut self,
         window: &mut Window,
         cx: &mut Context<Editor>,
-    ) {
-        let reveal_task = self.cmd_click_reveal_task(window, cx);
-        cx.spawn_in(window, async move |_editor, _cx| {
-            reveal_task.await.log_err();
-        })
-        .detach();
-    }
-
-    pub fn scroll_hover(
-        &mut self,
-        _amount: ScrollAmount,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
     ) -> bool {
-        false // VELIPSO: propagate
+        if let Some(reveal_task) = self.cmd_click_reveal_task(window, cx) {
+            cx.spawn_in(window, async move |_editor, _cx| {
+                reveal_task.await.log_err();
+            })
+            .detach();
+            true
+        } else {
+            false
+        }
     }
 
     fn cmd_click_reveal_task(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Editor>,
-    ) -> Task<anyhow::Result<Navigated>> {
+    ) -> Option<Task<anyhow::Result<Navigated>>> {
         if let Some(hovered_link_state) = self.hovered_link_state.take() {
             self.hide_hovered_link(cx);
             if !hovered_link_state.links.is_empty() {
@@ -206,185 +150,172 @@ impl Editor {
                 let navigate_task =
                     self.navigate_to_hover_links(hovered_link_state.links, window, cx);
                 self.select(SelectPhase::End, window, cx);
-                return navigate_task;
+                return Some(navigate_task);
             }
         }
 
-        Task::ready(Ok(Navigated::No))
-    }
-}
-
-pub fn show_link_definition(
-    shift_held: bool,
-    editor: &mut Editor,
-    trigger_point: TriggerPoint,
-    snapshot: &EditorSnapshot,
-    window: &mut Window,
-    cx: &mut Context<Editor>,
-) {
-    let preferred_kind = match trigger_point {
-        TriggerPoint::Text(_) if !shift_held => GotoDefinitionKind::Symbol,
-        _ => GotoDefinitionKind::Type,
-    };
-
-    let (mut hovered_link_state, is_cached) =
-        if let Some(existing) = editor.hovered_link_state.take() {
-            (existing, true)
-        } else {
-            (
-                HoveredLinkState {
-                    last_trigger_point: trigger_point.clone(),
-                    symbol_range: None,
-                    preferred_kind,
-                    links: vec![],
-                    task: None,
-                },
-                false,
-            )
-        };
-
-    if editor.pending_rename.is_some() {
-        return;
+        None
     }
 
-    let anchor = trigger_point.anchor().bias_left(snapshot.buffer_snapshot());
-    let Some((anchor, _)) = snapshot.buffer_snapshot().anchor_to_buffer_anchor(anchor) else {
-        return;
-    };
-    let Some(buffer) = editor.buffer.read(cx).buffer(anchor.buffer_id) else {
-        return;
-    };
-    let same_kind = hovered_link_state.preferred_kind == preferred_kind
-        || hovered_link_state
-            .links
-            .first()
-            .is_some_and(|d| matches!(d, HoverLink::Url(_) | HoverLink::LspLocation(_, _)));
-
-    if same_kind {
-        if is_cached && (hovered_link_state.last_trigger_point == trigger_point)
-            || hovered_link_state
-                .symbol_range
-                .as_ref()
-                .is_some_and(|symbol_range| {
-                    symbol_range.point_within_range(&trigger_point, snapshot)
-                })
-        {
-            editor.hovered_link_state = Some(hovered_link_state);
-            return;
-        }
-    } else {
-        editor.hide_hovered_link(cx)
-    }
-    let project = editor.project.clone();
-
-    // Record the requested position so a mouse move on the same point short-circuits
-    // instead of re-querying, even when the server returns no `originSelectionRange`
-    // (which would otherwise leave `symbol_range` empty).
-    hovered_link_state.last_trigger_point = trigger_point.clone();
-
-    hovered_link_state.task = Some(cx.spawn_in(window, async move |this, cx| {
-        async move {
-            let result = match &trigger_point {
-                TriggerPoint::Text(_) => {
-                    let mut links = Vec::new();
-                    let mut symbol_range = None;
-
-                    // LSP-provided document link wins over heuristic URL/file
-                    // detection at the same position: the server tells us the
-                    // exact range and target, while `find_url`/`find_file` are
-                    // best-effort text matches.
-                    if let Some((url_range, url)) = find_url(&buffer, anchor, cx) {
-                        let snapshot =
-                            this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
-                        if let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(url_range)
-                        {
-                            symbol_range = Some(RangeInEditor::Text(range));
-                        }
-                        links.push(HoverLink::Url(url));
-                    } else if let Some((filename_range, file_target)) =
-                        find_file(&buffer, project.clone(), anchor, cx).await
-                    {
-                        let snapshot =
-                            this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
-                        if let Some(range) =
-                            snapshot.buffer_anchor_range_to_anchor_range(filename_range)
-                        {
-                            symbol_range = Some(RangeInEditor::Text(range));
-                        }
-                        links.push(HoverLink::File(file_target));
-                    }
-
-                    if links.is_empty() {
-                        None
-                    } else {
-                        Some((symbol_range, links))
-                    }
-                }
+    fn show_link_definition(
+        self: &mut Editor,
+        trigger_point: TriggerPoint,
+        snapshot: &EditorSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Editor>,
+    ) {
+        let (mut hovered_link_state, is_cached) =
+            if let Some(existing) = self.hovered_link_state.take() {
+                (existing, true)
+            } else {
+                (
+                    HoveredLinkState {
+                        last_trigger_point: trigger_point.clone(),
+                        symbol_range: None,
+                        links: vec![],
+                        task: None,
+                    },
+                    false,
+                )
             };
 
-            this.update(cx, |editor, cx| {
-                // Clear any existing highlights
-                editor.clear_highlights(HighlightKey::HoveredLinkState, cx);
-                let Some(hovered_link_state) = editor.hovered_link_state.as_mut() else {
-                    editor.hide_hovered_link(cx);
-                    return;
-                };
-                hovered_link_state.preferred_kind = preferred_kind;
-                hovered_link_state.symbol_range = result
+        let anchor = trigger_point.anchor().bias_left(snapshot.buffer_snapshot());
+        let Some((anchor, _)) = snapshot.buffer_snapshot().anchor_to_buffer_anchor(anchor) else {
+            return;
+        };
+        let Some(buffer) = self.buffer.read(cx).buffer(anchor.buffer_id) else {
+            return;
+        };
+        let same_kind = hovered_link_state
+            .links
+            .first()
+            .is_some_and(|d| matches!(d, HoverLink::Url(_)));
+
+        if same_kind {
+            if is_cached && (hovered_link_state.last_trigger_point == trigger_point)
+                || hovered_link_state
+                    .symbol_range
                     .as_ref()
-                    .and_then(|(symbol_range, _)| symbol_range.clone());
+                    .is_some_and(|symbol_range| {
+                        symbol_range.point_within_range(&trigger_point, snapshot)
+                    })
+            {
+                self.hovered_link_state = Some(hovered_link_state);
+                return;
+            }
+        } else {
+            self.hide_hovered_link(cx)
+        }
+        let project = self.project.clone();
 
-                if let Some((symbol_range, definitions)) = result {
-                    hovered_link_state.links = definitions;
+        // Record the requested position so a mouse move on the same point short-circuits
+        // instead of re-querying, even when the server returns no `originSelectionRange`
+        // (which would otherwise leave `symbol_range` empty).
+        hovered_link_state.last_trigger_point = trigger_point.clone();
 
-                    let underline_hovered_link = !hovered_link_state.links.is_empty()
-                        || hovered_link_state.symbol_range.is_some();
+        hovered_link_state.task = Some(cx.spawn_in(window, async move |this, cx| {
+            async move {
+                let result = match &trigger_point {
+                    TriggerPoint::Text(_) => {
+                        let mut links = Vec::new();
+                        let mut symbol_range = None;
 
-                    if underline_hovered_link {
-                        let style = HighlightStyle {
-                            underline: Some(UnderlineStyle {
-                                thickness: px(1.),
-                                ..UnderlineStyle::default()
-                            }),
-                            color: Some(cx.theme().colors().link_text_hover),
-                            ..HighlightStyle::default()
-                        };
-                        let highlight_range =
-                            symbol_range.unwrap_or_else(|| match &trigger_point {
-                                TriggerPoint::Text(trigger_anchor) => {
-                                    let snapshot = editor.buffer.read(cx).snapshot(cx);
-                                    // If no symbol range returned from language server, use the surrounding word.
-                                    let (offset_range, _) =
-                                        snapshot.surrounding_word(*trigger_anchor);
-                                    RangeInEditor::Text(
-                                        snapshot.anchor_before(offset_range.start)
-                                            ..snapshot.anchor_after(offset_range.end),
-                                    )
-                                }
-                            });
+                        // LSP-provided document link wins over heuristic URL/file
+                        // detection at the same position: the server tells us the
+                        // exact range and target, while `find_url`/`find_file` are
+                        // best-effort text matches.
+                        if let Some((url_range, url)) = find_url(&buffer, anchor, cx) {
+                            let snapshot =
+                                this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
+                            if let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(url_range)
+                            {
+                                symbol_range = Some(RangeInEditor::Text(range));
+                            }
+                            links.push(HoverLink::Url(url));
+                        } else if let Some((filename_range, file_target)) =
+                            find_file(&buffer, project.clone(), anchor, cx).await
+                        {
+                            let snapshot =
+                                this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
+                            if let Some(range) =
+                                snapshot.buffer_anchor_range_to_anchor_range(filename_range)
+                            {
+                                symbol_range = Some(RangeInEditor::Text(range));
+                            }
+                            links.push(HoverLink::File(file_target));
+                        }
 
-                        match highlight_range {
-                            RangeInEditor::Text(text_range) => editor.highlight_text(
-                                HighlightKey::HoveredLinkState,
-                                vec![text_range],
-                                style,
-                                cx,
-                            ),
-                            RangeInEditor::Inlay(_) => {},
+                        if links.is_empty() {
+                            None
+                        } else {
+                            Some((symbol_range, links))
                         }
                     }
-                } else {
-                    editor.hide_hovered_link(cx);
-                }
-            })?;
+                };
 
-            anyhow::Ok(())
-        }
-        .log_err()
-        .await
-    }));
+                this.update(cx, |editor, cx| {
+                    // Clear any existing highlights
+                    editor.clear_highlights(HighlightKey::HoveredLinkState, cx);
+                    let Some(hovered_link_state) = editor.hovered_link_state.as_mut() else {
+                        editor.hide_hovered_link(cx);
+                        return;
+                    };
+                    hovered_link_state.symbol_range = result
+                        .as_ref()
+                        .and_then(|(symbol_range, _)| symbol_range.clone());
 
-    editor.hovered_link_state = Some(hovered_link_state);
+                    if let Some((symbol_range, definitions)) = result {
+                        hovered_link_state.links = definitions;
+
+                        let underline_hovered_link = !hovered_link_state.links.is_empty()
+                            || hovered_link_state.symbol_range.is_some();
+
+                        if underline_hovered_link {
+                            let style = HighlightStyle {
+                                underline: Some(UnderlineStyle {
+                                    thickness: px(1.),
+                                    ..UnderlineStyle::default()
+                                }),
+                                color: Some(cx.theme().colors().link_text_hover),
+                                ..HighlightStyle::default()
+                            };
+                            let highlight_range =
+                                symbol_range.unwrap_or_else(|| match &trigger_point {
+                                    TriggerPoint::Text(trigger_anchor) => {
+                                        let snapshot = editor.buffer.read(cx).snapshot(cx);
+                                        // If no symbol range returned from language server, use the surrounding word.
+                                        let (offset_range, _) =
+                                            snapshot.surrounding_word(*trigger_anchor);
+                                        RangeInEditor::Text(
+                                            snapshot.anchor_before(offset_range.start)
+                                                ..snapshot.anchor_after(offset_range.end),
+                                        )
+                                    }
+                                });
+
+                            match highlight_range {
+                                RangeInEditor::Text(text_range) => editor.highlight_text(
+                                    HighlightKey::HoveredLinkState,
+                                    vec![text_range],
+                                    style,
+                                    cx,
+                                ),
+                                RangeInEditor::Inlay(_) => {},
+                            }
+                        }
+                    } else {
+                        editor.hide_hovered_link(cx);
+                    }
+                })?;
+
+                anyhow::Ok(())
+            }
+            .log_err()
+            .await
+        }));
+
+        self.hovered_link_state = Some(hovered_link_state);
+    }
 }
 
 pub(crate) fn find_url(
@@ -888,35 +819,6 @@ mod tests {
         assert_eq!(parse_uri_fragment_position(""), None);
         assert_eq!(parse_uri_fragment_position("section-name"), None);
         assert_eq!(parse_uri_fragment_position("0,0"), None);
-    }
-
-    #[test]
-    fn test_document_link_target_to_hover_link_file_uri_with_fragment() {
-        let server_id = LanguageServerId(0);
-        let target = "file:///Users/me/work/local_test/document-links-test.json#9,16";
-        match document_link_target_to_hover_link(target, server_id) {
-            HoverLink::LspLocation(location, returned_id) => {
-                assert_eq!(returned_id, server_id);
-                assert_eq!(
-                    location.uri.as_str(),
-                    "file:///Users/me/work/local_test/document-links-test.json#9,16",
-                );
-                assert_eq!(
-                    location.range,
-                    lsp::Range {
-                        start: lsp::Position {
-                            line: 8,
-                            character: 15,
-                        },
-                        end: lsp::Position {
-                            line: 8,
-                            character: 15,
-                        },
-                    }
-                );
-            }
-            other => panic!("expected LspLocation variant, got {other:?}"),
-        }
     }
 
     #[test]

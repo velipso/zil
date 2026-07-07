@@ -692,10 +692,10 @@ impl EditorElement {
                 SelectionDragState::Dragging { .. }
             )
         {
-            editor.handle_click_hovered_link(window, cx);
-            editor.selection_drag_state = SelectionDragState::None;
-
-            cx.stop_propagation();
+            if editor.handle_click_hovered_link(window, cx) {
+                editor.selection_drag_state = SelectionDragState::None;
+                cx.stop_propagation();
+            }
         }
     }
 

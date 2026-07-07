@@ -269,7 +269,6 @@
       "cmd-/": ["editor::ToggleComments", { "advance_downwards": false }],
       "cmd-k cmd-/": "editor::ToggleBlockComments",
       "shift-alt-a": "editor::ToggleBlockComments",
-      "f2": "editor::Rename",
       "cmd-|": "editor::MoveToEnclosingBracket",
       "ctrl-m": "editor::MoveToEnclosingBracket", // From Jetbrains
       "alt-cmd-[": "editor::Fold",
@@ -411,13 +410,6 @@
     },
   },
   // Bindings that should be unified with bindings for more general actions
-  {
-    "context": "Editor && renaming",
-    "use_key_equivalents": true,
-    "bindings": {
-      "enter": "editor::ConfirmRename",
-    },
-  },
   {
     "context": "Editor && showing_completions",
     "use_key_equivalents": true,

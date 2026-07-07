@@ -841,10 +841,6 @@ impl Editor {
             return;
         }
 
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         let mut current_position = self.scroll_position(cx);
         let Some(visible_line_count) = self.visible_line_count() else {
             return;

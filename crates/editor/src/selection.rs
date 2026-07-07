@@ -1472,7 +1472,6 @@ impl Editor {
         self.select_next_state = None;
         self.select_prev_state = None;
         self.select_syntax_node_history.try_clear();
-        self.take_rename(false, window, cx);
 
         let newest_selection = self.selections.newest_anchor();
         let new_cursor_position = newest_selection.head();

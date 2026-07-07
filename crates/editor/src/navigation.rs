@@ -42,10 +42,6 @@ impl Editor {
     }
 
     pub fn move_up(&mut self, _: &MoveUp, window: &mut Window, cx: &mut Context<Self>) {
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         if self.mode.is_single_line() {
             cx.propagate();
             return;
@@ -83,10 +79,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         if self.mode.is_single_line() {
             cx.propagate();
             return;
@@ -118,10 +110,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         if self.mode.is_single_line() {
             cx.propagate();
             return;
@@ -200,10 +188,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         if matches!(self.mode, EditorMode::SingleLine) {
             cx.propagate();
             return;
@@ -249,10 +233,6 @@ impl Editor {
     }
 
     pub fn move_down(&mut self, _: &MoveDown, window: &mut Window, cx: &mut Context<Self>) {
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         if self.mode.is_single_line() {
             cx.propagate();
             return;
@@ -309,10 +289,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-
         if matches!(self.mode, EditorMode::SingleLine) {
             cx.propagate();
             return;
@@ -1094,7 +1070,6 @@ impl Editor {
                         Ok(Navigated::Yes)
                     });
                 },
-                _ => {}
             }
         }
         Task::ready(anyhow::Ok(Navigated::No))
