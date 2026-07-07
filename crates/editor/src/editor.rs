@@ -6846,13 +6846,7 @@ impl Editor {
             let text = self.breadcrumb_header.clone().unwrap_or_else(|| {
                 buffer
                     .snapshot()
-                    .resolve_file_path(
-                        self.project
-                            .as_ref()
-                            .map(|project| project.read(cx).visible_worktrees(cx).count() > 1)
-                            .unwrap_or_default(),
-                        cx,
-                    )
+                    .resolve_file_path(cx)
                     .unwrap_or_else(|| {
                         multibuffer.title(cx).to_string()
                     })

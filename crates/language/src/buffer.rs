@@ -4846,16 +4846,8 @@ impl BufferSnapshot {
         self.file.as_ref()
     }
 
-    pub fn resolve_file_path(&self, include_root: bool, cx: &App) -> Option<String> {
-        if let Some(file) = self.file() {
-            if file.path().file_name().is_none() || include_root {
-                Some(file.full_path(cx).to_string_lossy().into_owned())
-            } else {
-                Some(file.path().display(file.path_style(cx)).to_string())
-            }
-        } else {
-            None
-        }
+    pub fn resolve_file_path(&self, cx: &App) -> Option<String> {
+        self.file().map(|file| file.full_path(cx).to_string_lossy().into_owned())
     }
 
     pub fn words_in_range(&self, query: WordsQuery) -> BTreeMap<String, Range<Anchor>> {

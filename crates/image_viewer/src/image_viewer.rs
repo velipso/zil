@@ -489,7 +489,7 @@ impl Item for ImageView {
     }
 
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        let text = self.image_item.read(cx).abs_path(cx)?;
+        let text = self.image_item.read(cx).abs_path(cx)?.compact();
         let text = text.to_str()?;
         let font = ThemeSettings::get_global(cx).buffer_font.clone();
         Some((
