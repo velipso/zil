@@ -10331,7 +10331,6 @@ name = "ui_prompt"
 version = "0.1.0"
 dependencies = [
  "gpui",
- "markdown",
  "menu",
  "settings",
  "theme_settings",

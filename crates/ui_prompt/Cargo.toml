@@ -16,7 +16,6 @@ default = []
 
 [dependencies]
 gpui.workspace = true
-markdown.workspace = true
 menu.workspace = true
 settings.workspace = true
 theme_settings.workspace = true

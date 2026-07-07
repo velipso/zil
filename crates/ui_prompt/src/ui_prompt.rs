@@ -1,9 +1,7 @@
 use gpui::{
-    App, Entity, EventEmitter, FocusHandle, Focusable, PromptButton, PromptHandle, PromptLevel,
-    PromptResponse, RenderablePromptHandle, SharedString, TextStyleRefinement, Window, div,
-    prelude::*,
+    App, EventEmitter, FocusHandle, Focusable, Pixels, PromptButton, PromptHandle, PromptLevel,
+    PromptResponse, RenderablePromptHandle, Window, div, prelude::*,
 };
-use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use settings::{Settings, SettingsStore};
 use theme_settings::ThemeSettings;
 use ui::{FluentBuilder, TintColor, prelude::*};
@@ -25,6 +23,17 @@ fn process_settings(cx: &mut App) {
     }
 }
 
+fn clean_message(message: impl AsRef<str>) -> String {
+    message
+        .as_ref()
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
 /// Use this function in conjunction with [App::set_prompt_builder] to force
 /// GPUI to use the internal prompt system.
 fn zed_prompt_renderer(
@@ -39,13 +48,11 @@ fn zed_prompt_renderer(
     let renderer = cx.new({
         |cx| ZedPromptRenderer {
             _level: level,
-            message: cx.new(|cx| Markdown::new(SharedString::new(message), None, None, cx)),
+            message: clean_message(message),
             actions: actions.iter().map(|a| a.label().to_string()).collect(),
             focus: cx.focus_handle(),
             active_action_id: 0,
-            detail: detail
-                .filter(|text| !text.is_empty())
-                .map(|text| cx.new(|cx| Markdown::new(SharedString::new(text), None, None, cx))),
+            detail: detail.map(|detail| clean_message(detail)),
         }
     });
 
@@ -54,11 +61,11 @@ fn zed_prompt_renderer(
 
 pub struct ZedPromptRenderer {
     _level: PromptLevel,
-    message: Entity<Markdown>,
+    message: String,
     actions: Vec<String>,
     focus: FocusHandle,
     active_action_id: usize,
-    detail: Option<Entity<Markdown>>,
+    detail: Option<String>,
 }
 
 impl ZedPromptRenderer {
@@ -108,8 +115,9 @@ impl ZedPromptRenderer {
 }
 
 impl Render for ZedPromptRenderer {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let settings = ThemeSettings::get_global(cx);
+        let font_size: Pixels = settings.ui_font_size(cx).into();
 
         let dialog = v_flex()
             .key_context("Prompt")
@@ -127,15 +135,17 @@ impl Render for ZedPromptRenderer {
             .elevation_3(cx)
             .overflow_hidden()
             .font_family(settings.ui_font.family.clone())
-            .child(div().w_full().child(MarkdownElement::new(
-                self.message.clone(),
-                markdown_style(true, window, cx),
-            )))
+            .child(
+                div().w_full()
+                    .text_size(font_size)
+                    .text_color(Color::Default.color(cx))
+                    .child(self.message.clone())
+            )
             .children(self.detail.clone().map(|detail| {
-                div().w_full().text_xs().child(MarkdownElement::new(
-                    detail,
-                    markdown_style(false, window, cx),
-                ))
+                div().w_full()
+                    .text_xs()
+                    .text_color(Color::Muted.color(cx))
+                    .child(detail)
             }))
             .child(
                 v_flex()
@@ -168,31 +178,6 @@ impl Render for ZedPromptRenderer {
                     .justify_center()
                     .child(dialog),
             )
-    }
-}
-
-fn markdown_style(main_message: bool, window: &Window, cx: &App) -> MarkdownStyle {
-    let mut base_text_style = window.text_style();
-    let settings = ThemeSettings::get_global(cx);
-    let font_size = settings.ui_font_size(cx).into();
-
-    let color = if main_message {
-        Color::Default.color(cx)
-    } else {
-        Color::Muted.color(cx)
-    };
-
-    base_text_style.refine(&TextStyleRefinement {
-        font_family: Some(settings.ui_font.family.clone()),
-        font_size: Some(font_size),
-        color: Some(color),
-        ..Default::default()
-    });
-
-    MarkdownStyle {
-        base_text_style,
-        selection_background_color: cx.theme().colors().element_selection_background,
-        ..Default::default()
     }
 }
 
