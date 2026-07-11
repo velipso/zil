@@ -176,7 +176,6 @@ impl VsCodeSettings {
             credentials_url: None,
             debugger: None,
             editor: self.editor_settings_content(),
-            file_finder: None,
             git: self.git_settings_content(),
             global_lsp_settings: skip_default(GlobalLspSettingsContent {
                 semantic_token_rules: self.semantic_token_rules(),
@@ -589,15 +588,11 @@ impl VsCodeSettings {
             buffer_font_weight: self.read_f32("editor.fontWeight").map(FontWeightContent),
             buffer_line_height: None,
             buffer_font_features: None,
-            agent_ui_font_size: None,
-            agent_buffer_font_size: None,
-            git_commit_buffer_font_size: None,
             markdown_preview_font_family: None,
             markdown_preview_code_font_family: None,
             markdown_preview_theme: None,
             theme: None,
             ui_density: None,
-            unnecessary_code_fade: None,
             experimental_theme_overrides: None,
             theme_overrides: Default::default(),
         }

@@ -811,11 +811,11 @@ impl KeymapEditor {
                 .map(KeybindSource::from_meta)
                 .unwrap_or(KeybindSource::Unknown);
 
-            let keystroke_text = ui::text_for_keybinding_keystrokes(key_binding.keystrokes(), cx);
+            let keystroke_text = ui::text_for_keybinding_keystrokes(key_binding.keystrokes());
             let is_no_action = gpui::is_no_action(key_binding.action());
             let is_unbound_by_unbind =
                 binding_is_unbound_by_unbind(key_binding, binding_index, &key_bindings);
-            let binding = KeyBinding::new(key_binding, source);
+            let binding = KeyBinding::new(key_binding);
 
             let context = key_binding
                 .predicate()
@@ -1670,14 +1670,12 @@ impl HumanizedActionNameCache {
 #[derive(Clone)]
 struct KeyBinding {
     keystrokes: Rc<[KeybindingKeystroke]>,
-    source: KeybindSource,
 }
 
 impl KeyBinding {
-    fn new(binding: &gpui::KeyBinding, source: KeybindSource) -> Self {
+    fn new(binding: &gpui::KeyBinding) -> Self {
         Self {
             keystrokes: Rc::from(binding.keystrokes()),
-            source,
         }
     }
 }
@@ -2004,7 +2002,7 @@ impl Render for KeymapEditor {
                                         Button::new("edit-in-json", "Edit in JSON")
                                             .style(ButtonStyle::Subtle)
                                             .key_binding(
-                                                ui::KeyBinding::for_action_in(&zed_actions::OpenKeymapFile, &focus_handle, cx)
+                                                ui::KeyBinding::for_action_in(&zed_actions::OpenKeymapFile, &focus_handle)
                                                     .map(|kb| kb.size(rems_from_px(10.))),
                                             )
                                             .on_click(|_, window, cx| {
@@ -2018,7 +2016,7 @@ impl Render for KeymapEditor {
                                         Button::new("create", "Create Keybinding")
                                             .style(ButtonStyle::Outlined)
                                             .key_binding(
-                                                ui::KeyBinding::for_action_in(&OpenCreateKeybindingModal, &focus_handle, cx)
+                                                ui::KeyBinding::for_action_in(&OpenCreateKeybindingModal, &focus_handle)
                                                     .map(|kb| kb.size(rems_from_px(10.))),
                                             )
                                             .on_click(|_, window, cx| {
@@ -2123,7 +2121,10 @@ impl Render for KeymapEditor {
                                             .cloned()
                                             .unwrap_or_default()
                                             .into_any_element(),
-                                        |binding| ui::KeyBinding::from_keystrokes(binding.keystrokes.clone(), binding.source == KeybindSource::Vim).into_any_element()
+                                        |binding| {
+                                            ui::KeyBinding::from_keystrokes(binding.keystrokes.clone())
+                                                .into_any_element()
+                                        }
                                     );
 
                                     let action_arguments = match binding.action().arguments.clone()

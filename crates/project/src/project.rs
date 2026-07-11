@@ -251,7 +251,6 @@ pub enum Event {
     LanguageServerPrompt(LanguageServerPromptRequest),
     LanguageNotFound(Entity<Buffer>),
     ActiveEntryChanged(Option<ProjectEntryId>),
-    ActivateProjectPanel,
     WorktreeAdded(WorktreeId),
     WorktreeOrderChanged,
     WorktreeRemoved(WorktreeId),

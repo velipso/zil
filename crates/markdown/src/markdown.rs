@@ -140,7 +140,6 @@ impl Default for MarkdownStyle {
 
 #[derive(Clone, Copy)]
 pub enum MarkdownFont {
-    Agent,
     Editor,
     Preview,
 }
@@ -167,10 +166,6 @@ impl MarkdownStyle {
 
         let buffer_font_weight = theme_settings.buffer_font.weight;
         let (buffer_font_size, ui_font_size) = match font {
-            MarkdownFont::Agent => (
-                theme_settings.agent_buffer_font_size(cx),
-                theme_settings.agent_ui_font_size(cx),
-            ),
             MarkdownFont::Editor | MarkdownFont::Preview => (
                 theme_settings.buffer_font_size(cx),
                 theme_settings.ui_font_size(cx),
@@ -271,34 +266,7 @@ impl MarkdownStyle {
                 }),
                 ..Default::default()
             },
-            heading_level_styles: matches!(font, MarkdownFont::Agent).then_some(
-                HeadingLevelStyles {
-                    h1: Some(TextStyleRefinement {
-                        font_size: Some(rems(1.15).into()),
-                        ..Default::default()
-                    }),
-                    h2: Some(TextStyleRefinement {
-                        font_size: Some(rems(1.1).into()),
-                        ..Default::default()
-                    }),
-                    h3: Some(TextStyleRefinement {
-                        font_size: Some(rems(1.05).into()),
-                        ..Default::default()
-                    }),
-                    h4: Some(TextStyleRefinement {
-                        font_size: Some(rems(1.).into()),
-                        ..Default::default()
-                    }),
-                    h5: Some(TextStyleRefinement {
-                        font_size: Some(rems(0.95).into()),
-                        ..Default::default()
-                    }),
-                    h6: Some(TextStyleRefinement {
-                        font_size: Some(rems(0.875).into()),
-                        ..Default::default()
-                    }),
-                },
-            ),
+            heading_level_styles: None,
             ..Default::default()
         }
     }

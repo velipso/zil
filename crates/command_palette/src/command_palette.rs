@@ -570,7 +570,7 @@ impl PickerDelegate for CommandPaletteDelegate {
         ix: usize,
         selected: bool,
         _: &mut Window,
-        cx: &mut Context<Picker<Self>>,
+        _: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         let matching_command = self.matches.get(ix)?;
         let command = self.commands.get(matching_command.candidate_id)?;
@@ -592,7 +592,6 @@ impl PickerDelegate for CommandPaletteDelegate {
                         .child(KeyBinding::for_action_in(
                             &*command.action,
                             &self.previous_focus_handle,
-                            cx,
                         )),
                 ),
         )
@@ -605,13 +604,13 @@ impl PickerDelegate for CommandPaletteDelegate {
     ) -> Option<AnyElement> {
         let selected_command = self.selected_command()?;
         let keybind =
-            KeyBinding::for_action_in(&*selected_command.action, &self.previous_focus_handle, cx);
+            KeyBinding::for_action_in(&*selected_command.action, &self.previous_focus_handle);
 
         let focus_handle = &self.previous_focus_handle;
         let keybinding_buttons = if keybind.has_binding(window) {
             Button::new("change", "Change Keybinding…")
                 .key_binding(
-                    KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle, cx)
+                    KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle)
                         .map(|kb| kb.size(rems_from_px(12.))),
                 )
                 .on_click(move |_, window, cx| {
@@ -620,7 +619,7 @@ impl PickerDelegate for CommandPaletteDelegate {
         } else {
             Button::new("add", "Add Keybinding…")
                 .key_binding(
-                    KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle, cx)
+                    KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle)
                         .map(|kb| kb.size(rems_from_px(12.))),
                 )
                 .on_click(move |_, window, cx| {
@@ -640,7 +639,7 @@ impl PickerDelegate for CommandPaletteDelegate {
                 .child(
                     Button::new("run-action", "Run")
                         .key_binding(
-                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
+                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle)
                                 .map(|kb| kb.size(rems_from_px(12.))),
                         )
                         .on_click(|_, window, cx| {

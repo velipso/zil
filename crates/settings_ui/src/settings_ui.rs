@@ -2763,7 +2763,6 @@ impl SettingsWindow {
                             KeyBinding::for_action_in(
                                 &ToggleFocusNav,
                                 &self.navbar_focus_handle.focus_handle(cx),
-                                cx,
                             ),
                             cx.theme().colors().surface_background.opacity(0.5),
                         )

@@ -216,7 +216,6 @@ impl Render for KeyContextView {
                             .style(ButtonStyle::Filled)
                             .key_binding(ui::KeyBinding::for_action(
                                 &zed_actions::OpenDefaultKeymap,
-                                cx
                             ))
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(zed_actions::OpenDefaultKeymap.boxed_clone(), cx);
@@ -225,7 +224,7 @@ impl Render for KeyContextView {
                     .child(
                         Button::new("edit_your_keymap", "Edit Keymap File")
                             .style(ButtonStyle::Filled)
-                            .key_binding(ui::KeyBinding::for_action(&zed_actions::OpenKeymapFile, cx))
+                            .key_binding(ui::KeyBinding::for_action(&zed_actions::OpenKeymapFile))
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx);
                             }),

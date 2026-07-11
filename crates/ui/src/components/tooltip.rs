@@ -61,10 +61,10 @@ impl Tooltip {
         let title = title.into();
         let action = action.boxed_clone();
         move |_, cx| {
-            cx.new(|cx| Self {
+            cx.new(|_cx| Self {
                 title: Title::Str(title.clone()),
                 meta: None,
-                key_binding: Some(KeyBinding::for_action(action.as_ref(), cx)),
+                key_binding: Some(KeyBinding::for_action(action.as_ref())),
             })
             .into()
         }
@@ -79,13 +79,12 @@ impl Tooltip {
         let action = action.boxed_clone();
         let focus_handle = focus_handle.clone();
         move |_, cx| {
-            cx.new(|cx| Self {
+            cx.new(|_cx| Self {
                 title: Title::Str(title.clone()),
                 meta: None,
                 key_binding: Some(KeyBinding::for_action_in(
                     action.as_ref(),
                     &focus_handle,
-                    cx,
                 )),
             })
             .into()
@@ -97,10 +96,10 @@ impl Tooltip {
         action: &dyn Action,
         cx: &mut App,
     ) -> AnyView {
-        cx.new(|cx| Self {
+        cx.new(|_cx| Self {
             title: Title::Str(title.into()),
             meta: None,
-            key_binding: Some(KeyBinding::for_action(action, cx)),
+            key_binding: Some(KeyBinding::for_action(action)),
         })
         .into()
     }
@@ -111,10 +110,10 @@ impl Tooltip {
         focus_handle: &FocusHandle,
         cx: &mut App,
     ) -> AnyView {
-        cx.new(|cx| Self {
+        cx.new(|_cx| Self {
             title: title.into().into(),
             meta: None,
-            key_binding: Some(KeyBinding::for_action_in(action, focus_handle, cx)),
+            key_binding: Some(KeyBinding::for_action_in(action, focus_handle)),
         })
         .into()
     }
@@ -125,10 +124,10 @@ impl Tooltip {
         meta: impl Into<SharedString>,
         cx: &mut App,
     ) -> AnyView {
-        cx.new(|cx| Self {
+        cx.new(|_cx| Self {
             title: title.into().into(),
             meta: Some(meta.into()),
-            key_binding: action.map(|action| KeyBinding::for_action(action, cx)),
+            key_binding: action.map(|action| KeyBinding::for_action(action)),
         })
         .into()
     }
@@ -140,10 +139,10 @@ impl Tooltip {
         focus_handle: &FocusHandle,
         cx: &mut App,
     ) -> AnyView {
-        cx.new(|cx| Self {
+        cx.new(|_cx| Self {
             title: title.into().into(),
             meta: Some(meta.into()),
-            key_binding: action.map(|action| KeyBinding::for_action_in(action, focus_handle, cx)),
+            key_binding: action.map(|action| KeyBinding::for_action_in(action, focus_handle)),
         })
         .into()
     }

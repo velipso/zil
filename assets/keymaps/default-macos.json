@@ -440,18 +440,6 @@
     },
   },
   {
-    "context": "!AcpThread > Editor && mode == full",
-    "use_key_equivalents": true,
-    "bindings": {
-      "alt-enter": "editor::OpenExcerpts",
-      "shift-enter": "editor::ExpandExcerpts",
-      "cmd-alt-enter": "editor::OpenExcerptsSplit",
-      "cmd-shift-e": "pane::RevealInProjectPanel",
-      "cmd-f8": "editor::GoToHunk",
-      "cmd-shift-f8": "editor::GoToPreviousHunk",
-    },
-  },
-  {
     "context": "Prompt",
     "use_key_equivalents": true,
     "bindings": {

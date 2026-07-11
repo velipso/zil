@@ -375,7 +375,6 @@ pub struct EditorStyle {
     pub scrollbar_width: Pixels,
     pub syntax: Arc<SyntaxTheme>,
     pub status: StatusColors,
-    pub unnecessary_code_fade: f32,
 }
 
 impl Default for EditorStyle {
@@ -391,7 +390,6 @@ impl Default for EditorStyle {
             // We should look into removing the status colors from the editor
             // style and retrieve them directly from the theme.
             status: StatusColors::dark(),
-            unnecessary_code_fade: Default::default(),
         }
     }
 }
@@ -6361,29 +6359,6 @@ impl Editor {
         self.searchable
     }
 
-    pub fn open_excerpts_in_split(
-        &mut self,
-        _: &OpenExcerptsSplit,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.open_excerpts_common(None, true, window, cx)
-    }
-
-    pub fn open_excerpts(&mut self, _: &OpenExcerpts, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_excerpts_common(None, false, window, cx)
-    }
-
-    pub(crate) fn open_excerpts_common(
-        &mut self,
-        _jump_data: Option<JumpData>,
-        _split: bool,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        cx.propagate();
-    }
-
     fn selection_replacement_ranges(
         &self,
         range: Range<MultiBufferOffsetUtf16>,
@@ -6831,7 +6806,6 @@ impl Editor {
             scrollbar_width: EditorElement::SCROLLBAR_WIDTH,
             syntax: cx.theme().syntax().clone(),
             status: cx.theme().status().clone(),
-            unnecessary_code_fade: settings.unnecessary_code_fade,
         }
     }
 

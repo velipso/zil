@@ -1963,8 +1963,8 @@ impl ContextMenu {
                                 let binding = self
                                     .action_context
                                     .as_ref()
-                                    .map(|focus| KeyBinding::for_action_in(&**action, focus, cx))
-                                    .unwrap_or_else(|| KeyBinding::for_action(&**action, cx));
+                                    .map(|focus| KeyBinding::for_action_in(&**action, focus))
+                                    .unwrap_or_else(|| KeyBinding::for_action(&**action));
 
                                 div()
                                     .ml_4()

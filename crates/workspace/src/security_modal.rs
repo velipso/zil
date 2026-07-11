@@ -214,10 +214,7 @@ impl Render for SecurityModal {
                     .child(
                         Button::new("rm", "Stay in Restricted Mode")
                             .key_binding(
-                                KeyBinding::for_action(
-                                    &ToggleWorktreeSecurity,
-                                    cx,
-                                )
+                                KeyBinding::for_action(&ToggleWorktreeSecurity)
                                 .map(|kb| kb.size(rems_from_px(12.))),
                             )
                             .on_click(cx.listener(move |security_modal, _, _, cx| {
@@ -231,7 +228,7 @@ impl Render for SecurityModal {
                             .style(ButtonStyle::Filled)
                             .layer(ui::ElevationIndex::ModalSurface)
                             .key_binding(
-                                KeyBinding::for_action(&menu::Confirm, cx)
+                                KeyBinding::for_action(&menu::Confirm)
                                     .map(|kb| kb.size(rems_from_px(12.))),
                             )
                             .on_click(cx.listener(move |security_modal, _, _, cx| {

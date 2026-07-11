@@ -106,25 +106,7 @@ impl TabSwitcher {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let mut weak_pane = workspace.active_pane().downgrade();
-        for dock in [
-            workspace.left_dock(),
-            workspace.bottom_dock(),
-            workspace.right_dock(),
-        ] {
-            dock.update(cx, |this, cx| {
-                let Some(panel) = this
-                    .active_panel()
-                    .filter(|panel| panel.panel_focus_handle(cx).contains_focused(window, cx))
-                else {
-                    return;
-                };
-                if let Some(pane) = panel.pane(cx) {
-                    weak_pane = pane.downgrade();
-                }
-            })
-        }
-
+        let weak_pane = workspace.active_pane().downgrade();
         let weak_workspace = workspace.weak_handle();
 
         let original_items: Vec<_> = workspace

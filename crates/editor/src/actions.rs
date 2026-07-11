@@ -160,33 +160,6 @@ pub struct SelectDownByLines {
     pub(super) lines: u32,
 }
 
-/// Expands all excerpts with selections.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct ExpandExcerpts {
-    #[serde(default)]
-    pub(super) lines: u32,
-}
-
-/// Expands excerpts above the current position.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct ExpandExcerptsUp {
-    #[serde(default)]
-    pub(super) lines: u32,
-}
-
-/// Expands excerpts below the current position.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = editor)]
-#[serde(deny_unknown_fields)]
-pub struct ExpandExcerptsDown {
-    #[serde(default)]
-    pub(super) lines: u32,
-}
-
 /// Handles text input in the editor.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
 #[action(namespace = editor)]
@@ -476,10 +449,6 @@ actions!(
         /// edits outside the selected ranges are discarded. External command formatters do not
         /// support range formatting and are skipped.
         FormatSelections,
-        /// Goes to the next diff hunk.
-        GoToHunk,
-        /// Goes to the previous diff hunk.
-        GoToPreviousHunk,
         /// Goes to the next bookmark in the file.
         GoToNextBookmark,
         /// Goes to the next change in the file.
@@ -572,10 +541,6 @@ actions!(
         ViewBookmarks,
         /// Opens the context menu at cursor position.
         OpenContextMenu,
-        /// Opens excerpts from the current file.
-        OpenExcerpts,
-        /// Opens excerpts in a split pane.
-        OpenExcerptsSplit,
         /// Opens documentation for the symbol at cursor.
         OpenDocs,
         /// Opens the file whose name is selected in the editor.

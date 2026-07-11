@@ -116,8 +116,8 @@ impl WhichKeyModal {
             }
 
             // Finally sort by text length, then lexicographically for full stability
-            let text_a = text_for_keystrokes(keystrokes_a, cx);
-            let text_b = text_for_keystrokes(keystrokes_b, cx);
+            let text_a = text_for_keystrokes(keystrokes_a);
+            let text_b = text_for_keystrokes(keystrokes_b);
             let text_len_cmp = text_a.len().cmp(&text_b.len());
             if text_len_cmp != std::cmp::Ordering::Equal {
                 return text_len_cmp;
@@ -125,10 +125,10 @@ impl WhichKeyModal {
             text_a.cmp(&text_b)
         });
         binding_data.dedup();
-        self.pending_keys = text_for_keystrokes(&pending_keys, cx).into();
+        self.pending_keys = text_for_keystrokes(&pending_keys).into();
         self.bindings = binding_data
             .into_iter()
-            .map(|(keystrokes, action)| (text_for_keystrokes(&keystrokes, cx).into(), action))
+            .map(|(keystrokes, action)| (text_for_keystrokes(&keystrokes).into(), action))
             .collect();
     }
 }

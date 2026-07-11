@@ -104,7 +104,7 @@ impl Render for InvalidItemView {
                                             cx.open_with_system(&abs_path);
                                         })
                                         .style(ButtonStyle::Outlined)
-                                        .key_binding(KeyBinding::for_action(&OpenWithSystem, cx)),
+                                        .key_binding(KeyBinding::for_action(&OpenWithSystem)),
                                 ),
                             )
                         }),

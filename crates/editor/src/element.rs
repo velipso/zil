@@ -332,8 +332,6 @@ impl EditorElement {
         register_action(editor, window, Editor::set_mark);
         register_action(editor, window, Editor::save_location);
         register_action(editor, window, Editor::swap_selection_ends);
-        register_action(editor, window, Editor::open_excerpts);
-        register_action(editor, window, Editor::open_excerpts_in_split);
         register_action(editor, window, Editor::toggle_soft_wrap);
         register_action(editor, window, Editor::toggle_tab_bar);
         register_action(editor, window, Editor::toggle_breadcrumb);

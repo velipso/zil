@@ -145,11 +145,6 @@ pub struct ThemeSettingsContent {
     /// The OpenType features to enable for rendering in text buffers.
     #[schemars(default = "default_font_features")]
     pub buffer_font_features: Option<FontFeaturesContent>,
-    /// The font size for agent responses in the agent panel. Falls back to the UI font size if unset.
-    pub agent_ui_font_size: Option<FontSize>,
-    /// The font size for user messages in the agent panel.
-    pub agent_buffer_font_size: Option<FontSize>,
-    pub git_commit_buffer_font_size: Option<FontSize>,
     /// The name of a font to use for rendering in the markdown preview.
     /// Falls back to the UI font if unset.
     pub markdown_preview_font_family: Option<FontFamilyName>,
@@ -167,10 +162,6 @@ pub struct ThemeSettingsContent {
     // Controls the density of the UI.
     #[serde(rename = "unstable.ui_density")]
     pub ui_density: Option<UiDensity>,
-
-    /// How much to fade out unused code.
-    #[schemars(range(min = 0.0, max = 0.9))]
-    pub unnecessary_code_fade: Option<CodeFade>,
 
     /// EXPERIMENTAL: Overrides for the current theme.
     ///

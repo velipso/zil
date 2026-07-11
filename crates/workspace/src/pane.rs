@@ -158,15 +158,6 @@ pub struct CloseItemsToTheRight;
 #[serde(deny_unknown_fields)]
 pub struct CloseItemsToTheLeft;
 
-/// Reveals the current item in the project panel.
-#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
-#[action(namespace = pane)]
-#[serde(deny_unknown_fields)]
-pub struct RevealInProjectPanel {
-    #[serde(skip)]
-    pub entry_id: Option<u64>,
-}
-
 /// Opens the search interface with the specified configuration.
 #[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Default, Action)]
 #[action(namespace = pane)]
@@ -3413,37 +3404,6 @@ impl Render for Pane {
                 |pane: &mut Self, action: &CloseMultibufferItems, window, cx| {
                     pane.close_multibuffer_items(action, window, cx)
                         .detach_and_log_err(cx)
-                },
-            ))
-            .on_action(cx.listener(
-                |pane: &mut Self, action: &RevealInProjectPanel, _window, cx| {
-                    let active_item = pane.active_item();
-                    let entry_id = active_item.as_ref().and_then(|item| {
-                        action
-                            .entry_id
-                            .map(ProjectEntryId::from_proto)
-                            .or_else(|| item.project_entry_ids(cx).first().copied())
-                    });
-
-                    pane.project
-                        .update(cx, |project, cx| {
-                            if let Some(entry_id) = entry_id
-                                && project
-                                    .worktree_for_entry(entry_id, cx)
-                                    .is_some_and(|worktree| worktree.read(cx).is_visible())
-                            {
-                                return cx.emit(project::Event::RevealInProjectPanel(entry_id));
-                            }
-
-                            // When no entry is found, which is the case when
-                            // working with an unsaved buffer, or the worktree
-                            // is not visible, for example, a file that doesn't
-                            // belong to an open project, we can't reveal the
-                            // entry but we still want to activate the project
-                            // panel.
-                            cx.emit(project::Event::ActivateProjectPanel);
-                        })
-                        .log_err();
                 },
             ))
             .on_action(cx.listener(|_, _: &menu::Cancel, window, cx| {

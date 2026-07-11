@@ -123,9 +123,6 @@ pub struct SettingsContent {
     #[serde(flatten)]
     pub remote: RemoteSettingsContent,
 
-    /// Settings related to the file finder.
-    pub file_finder: Option<FileFinderSettingsContent>,
-
     pub tabs: Option<ItemSettingsContent>,
     pub tab_bar: Option<TabBarSettingsContent>,
 
@@ -393,28 +390,6 @@ pub enum StatusStyle {
     #[default]
     Icon,
     LabelColor,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
-pub struct FileFinderSettingsContent {
-    /// Determines how much space the file finder can take up in relation to the available window width.
-    ///
-    /// Default: small
-    pub modal_max_width: Option<FileFinderWidthContent>,
-    /// Determines whether the file finder should skip focus for the active file in search results.
-    ///
-    /// Default: true
-    pub skip_focus_for_active_in_search: Option<bool>,
-    /// Whether to use gitignored files when searching.
-    /// Only the file Zed had indexed will be used, not necessary all the gitignored files.
-    ///
-    /// Default: Smart
-    pub include_ignored: Option<IncludeIgnoredContent>,
-    /// Whether to include text channels in file finder results.
-    ///
-    /// Default: false
-    pub include_channels: Option<bool>,
 }
 
 #[derive(
