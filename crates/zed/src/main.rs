@@ -38,7 +38,7 @@ use settings::{Settings, SettingsStore, watch_config_file};
 use std::{
     env,
     io::{self, IsTerminal},
-    path::Path,
+    path::{PathBuf, Path},
     process::{self, Command, Stdio},
     sync::{Arc, LazyLock},
 };
@@ -537,10 +537,10 @@ fn main() {
         .detach();
 
         cx.spawn(async move |_cx| {
-            while let Some(args) = args_rx.next().await {
-                let urls: Vec<_> = args
+            while let Some(cmd) = args_rx.next().await {
+                let urls: Vec<_> = cmd.args
                     .iter()
-                    .map(|arg| parse_url_arg(arg))
+                    .map(|arg| parse_url_arg(&cmd.cwd, arg))
                     .collect();
 
                 if urls.is_empty() {
@@ -732,15 +732,19 @@ fn stdout_is_a_pty() -> bool {
     !*FORCE_CLI_MODE && io::stdout().is_terminal()
 }
 
-fn parse_url_arg(arg: &str) -> String {
-    match std::fs::canonicalize(Path::new(&arg)) {
+fn parse_url_arg(cwd: &String, arg: &str) -> String {
+    let arg = Path::new(&arg);
+    let arg = if arg.is_absolute() {
+        arg.to_path_buf()
+    } else {
+        let cwd = PathBuf::from(cwd);
+        cwd.join(arg)
+    };
+    let arg = arg.to_string_lossy().to_string();
+    match std::fs::canonicalize(&arg) {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
-            if arg.starts_with("file://")
-                || arg.starts_with("zed://")
-                || arg.starts_with("zed-cli://")
-                || arg.starts_with("ssh://")
-            {
+            if arg.starts_with("file://") {
                 arg.into()
             } else {
                 format!("file://{arg}")

@@ -8,9 +8,15 @@ use std::{
 };
 use uuid::Uuid;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct ArgListenerCommand {
+    pub cwd: String,
+    pub args: Vec<String>,
+}
+
 pub(crate) enum ArgListenerResult {
     Exit,
-    Create(mpsc::UnboundedReceiver<Vec<String>>),
+    Create(mpsc::UnboundedReceiver<ArgListenerCommand>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -23,7 +29,7 @@ struct LockFileData {
 #[derive(Serialize, Deserialize, Debug)]
 enum LocalMessage {
     Hello(String),
-    Command(Vec<String>),
+    Command(ArgListenerCommand),
 }
 
 #[derive(Debug)]
@@ -35,7 +41,7 @@ struct UseError {
 fn read_stream(
     stream: TcpStream,
     token: &str,
-    tx: mpsc::UnboundedSender<Vec<String>>
+    tx: mpsc::UnboundedSender<ArgListenerCommand>
 ) -> Result<(), String> {
     let reader = BufReader::new(stream);
     let mut authenticated = false;
@@ -53,11 +59,11 @@ fn read_stream(
                 }
                 authenticated = true;
             },
-            LocalMessage::Command(args) => {
+            LocalMessage::Command(command) => {
                 if !authenticated {
                     return Err("Command received before authentication".to_string());
                 }
-                tx.unbounded_send(args.to_vec()).unwrap();
+                tx.unbounded_send(command).unwrap();
             },
         }
     }
@@ -96,9 +102,13 @@ fn create_lock_file(
         })?;
     drop(lock_file);
 
-    let (tx, rx) = mpsc::unbounded::<Vec<String>>();
+    let (tx, rx) = mpsc::unbounded::<ArgListenerCommand>();
 
-    tx.unbounded_send(args.to_vec()).unwrap();
+    let cwd = std::env::current_dir()
+        .map_err(|err| format!("Failed to get cwd: {err}"))?
+        .to_string_lossy()
+        .to_string();
+    tx.unbounded_send(ArgListenerCommand { cwd, args: args.to_vec() }).unwrap();
 
     let token = token.to_string();
     std::thread::spawn(move || {
@@ -152,7 +162,17 @@ fn use_lock_file(
         })?;
 
     // send arguments
-    let command = LocalMessage::Command(args.to_vec());
+    let cwd = std::env::current_dir()
+        .map_err(|err| UseError {
+            retry: false,
+            err: format!("Failed to get cwd: {err}")
+        })?
+        .to_string_lossy()
+        .to_string();
+    let command = LocalMessage::Command(ArgListenerCommand {
+        cwd,
+        args: args.to_vec()
+    });
     writeln!(stream, "{}", serde_json::to_string(&command).unwrap())
         .map_err(|err| UseError {
             retry: false,
