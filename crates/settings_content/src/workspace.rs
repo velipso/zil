@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 
 use crate::{
-    ActionName, CenteredPaddingSettings, DelayMs, DockPosition, InactiveOpacity,
+    ActionName, CenteredPaddingSettings, DelayMs, InactiveOpacity,
     serialize_optional_f32_with_two_decimal_places,
 };
 
@@ -19,10 +19,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: platform_default
     pub text_rendering_mode: Option<TextRenderingMode>,
-    /// Layout mode for the bottom dock
-    ///
-    /// Default: contained
-    pub bottom_dock_layout: Option<BottomDockLayout>,
     /// Direction to split horizontally.
     ///
     /// Default: "up"
@@ -45,15 +41,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: off
     pub autosave: Option<AutosaveSetting>,
-    /// Controls previous session restoration in freshly launched Zed instance.
-    /// Values: empty_tab, last_workspace, last_session, launchpad
-    /// Default: last_session
-    pub restore_on_startup: Option<RestoreOnStartupBehavior>,
-    /// The default behavior when opening paths from the CLI without
-    /// an explicit `-e` or `-n` flag.
-    ///
-    /// Default: existing_window
-    pub cli_default_open_behavior: Option<CliDefaultOpenBehavior>,
     /// Whether to attempt to restore previous file's state when opening it again.
     /// The state is stored per pane.
     /// When disabled, defaults are applied instead of the state restoration.
@@ -100,10 +87,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: auto (nothing on macOS, "app quit" otherwise)
     pub on_last_window_closed: Option<OnLastWindowClosed>,
-    /// Whether to resize all the panels in a dock when resizing the dock.
-    ///
-    /// Default: ["left"]
-    pub resize_all_panels_in_dock: Option<Vec<DockPosition>>,
     /// Whether to automatically close files that have been deleted on disk.
     ///
     /// Default: false
@@ -241,32 +224,6 @@ pub struct ActivePaneModifiers {
 #[derive(
     Copy,
     Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum BottomDockLayout {
-    /// Contained between the left and right docks
-    #[default]
-    Contained,
-    /// Takes up the full width of the window
-    Full,
-    /// Extends under the left dock while snapping to the right dock
-    LeftAligned,
-    /// Extends under the right dock while snapping to the left dock
-    RightAligned,
-}
-
-#[derive(
-    Copy,
-    Clone,
     Default,
     Debug,
     Serialize,
@@ -318,60 +275,6 @@ impl CloseWindowWhenNoItems {
             CloseWindowWhenNoItems::KeepWindowOpen => false,
         }
     }
-}
-
-#[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum CliDefaultOpenBehavior {
-    /// Open directories as a new workspace in the current Zed window's sidebar.
-    #[default]
-    #[strum(serialize = "Add to Existing Window")]
-    ExistingWindow,
-    /// Open directories in a new window, but reuse an existing window when
-    /// opening files that are already part of an open project.
-    #[strum(serialize = "Open a New Window")]
-    NewWindow,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum RestoreOnStartupBehavior {
-    /// Always start with an empty editor tab
-    #[serde(alias = "none")]
-    EmptyTab,
-    /// Restore the workspace that was closed last.
-    LastWorkspace,
-    /// Restore all workspaces that were open when quitting Zed.
-    #[default]
-    LastSession,
-    /// Show the launchpad with recent projects (no tabs).
-    Launchpad,
 }
 
 #[with_fallible_options]

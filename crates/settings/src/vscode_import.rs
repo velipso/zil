@@ -109,10 +109,6 @@ impl VsCodeSettings {
             .map(|v| v as f32)
     }
 
-    fn read_u64(&self, setting: &str) -> Option<u64> {
-        self.read_value(setting).and_then(|v| v.as_u64())
-    }
-
     fn read_usize(&self, setting: &str) -> Option<usize> {
         self.read_value(setting)
             .and_then(|v| v.as_u64())
@@ -228,10 +224,6 @@ impl VsCodeSettings {
             rulers: None,
             indent_guides: None,
             horizontal_scroll_margin: None,
-            hover_popover_delay: self.read_u64("editor.hover.delay").map(Into::into),
-            hover_popover_enabled: self.read_bool("editor.hover.enabled"),
-            hover_popover_sticky: self.read_bool("editor.hover.sticky"),
-            hover_popover_hiding_delay: self.read_u64("editor.hover.hidingDelay").map(Into::into),
             lsp_document_colors: None,
             lsp_highlight_debounce: None,
             middle_click_paste: None,
@@ -615,9 +607,7 @@ impl VsCodeSettings {
                 "onWindowChange" => Some(AutosaveSetting::OnWindowChange),
                 _ => None,
             }),
-            bottom_dock_layout: None,
             centered_layout: None,
-            cli_default_open_behavior: None,
             close_on_file_delete: None,
             close_panel_on_toggle: None,
             command_aliases: Default::default(),
@@ -639,9 +629,7 @@ impl VsCodeSettings {
             on_last_window_closed: None,
             pane_split_direction_horizontal: None,
             pane_split_direction_vertical: None,
-            resize_all_panels_in_dock: None,
             restore_on_file_reopen: self.read_bool("workbench.editor.restoreViewState"),
-            restore_on_startup: None,
             window_decorations: None,
             show_call_status_icon: None,
             use_system_path_prompts: self.read_bool("files.simpleDialog.enable").map(|b| !b),

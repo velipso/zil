@@ -303,10 +303,6 @@ pub struct DebuggerSettingsContent {
     ///
     /// Default: true
     pub format_dap_log_messages: Option<bool>,
-    /// The dock position of the debug panel
-    ///
-    /// Default: Bottom
-    pub dock: Option<DockPosition>,
 }
 
 /// The granularity of one 'step' in the stepping requests `next`, `stepIn`, `stepOut`, and `stepBack`.
@@ -334,26 +330,6 @@ pub enum SteppingGranularity {
     Line,
     /// The step should allow one instruction to execute (e.g. one x86 instruction).
     Instruction,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum DockPosition {
-    Left,
-    Bottom,
-    Right,
 }
 
 /// Configuration of voice calls in Zed.
@@ -475,25 +451,6 @@ pub enum HourFormat {
     #[default]
     Hour12,
     Hour24,
-}
-
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum DockSide {
-    Left,
-    Right,
 }
 
 #[derive(

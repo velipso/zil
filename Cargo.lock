@@ -9660,7 +9660,6 @@ dependencies = [
  "sha2",
  "shellexpand",
  "util",
- "zed_actions",
 ]
 
 [[package]]

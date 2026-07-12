@@ -712,10 +712,7 @@ impl Editor {
     }
 
     pub(super) fn folds_did_change(&mut self, cx: &mut Context<Self>) {
-        if self.mode.is_minimap()
-            || WorkspaceSettings::get(None, cx).restore_on_startup
-                == RestoreOnStartupBehavior::EmptyTab
-        {
+        if self.mode.is_minimap() {
             return;
         }
 

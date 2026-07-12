@@ -310,17 +310,6 @@ pub mod settings_profile_selector {
     pub struct Toggle;
 }
 
-/// Where to spawn the task in the UI.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum RevealTarget {
-    /// In the central pane group, "main" editor area.
-    Center,
-    /// In the terminal dock, "regular" terminal items' place.
-    #[default]
-    Dock,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WslConnectionOptions {
     pub distro_name: String,

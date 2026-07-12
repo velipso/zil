@@ -8,7 +8,7 @@ use util::serde::default_true;
 use util::{ResultExt, truncate_and_remove_front};
 
 use crate::{
-    AttachRequest, ResolvedTask, RevealTarget, Shell, SpawnInTerminal, TaskContext, TaskId,
+    AttachRequest, ResolvedTask, Shell, SpawnInTerminal, TaskContext, TaskId,
     VariableName, ZED_VARIABLE_NAME_PREFIX, serde_helpers::non_empty_string_vec,
 };
 
@@ -46,11 +46,6 @@ pub struct TaskTemplate {
     // * `never` — do not alter focus, but still add/reuse the task's tab in its pane
     #[serde(default)]
     pub reveal: RevealStrategy,
-    /// Where to place the task's terminal item after starting the task.
-    /// * `dock` — in the terminal dock, "regular" terminal items' place (default).
-    /// * `center` — in the central pane group, "main" editor area.
-    #[serde(default)]
-    pub reveal_target: RevealTarget,
     /// What to do with the terminal pane and tab, after the command had finished:
     /// * `never` — do nothing when the command finishes (default)
     /// * `always` — always hide the terminal tab, hide the pane also if it was the last tab in it
@@ -281,7 +276,6 @@ impl TaskTemplate {
                 use_new_terminal: self.use_new_terminal,
                 allow_concurrent_runs: self.allow_concurrent_runs,
                 reveal: self.reveal,
-                reveal_target: self.reveal_target,
                 hide: self.hide,
                 shell: self.shell.clone(),
                 show_summary: self.show_summary,

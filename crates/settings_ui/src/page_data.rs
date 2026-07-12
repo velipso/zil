@@ -58,7 +58,6 @@ pub(crate) fn settings_data(cx: &App) -> Vec<SettingsPage> {
         languages_and_tools_page(cx),
         search_and_files_page(),
         window_and_layout_page(),
-        panels_page(),
         debugger_page(),
         version_control_page(),
         network_page(),
@@ -226,27 +225,6 @@ fn general_page(cx: &App) -> SettingsPage {
                 metadata: None,
                 files: USER,
             }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "CLI Default Open Behavior",
-                description: "How `zed <path>` opens directories when no flag is specified.",
-                field: Box::new(SettingField {
-                    json_path: Some("cli_default_open_behavior"),
-                    pick: |settings_content| {
-                        settings_content
-                            .workspace
-                            .cli_default_open_behavior
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.workspace.cli_default_open_behavior = value;
-                    },
-                }),
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    should_do_titlecase: Some(false),
-                    ..Default::default()
-                })),
-                files: USER,
-            }),
         ]
     }
     fn security_section() -> [SettingsPageItem; 2] {
@@ -276,7 +254,7 @@ fn general_page(cx: &App) -> SettingsPage {
         ]
     }
 
-    fn workspace_restoration_section() -> [SettingsPageItem; 3] {
+    fn workspace_restoration_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("Workspace Restoration"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -295,19 +273,6 @@ fn general_page(cx: &App) -> SettingsPage {
                             .session
                             .get_or_insert_default()
                             .restore_unsaved_buffers = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Restore On Startup",
-                description: "What to restore from the previous session when opening Zed.",
-                field: Box::new(SettingField {
-                    json_path: Some("restore_on_startup"),
-                    pick: |settings_content| settings_content.workspace.restore_on_startup.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.workspace.restore_on_startup = value;
                     },
                 }),
                 metadata: None,
@@ -1243,68 +1208,6 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn hover_popover_section() -> [SettingsPageItem; 5] {
-        [
-            SettingsPageItem::SectionHeader("Hover Popover"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Enabled",
-                description: "Show the informational hover box when moving the mouse over symbols in the editor.",
-                field: Box::new(SettingField {
-                    json_path: Some("hover_popover_enabled"),
-                    pick: |settings_content| settings_content.editor.hover_popover_enabled.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.hover_popover_enabled = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            // todo(settings ui): add units to this number input
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Delay",
-                description: "Time to wait in milliseconds before showing the informational hover box.",
-                field: Box::new(SettingField {
-                    json_path: Some("hover_popover_delay"),
-                    pick: |settings_content| settings_content.editor.hover_popover_delay.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.hover_popover_delay = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Sticky",
-                description: "Whether the hover popover sticks when the mouse moves toward it, allowing interaction with its contents.",
-                field: Box::new(SettingField {
-                    json_path: Some("hover_popover_sticky"),
-                    pick: |settings_content| settings_content.editor.hover_popover_sticky.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.hover_popover_sticky = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            // todo(settings ui): add units to this number input
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Hiding Delay",
-                description: "Time to wait in milliseconds before hiding the hover popover after the mouse moves away.",
-                field: Box::new(SettingField {
-                    json_path: Some("hover_popover_hiding_delay"),
-                    pick: |settings_content| {
-                        settings_content.editor.hover_popover_hiding_delay.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.editor.hover_popover_hiding_delay = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
     fn drag_and_drop_selection_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Drag And Drop Selection"),
@@ -1873,7 +1776,6 @@ fn editor_page() -> SettingsPage {
         auto_save_section(),
         which_key_section(),
         scrolling_section(),
-        hover_popover_section(),
         drag_and_drop_selection_section(),
         gutter_section(),
         indent_guides_section(),
@@ -2683,22 +2585,9 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn layout_section() -> [SettingsPageItem; 6] {
+    fn layout_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader("Layout"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Bottom Dock Layout",
-                description: "Layout mode for the bottom dock.",
-                field: Box::new(SettingField {
-                    json_path: Some("bottom_dock_layout"),
-                    pick: |settings_content| settings_content.workspace.bottom_dock_layout.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.workspace.bottom_dock_layout = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 files: USER,
                 title: "Centered Layout Left Padding",
@@ -2950,34 +2839,6 @@ fn window_and_layout_page() -> SettingsPage {
             window_section(),
             pane_modifiers_section(),
             pane_split_direction_section(),
-        ],
-    }
-}
-
-fn panels_page() -> SettingsPage {
-    fn debugger_panel_section() -> [SettingsPageItem; 2] {
-        [
-            SettingsPageItem::SectionHeader("Debugger Panel"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Debugger Panel Dock",
-                description: "The dock position of the debug panel.",
-                field: Box::new(SettingField {
-                    json_path: Some("debugger.dock"),
-                    pick: |settings_content| settings_content.debugger.as_ref()?.dock.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.debugger.get_or_insert_default().dock = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-        ]
-    }
-
-    SettingsPage {
-        title: "Panels",
-        items: concat_sections![
-            debugger_panel_section(),
         ],
     }
 }

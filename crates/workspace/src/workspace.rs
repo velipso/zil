@@ -37,7 +37,7 @@ use futures::{
     future::Shared,
 };
 use gpui::{
-    Action, AnyEntity, AnyView, AnyWeakView, App, AsyncApp, AsyncWindowContext, Bounds,
+    Action, AnyView, AnyWeakView, App, AsyncApp, AsyncWindowContext, Bounds,
     Context, CursorStyle, Decorations, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, Global, HitboxBehavior, Hsla, KeyContext, Keystroke, ManagedView, MouseButton,
     PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, Size, Stateful, Subscription,
@@ -103,10 +103,7 @@ use util::{
     serde::default_true,
 };
 use uuid::Uuid;
-pub use workspace_settings::{
-    AutosaveSetting, BottomDockLayout, FocusFollowsMouse,
-    RestoreOnStartupBehavior, TabBarSettings, WorkspaceSettings,
-};
+pub use workspace_settings::{AutosaveSetting, FocusFollowsMouse, TabBarSettings, WorkspaceSettings};
 use zed_actions::{theme::ToggleMode};
 
 use crate::{item::ItemBufferKind, notifications::NotificationId};
@@ -131,20 +128,6 @@ static ZED_WINDOW_POSITION: LazyLock<Option<Point<Pixels>>> = LazyLock::new(|| {
         .as_deref()
         .and_then(parse_pixel_position_env_var)
 });
-
-#[derive(Debug, PartialEq, Clone, Default)]
-pub struct DockStructure {
-    pub left: DockData,
-    pub right: DockData,
-    pub bottom: DockData,
-}
-
-#[derive(Debug, PartialEq, Clone, Default)]
-pub struct DockData {
-    pub visible: bool,
-    pub active_panel: Option<String>,
-    pub zoom: bool,
-}
 
 /// Opens a file or directory.
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
@@ -191,16 +174,8 @@ actions!(
         ClearAllNotifications,
         /// Clears all navigation history, including forward/backward navigation, recently opened files, and recently closed tabs. **This action is irreversible**.
         ClearNavigationHistory,
-        /// Closes the active dock.
-        CloseActiveDock,
-        /// Closes all docks.
-        CloseAllDocks,
-        /// Toggles all docks.
-        ToggleAllDocks,
         /// Closes the current window.
         CloseWindow,
-        /// Moves the focused panel to the next position.
-        MoveFocusedPanelToNextPosition,
         /// Creates a new file.
         NewFile,
         /// Creates a new file in a vertical split.
@@ -215,10 +190,6 @@ actions!(
         OpenFiles,
         /// Reloads the active item.
         ReloadActiveItem,
-        /// Resets the active dock to its default size.
-        ResetActiveDockSize,
-        /// Resets all open docks to their default sizes.
-        ResetOpenDocksSize,
         /// Reloads the application
         Reload,
         /// Formats and saves the current file, regardless of the format_on_save setting.
@@ -231,14 +202,8 @@ actions!(
         ShutdownDebugAdapters,
         /// Suppresses the current notification.
         SuppressNotification,
-        /// Toggles the bottom dock.
-        ToggleBottomDock,
         /// Toggles centered layout mode.
         ToggleCenteredLayout,
-        /// Toggles the left dock.
-        ToggleLeftDock,
-        /// Toggles the right dock.
-        ToggleRightDock,
         /// Toggles read-only mode for the active item (if supported by that item).
         ToggleReadOnlyFile,
         /// Toggles between scrolling/stacked tabs.
@@ -362,46 +327,6 @@ pub struct NewCenterTerminal {
     /// If true, creates a local terminal even in remote projects.
     #[serde(default)]
     pub local: bool,
-}
-
-/// Increases size of a currently focused dock by a given amount of pixels.
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
-pub struct IncreaseActiveDockSize {
-    /// For 0px parameter, uses UI font size value.
-    #[serde(default)]
-    pub px: u32,
-}
-
-/// Decreases size of a currently focused dock by a given amount of pixels.
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
-pub struct DecreaseActiveDockSize {
-    /// For 0px parameter, uses UI font size value.
-    #[serde(default)]
-    pub px: u32,
-}
-
-/// Increases size of all currently visible docks uniformly, by a given amount of pixels.
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
-pub struct IncreaseOpenDocksSize {
-    /// For 0px parameter, uses UI font size value.
-    #[serde(default)]
-    pub px: u32,
-}
-
-/// Decreases size of all currently visible docks uniformly, by a given amount of pixels.
-#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = workspace)]
-#[serde(deny_unknown_fields)]
-pub struct DecreaseOpenDocksSize {
-    /// For 0px parameter, uses UI font size value.
-    #[serde(default)]
-    pub px: u32,
 }
 
 actions!(
@@ -664,9 +589,6 @@ pub fn init(app_state: Arc<AppState>, cx: &mut App) {
         });
 }
 
-type BuildProjectItemFn =
-    fn(AnyEntity, Entity<Project>, Option<&Pane>, &mut Window, &mut App) -> Box<dyn ItemHandle>;
-
 type BuildProjectItemForPathFn =
     fn(
         &Entity<Project>,
@@ -677,20 +599,11 @@ type BuildProjectItemForPathFn =
 
 #[derive(Clone, Default)]
 struct ProjectItemRegistry {
-    build_project_item_fns_by_type: HashMap<TypeId, BuildProjectItemFn>,
     build_project_item_for_path_fns: Vec<BuildProjectItemForPathFn>,
 }
 
 impl ProjectItemRegistry {
     fn register<T: ProjectItem>(&mut self) {
-        self.build_project_item_fns_by_type.insert(
-            TypeId::of::<T::Item>(),
-            |item, project, pane, window, cx| {
-                let item = item.downcast().unwrap();
-                Box::new(cx.new(|cx| T::for_project_item(project, pane, item, window, cx)))
-                    as Box<dyn ItemHandle>
-            },
-        );
         self.build_project_item_for_path_fns
             .push(|project, project_path, window, cx| {
                 let project_path = project_path.clone();
@@ -1629,20 +1542,6 @@ impl Workspace {
 
     pub fn weak_handle(&self) -> WeakEntity<Self> {
         self.weak_self.clone()
-    }
-
-    pub fn set_bottom_dock_layout(
-        &mut self,
-        layout: BottomDockLayout,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let fs = self.project().read(cx).fs();
-        settings::update_settings_file(fs.clone(), cx, move |content, _cx| {
-            content.workspace.bottom_dock_layout = Some(layout);
-        });
-
-        cx.notify();
     }
 
     pub fn open_item_abs_paths(&self, cx: &App) -> Vec<PathBuf> {
@@ -5130,10 +5029,6 @@ pub struct OpenOptions {
     pub visible: Option<OpenVisible>,
     pub focus: Option<bool>,
     pub workspace_matching: WorkspaceMatching,
-    /// Whether to add unmatched directories to the existing window's sidebar
-    /// rather than opening a new window. Defaults to true, matching the default
-    /// `cli_default_open_behavior` setting.
-    pub add_dirs_to_sidebar: bool,
     pub wait: bool,
     pub requesting_window: Option<WindowHandle<MultiWorkspace>>,
     pub open_mode: OpenMode,
@@ -5146,7 +5041,6 @@ impl Default for OpenOptions {
             visible: None,
             focus: None,
             workspace_matching: WorkspaceMatching::default(),
-            add_dirs_to_sidebar: true,
             wait: false,
             requesting_window: None,
             open_mode: OpenMode::default(),

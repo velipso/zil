@@ -49,7 +49,7 @@ use uuid::Uuid;
 use workspace::{AppState, WorkspaceSettings, WorkspaceStore};
 use zed::{
     OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
-    derive_paths_with_position, handle_cli_connection, handle_keymap_file_changes,
+    derive_paths_with_position, handle_keymap_file_changes,
     initialize_workspace, open_paths_with_positions,
 };
 
@@ -563,38 +563,12 @@ fn main() {
 fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut App) {
     if let Some(kind) = request.kind {
         match kind {
-            OpenRequestKind::CliConnection(connection) => {
-                cx.spawn(async move |cx| handle_cli_connection(connection, app_state, cx).await)
-                    .detach();
-            }
             OpenRequestKind::FocusApp => {
                 cx.spawn(async move |cx| {
                     if workspace::activate_any_workspace_window(cx).is_some() {
                         return anyhow::Ok(());
                     }
                     restore_or_create_workspace(app_state, cx).await
-                })
-                .detach_and_log_err(cx);
-            }
-            OpenRequestKind::DockMenuAction { index } => {
-                cx.perform_dock_menu_action(index);
-            }
-            OpenRequestKind::Setting { setting_path } => {
-                // zed://settings/languages/$(language)/tab_size  - DONT SUPPORT
-                // zed://settings/languages/Rust/tab_size  - SUPPORT
-                // languages.$(language).tab_size
-                // [ languages $(language) tab_size]
-                cx.spawn(async move |cx| {
-                    let workspace =
-                        workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
-
-                    workspace.update(cx, |_, window, cx| match setting_path {
-                        None => window.dispatch_action(Box::new(zed_actions::OpenSettings), cx),
-                        Some(setting_path) => window.dispatch_action(
-                            Box::new(zed_actions::OpenSettingsAt { path: setting_path }),
-                            cx,
-                        ),
-                    })
                 })
                 .detach_and_log_err(cx);
             }

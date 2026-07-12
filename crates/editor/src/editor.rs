@@ -152,9 +152,8 @@ use ui::{ContextMenu, Disclosure, prelude::*};
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, maybe, post_inc};
 use workspace::{
-    CollaboratorId, Item as WorkspaceItem, ItemNavHistory,
-    RestoreOnStartupBehavior, SplitDirection,
-    TabBarSettings, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
+    CollaboratorId, Item as WorkspaceItem, ItemNavHistory, SplitDirection,
+    TabBarSettings, ViewId, Workspace, WorkspaceId,
     item::{ItemBufferKind, ItemHandle},
     notifications::{DetachAndPromptErr, NotifyTaskExt},
     searchable::SearchEvent,

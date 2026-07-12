@@ -1,28 +1,17 @@
-use crate::handle_open_request;
-use crate::restore_or_create_workspace;
 use anyhow::{Context as _, Result, anyhow};
-use cli::{CliRequest, CliResponse, CliResponseSink};
-use cli::{IpcHandshake, ipc};
 use editor::Editor;
 use fs::Fs;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures::channel::{mpsc, oneshot};
-use futures::future;
+use futures::channel::mpsc;
 
-use futures::{FutureExt, StreamExt};
-use gpui::{App, AsyncApp, Global, TaskExt, WindowHandle};
+use gpui::{App, AsyncApp, Global, WindowHandle};
 use remote::{RemoteConnectionOptions, WslConnectionOptions};
-use settings::Settings;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 use util::ResultExt;
-use util::debug_panic;
 use util::paths::PathWithPosition;
-use workspace::PathList;
 use workspace::item::ItemHandle;
-use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult};
+use workspace::{AppState, MultiWorkspace, OpenResult};
 
 #[derive(Default, Debug)]
 pub struct OpenRequest {
@@ -33,35 +22,13 @@ pub struct OpenRequest {
 }
 
 pub enum OpenRequestKind {
-    CliConnection(
-        (
-            mpsc::UnboundedReceiver<CliRequest>,
-            Box<dyn CliResponseSink>,
-        ),
-    ),
     FocusApp,
-    DockMenuAction {
-        index: usize,
-    },
-    Setting {
-        /// `None` opens settings without navigating to a specific path.
-        setting_path: Option<String>,
-    },
 }
 
 impl std::fmt::Debug for OpenRequestKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CliConnection(_) => write!(f, "CliConnection(..)"),
             Self::FocusApp => write!(f, "FocusApp"),
-            Self::DockMenuAction { index } => f
-                .debug_struct("DockMenuAction")
-                .field("index", index)
-                .finish(),
-            Self::Setting { setting_path } => f
-                .debug_struct("Setting")
-                .field("setting_path", setting_path)
-                .finish(),
         }
     }
 }
@@ -87,24 +54,10 @@ impl OpenRequest {
         }
 
         for url in request.urls {
-            if let Some(server_name) = url.strip_prefix("zed-cli://") {
-                this.kind = Some(OpenRequestKind::CliConnection(connect_to_cli(server_name)?));
-            } else if let Some(action_index) = url.strip_prefix("zed-dock-action://") {
-                this.kind = Some(OpenRequestKind::DockMenuAction {
-                    index: action_index.parse()?,
-                });
-            } else if let Some(file) = url.strip_prefix("file://") {
-                this.parse_file_path(file)
-            } else if let Some(file) = url.strip_prefix("zed://file") {
+            if let Some(file) = url.strip_prefix("file://") {
                 this.parse_file_path(file)
             } else if url == "zed://" || url == "zed://open" || url == "zed://open/" {
                 this.kind = Some(OpenRequestKind::FocusApp);
-            } else if url == "zed://settings" || url == "zed://settings/" {
-                this.kind = Some(OpenRequestKind::Setting { setting_path: None });
-            } else if let Some(setting_path) = url.strip_prefix("zed://settings/") {
-                this.kind = Some(OpenRequestKind::Setting {
-                    setting_path: Some(setting_path.to_string()),
-                });
             } else {
                 log::error!("unhandled url: {}", url);
             }
@@ -169,37 +122,6 @@ pub fn listen_for_cli_connections(opener: OpenListener) -> Result<()> {
         }
     });
     Ok(())
-}
-
-fn connect_to_cli(
-    server_name: &str,
-) -> Result<(
-    mpsc::UnboundedReceiver<CliRequest>,
-    Box<dyn CliResponseSink>,
-)> {
-    let handshake_tx = ipc::IpcSender::<IpcHandshake>::connect(server_name.to_string())
-        .context("error connecting to cli")?;
-    let (request_tx, request_rx) = ipc::channel::<CliRequest>()?;
-    let (response_tx, response_rx) = ipc::channel::<CliResponse>()?;
-
-    handshake_tx
-        .send(IpcHandshake {
-            requests: request_tx,
-            responses: response_rx,
-        })
-        .context("error sending ipc handshake")?;
-
-    let (async_request_tx, async_request_rx) = futures::channel::mpsc::unbounded::<CliRequest>();
-    thread::spawn(move || {
-        while let Ok(cli_request) = request_rx.recv() {
-            if async_request_tx.unbounded_send(cli_request).is_err() {
-                break;
-            }
-        }
-        anyhow::Ok(())
-    });
-
-    Ok((async_request_rx, Box::new(response_tx)))
 }
 
 pub fn navigate_to_positions(
@@ -269,191 +191,6 @@ pub async fn open_paths_with_positions(
     Ok((multi_workspace, items))
 }
 
-pub async fn handle_cli_connection(
-    (mut requests, responses): (
-        mpsc::UnboundedReceiver<CliRequest>,
-        Box<dyn CliResponseSink>,
-    ),
-    app_state: Arc<AppState>,
-    cx: &mut AsyncApp,
-) {
-    if let Some(request) = requests.next().await {
-        match request {
-            CliRequest::Open {
-                urls,
-                paths,
-                wait,
-                wsl,
-                mut open_behavior,
-                env,
-                user_data_dir: _,
-            } => {
-                if !urls.is_empty() {
-                    cx.update(|cx| {
-                        match OpenRequest::parse(
-                            RawOpenRequest {
-                                urls,
-                                wsl,
-                                open_behavior: Some(open_behavior),
-                            },
-                            cx,
-                        ) {
-                            Ok(open_request) => {
-                                cx.activate(true);
-                                handle_open_request(open_request, app_state.clone(), cx);
-                                responses.send(CliResponse::Exit { status: 0 }).log_err();
-                            }
-                            Err(e) => {
-                                responses
-                                    .send(CliResponse::Stderr {
-                                        message: format!("{e}"),
-                                    })
-                                    .log_err();
-                                responses.send(CliResponse::Exit { status: 1 }).log_err();
-                            }
-                        };
-                    });
-                    return;
-                }
-
-                if open_behavior == cli::OpenBehavior::Default {
-                    match resolve_open_behavior(
-                        &paths,
-                        &app_state,
-                        responses.as_ref(),
-                        &mut requests,
-                        cx,
-                    )
-                    .await
-                    {
-                        Some(settings::CliDefaultOpenBehavior::ExistingWindow) => {
-                            open_behavior = cli::OpenBehavior::ExistingWindow;
-                        }
-                        Some(settings::CliDefaultOpenBehavior::NewWindow) => {
-                            open_behavior = cli::OpenBehavior::Classic;
-                        }
-                        None => {}
-                    }
-                }
-
-                cx.update(|cx| cx.activate(true));
-
-                let open_workspace_result = open_workspaces(
-                    paths,
-                    open_behavior,
-                    responses.as_ref(),
-                    wait,
-                    app_state.clone(),
-                    env,
-                    cx,
-                )
-                .await;
-
-                let status = if open_workspace_result.is_err() { 1 } else { 0 };
-                responses.send(CliResponse::Exit { status }).log_err();
-            }
-            CliRequest::SetOpenBehavior { .. } => {
-                // We handle this case in a situation-specific way in
-                // resolve_open_behavior
-                debug_panic!("unexpected SetOpenBehavior message");
-            }
-        }
-    }
-}
-
-/// Resolves the CLI open behavior when no explicit flag (`-n`, `-e`, `--reuse`)
-/// was given. May prompt the user interactively on first run.
-///
-/// Returns `Some(behavior)` to override the default, or `None` if no override
-/// is needed (e.g. no existing windows, paths already in a workspace, or the
-/// user has already configured `cli_default_open_behavior` in settings).
-async fn resolve_open_behavior(
-    paths: &[String],
-    app_state: &Arc<AppState>,
-    responses: &dyn CliResponseSink,
-    requests: &mut mpsc::UnboundedReceiver<CliRequest>,
-    cx: &mut AsyncApp,
-) -> Option<settings::CliDefaultOpenBehavior> {
-    let has_existing_windows = cx.update(|cx| {
-        cx.windows()
-            .iter()
-            .any(|window| window.downcast::<MultiWorkspace>().is_some())
-    });
-
-    if !has_existing_windows {
-        return None;
-    }
-
-    if !paths.is_empty() {
-        let paths_as_pathbufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
-        let paths_in_existing_workspace = cx.update(|cx| {
-            for window in cx.windows() {
-                if let Some(multi_workspace) = window.downcast::<MultiWorkspace>() {
-                    if let Ok(multi_workspace) = multi_workspace.read(cx) {
-                        let workspace = multi_workspace.workspace();
-                        let project = workspace.read(cx).project().read(cx);
-                        if project
-                            .visibility_for_paths(&paths_as_pathbufs, false, cx)
-                            .is_some()
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
-        });
-
-        if paths_in_existing_workspace {
-            return None;
-        }
-    }
-
-    if !paths.is_empty() {
-        let has_directory =
-            futures::future::join_all(paths.iter().map(|p| app_state.fs.is_dir(Path::new(p))))
-                .await
-                .into_iter()
-                .any(|is_dir| is_dir);
-
-        if !has_directory {
-            return None;
-        }
-    }
-
-    let settings_text = app_state
-        .fs
-        .load(paths::settings_file())
-        .await
-        .unwrap_or_default();
-
-    if settings_text.contains("cli_default_open_behavior") {
-        return None;
-    }
-
-    responses.send(CliResponse::PromptOpenBehavior).log_err()?;
-
-    if let Some(CliRequest::SetOpenBehavior { behavior }) = requests.next().await {
-        let behavior = match behavior {
-            cli::CliBehaviorSetting::ExistingWindow => {
-                settings::CliDefaultOpenBehavior::ExistingWindow
-            }
-            cli::CliBehaviorSetting::NewWindow => settings::CliDefaultOpenBehavior::NewWindow,
-        };
-
-        let fs = app_state.fs.clone();
-        cx.update(|cx| {
-            settings::update_settings_file(fs, cx, move |content, _cx| {
-                content.workspace.cli_default_open_behavior = Some(behavior);
-            });
-        });
-
-        return Some(behavior);
-    }
-
-    None
-}
-
 pub(crate) fn open_options_for_request(
     open_behavior: Option<cli::OpenBehavior>,
     cx: &App,
@@ -483,212 +220,9 @@ pub(crate) fn open_options_for_behavior(
             cli::OpenBehavior::Add => workspace::WorkspaceMatching::MatchSubdirectory,
             _ => workspace::WorkspaceMatching::MatchExact,
         },
-        add_dirs_to_sidebar: match open_behavior {
-            cli::OpenBehavior::ExistingWindow => true,
-            // For the default value, we consult the settings to decide
-            // whether to open in a new window or existing window.
-            cli::OpenBehavior::Default => {
-                workspace::WorkspaceSettings::get_global(cx).cli_default_open_behavior
-                    == settings::CliDefaultOpenBehavior::ExistingWindow
-            }
-            _ => false,
-        },
         requesting_window,
         ..Default::default()
     }
-}
-
-async fn open_workspaces(
-    paths: Vec<String>,
-    open_behavior: cli::OpenBehavior,
-    responses: &dyn CliResponseSink,
-    wait: bool,
-    app_state: Arc<AppState>,
-    env: Option<collections::HashMap<String, String>>,
-    cx: &mut AsyncApp,
-) -> Result<()> {
-    if paths.is_empty() && open_behavior != cli::OpenBehavior::AlwaysNew {
-        return restore_or_create_workspace(app_state, cx).await;
-    }
-
-    let grouped_locations: Vec<PathList> =
-        if paths.is_empty() {
-            Vec::new()
-        } else {
-            vec![
-                PathList::new(&paths.into_iter().map(PathBuf::from).collect::<Vec<_>>()),
-            ]
-        };
-
-    if grouped_locations.is_empty() {
-        cx.update(|cx| {
-            let open_options = OpenOptions {
-                env,
-                ..Default::default()
-            };
-            workspace::open_new(open_options, app_state, cx, |workspace, window, cx| {
-                Editor::new_file(workspace, &Default::default(), window, cx)
-            })
-            .detach_and_log_err(cx);
-        });
-        return Ok(());
-    }
-    // If there are paths to open, open a workspace for each grouping of paths
-    let mut errored = false;
-
-    for workspace_paths in grouped_locations {
-        let base_open_options =
-            cx.update(|cx| open_options_for_behavior(open_behavior, cx));
-        let open_options = workspace::OpenOptions {
-            wait,
-            env: env.clone(),
-            ..base_open_options
-        };
-
-        let workspace_paths = workspace_paths
-            .paths()
-            .iter()
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect();
-
-        let workspace_failed_to_open = open_local_workspace(
-            workspace_paths,
-            open_options,
-            responses,
-            &app_state,
-            cx,
-        )
-        .await;
-
-        if workspace_failed_to_open {
-            errored = true;
-        }
-    }
-
-    anyhow::ensure!(!errored, "failed to open a workspace");
-
-    Ok(())
-}
-
-async fn open_local_workspace(
-    workspace_paths: Vec<String>,
-    open_options: workspace::OpenOptions,
-    responses: &dyn CliResponseSink,
-    app_state: &Arc<AppState>,
-    cx: &mut AsyncApp,
-) -> bool {
-    println!("open_local_workspace");
-    let user_provided_paths = !workspace_paths.is_empty();
-
-    let paths_with_position =
-        derive_paths_with_position(app_state.fs.as_ref(), workspace_paths).await;
-
-    let (workspace, items) = match open_paths_with_positions(
-        &paths_with_position,
-        app_state.clone(),
-        open_options.clone(),
-        cx,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(error) => {
-            let paths = paths_with_position
-                .iter()
-                .map(|p| p.path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            log::error!("failed to open workspace [{paths}]: {error:#}");
-            responses
-                .send(CliResponse::Stderr {
-                    message: format!("error opening [{paths}]: {error:#}"),
-                })
-                .log_err();
-            return true;
-        }
-    };
-
-    let mut errored = false;
-    let mut item_release_futures = Vec::new();
-    let mut subscriptions = Vec::new();
-    // If --wait flag is used with no paths, or a directory, then wait until
-    // the entire workspace is closed.
-    if open_options.wait {
-        let mut wait_for_window_close = paths_with_position.is_empty();
-        if user_provided_paths {
-            for path_with_position in &paths_with_position {
-                if app_state.fs.is_dir(&path_with_position.path).await {
-                    wait_for_window_close = true;
-                    break;
-                }
-            }
-        }
-
-        if wait_for_window_close {
-            let (release_tx, release_rx) = oneshot::channel();
-            item_release_futures.push(release_rx);
-            subscriptions.push(workspace.update(cx, |_, _, cx| {
-                cx.on_release(move |_, _| {
-                    let _ = release_tx.send(());
-                })
-            }));
-        }
-    }
-
-    for item in items {
-        match item {
-            Some(Ok(item)) => {
-                if open_options.wait {
-                    let (release_tx, release_rx) = oneshot::channel();
-                    item_release_futures.push(release_rx);
-                    subscriptions.push(Ok(cx.update(|cx| {
-                        item.on_release(
-                            cx,
-                            Box::new(move |_| {
-                                release_tx.send(()).ok();
-                            }),
-                        )
-                    })));
-                }
-            }
-            Some(Err(err)) => {
-                log::error!("{err:#}");
-                responses
-                    .send(CliResponse::Stderr {
-                        message: format!("{err:#}"),
-                    })
-                    .log_err();
-                errored = true;
-            }
-            None => {}
-        }
-    }
-
-    if open_options.wait {
-        let wait = async move {
-            let _subscriptions = subscriptions;
-            let _ = future::try_join_all(item_release_futures).await;
-        }
-        .fuse();
-        futures::pin_mut!(wait);
-
-        let background = cx.background_executor().clone();
-        loop {
-            // Repeatedly check if CLI is still open to avoid wasting resources
-            // waiting for files or workspaces to close.
-            let mut timer = background.timer(Duration::from_secs(1)).fuse();
-            futures::select_biased! {
-                _ = wait => break,
-                _ = timer => {
-                    if responses.send(CliResponse::Ping).is_err() {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    errored
 }
 
 pub async fn derive_paths_with_position(
