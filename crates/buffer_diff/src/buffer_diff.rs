@@ -1,10 +1,7 @@
 use futures::channel::oneshot;
 use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task};
 use imara_diff::{Algorithm, Sink, intern::InternedInput, sources::lines_with_terminator};
-use language::{
-    Capability, Diff, DiffOptions, Language, LanguageName, LanguageRegistry,
-    language_settings::LanguageSettings, word_diff_ranges,
-};
+use language::{Capability, Diff, DiffOptions, Language, LanguageRegistry, word_diff_ranges};
 use rope::Rope;
 use std::{
     cmp::Ordering,
@@ -1096,29 +1093,8 @@ impl BufferDiffInner<language::BufferSnapshot> {
     }
 }
 
-fn build_diff_options(
-    language: Option<LanguageName>,
-    language_scope: Option<language::LanguageScope>,
-    cx: &App,
-) -> Option<DiffOptions> {
-    #[cfg(any(test, feature = "test-support"))]
-    {
-        if !cx.has_global::<settings::SettingsStore>() {
-            return Some(DiffOptions {
-                language_scope,
-                max_word_diff_line_count: MAX_WORD_DIFF_LINE_COUNT,
-                ..Default::default()
-            });
-        }
-    }
-
-    LanguageSettings::resolve(None, language.as_ref(), cx)
-        .word_diff_enabled
-        .then_some(DiffOptions {
-            language_scope,
-            max_word_diff_line_count: MAX_WORD_DIFF_LINE_COUNT,
-            ..Default::default()
-        })
+fn build_diff_options() -> Option<DiffOptions> {
+    None
 }
 
 fn compute_hunks(
@@ -1560,7 +1536,6 @@ impl BufferDiff {
             buffer.clone(),
             Some(Arc::from(base_text)),
             Some(false),
-            None,
             cx,
         ));
         this.set_snapshot(inner, &buffer, cx).detach();
@@ -1665,18 +1640,13 @@ impl BufferDiff {
         buffer: text::BufferSnapshot,
         base_text: Option<Arc<str>>,
         base_text_change: Option<bool>,
-        language: Option<Arc<Language>>,
         cx: &App,
     ) -> Task<BufferDiffUpdate> {
         let base_text = base_text.map(|t| text::LineEnding::normalize_arc(t));
         let prev_base_text = self.base_text(cx).as_rope().clone();
         let base_text_changed = base_text_change.is_some();
         let compute_base_text_edits = base_text_change == Some(true);
-        let diff_options = build_diff_options(
-            language.as_ref().map(|l| l.name()),
-            language.as_ref().map(|l| l.default_scope()),
-            cx,
-        );
+        let diff_options = build_diff_options();
         let buffer_snapshot = buffer.clone();
 
         let base_text_diff_task = if base_text_changed && compute_base_text_edits {
@@ -1963,7 +1933,6 @@ impl BufferDiff {
     pub fn set_base_text(
         &mut self,
         base_text: Option<Arc<str>>,
-        language: Option<Arc<Language>>,
         buffer: text::BufferSnapshot,
         cx: &mut Context<Self>,
     ) -> oneshot::Receiver<()> {
@@ -1974,7 +1943,7 @@ impl BufferDiff {
         cx.spawn(async move |this, cx| {
             let Some(state) = this
                 .update(cx, |this, cx| {
-                    this.update_diff(buffer.clone(), base_text, Some(false), language, cx)
+                    this.update_diff(buffer.clone(), base_text, Some(false), cx)
                 })
                 .log_err()
             else {
@@ -2001,9 +1970,8 @@ impl BufferDiff {
 
     #[cfg(any(test, feature = "test-support"))]
     pub fn recalculate_diff_sync(&mut self, buffer: &text::BufferSnapshot, cx: &mut Context<Self>) {
-        let language = self.base_text(cx).language().cloned();
         let base_text = self.base_text_string(cx).map(|s| s.as_str().into());
-        let fut = self.update_diff(buffer.clone(), base_text, None, language, cx);
+        let fut = self.update_diff(buffer.clone(), base_text, None, cx);
         let fg_executor = cx.foreground_executor().clone();
         let snapshot = fg_executor.block_on(fut);
         let fut = self.set_snapshot_with_secondary_inner(snapshot, buffer, None, false, cx);

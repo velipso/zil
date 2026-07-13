@@ -75,7 +75,7 @@ use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_ident
 use rpc::ErrorCode;
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
-use settings::{RegisterSetting, Settings, SettingsLocation};
+use settings::{Settings, SettingsLocation};
 use std::{
     borrow::Cow,
     future::Future,
@@ -615,34 +615,6 @@ impl DirectoryLister {
 }
 
 pub const CURRENT_PROJECT_FEATURES: &[&str] = &["new-style-anchors"];
-
-/// Whether to disable all AI features in Zed.
-///
-/// Default: false
-#[derive(Copy, Clone, Debug, RegisterSetting)]
-pub struct DisableAiSettings {
-    pub disable_ai: bool,
-}
-
-impl settings::Settings for DisableAiSettings {
-    fn from_settings(_content: &settings::SettingsContent) -> Self {
-        Self { disable_ai: true }
-    }
-}
-
-impl DisableAiSettings {
-    /// Returns whether AI is disabled for the given file.
-    ///
-    /// This checks the project-level settings for the file's worktree,
-    /// allowing `disable_ai` to be configured per-project in `.zed/settings.json`.
-    pub fn is_ai_disabled_for_buffer(_buffer: Option<&Entity<Buffer>>, _cx: &App) -> bool {
-        true
-    }
-
-    pub fn is_ai_disabled_for_file(_file: Option<&Arc<dyn language::File>>, _cx: &App) -> bool {
-        true
-    }
-}
 
 impl Project {
     pub fn local(

@@ -162,13 +162,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: "off"
     pub document_symbols: Option<DocumentSymbols>,
-    /// Controls where the `editor::Rewrap` action is allowed for this language.
-    ///
-    /// Note: This setting has no effect in Vim mode, as rewrap is already
-    /// allowed everywhere.
-    ///
-    /// Default: "in_comments"
-    pub allow_rewrap: Option<RewrapBehavior>,
     /// Whether to show tabs and spaces in the editor.
     pub show_whitespaces: Option<ShowWhitespaceSetting>,
     /// Visible characters used to render whitespace when show_whitespaces is enabled.
@@ -183,11 +176,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: true
     pub indent_list_on_tab: Option<bool>,
-    /// Which code actions to run on save before the formatter.
-    /// These are not run if formatting is off.
-    ///
-    /// Default: {} (or {"source.organizeImports": true} for Go).
-    pub code_actions_on_format: Option<HashMap<String, bool>>,
     /// Controls automatic indentation behavior when typing.
     ///
     /// - "syntax_aware": Adjusts indentation based on syntax context (default)
@@ -204,17 +192,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: {}
     pub tasks: Option<LanguageTaskSettingsContent>,
-    /// Preferred debuggers for this language.
-    ///
-    /// Default: []
-    pub debuggers: Option<Vec<String>>,
-    /// Whether to enable word diff highlighting in the editor.
-    ///
-    /// When enabled, changed words within modified lines are highlighted
-    /// to show exactly what changed.
-    ///
-    /// Default: true
-    pub word_diff_enabled: Option<bool>,
 }
 
 /// Controls how whitespace should be displayedin the editor.
@@ -255,31 +232,6 @@ pub enum ShowWhitespaceSetting {
 pub struct WhitespaceMapContent {
     pub space: Option<char>,
     pub tab: Option<char>,
-}
-
-/// The behavior of `editor::Rewrap`.
-#[derive(
-    Debug,
-    PartialEq,
-    Clone,
-    Copy,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum RewrapBehavior {
-    /// Only rewrap within comments.
-    #[default]
-    InComments,
-    /// Only rewrap within the current selection(s).
-    InSelections,
-    /// Allow rewrapping anywhere.
-    Anywhere,
 }
 
 #[with_fallible_options]

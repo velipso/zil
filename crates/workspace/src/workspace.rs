@@ -4778,10 +4778,6 @@ impl Render for Workspace {
                                     .inset_0()
                                     .shadow_lg();
 
-                                if !WorkspaceSettings::get_global(cx).zoomed_padding {
-                                    return Some(div);
-                                }
-
                                 Some(div.top_2().bottom_2().left_2().right_2().border_1())
                             }))
                             .children(self.render_notifications(window, cx)),

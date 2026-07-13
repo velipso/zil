@@ -76,13 +76,6 @@ pub struct LanguageSettings {
     pub auto_indent_on_paste: bool,
     /// Task configuration for this language.
     pub tasks: LanguageTaskSettings,
-    /// Whether to enable word diff highlighting in the editor.
-    ///
-    /// When enabled, changed words within modified lines are highlighted
-    /// to show exactly what changed.
-    ///
-    /// Default: `true`
-    pub word_diff_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -352,7 +345,6 @@ impl settings::Settings for AllLanguageSettings {
                     enabled: tasks.enabled.unwrap(),
                     prefer_lsp: tasks.prefer_lsp.unwrap(),
                 },
-                word_diff_enabled: settings.word_diff_enabled.unwrap(),
             }
         }
 

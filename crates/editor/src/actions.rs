@@ -537,8 +537,6 @@ actions!(
         NextEditPrediction,
         /// Scrolls to the next screen.
         NextScreen,
-        /// Opens a view of all bookmarks in the project.
-        ViewBookmarks,
         /// Opens the context menu at cursor position.
         OpenContextMenu,
         /// Opens documentation for the symbol at cursor.

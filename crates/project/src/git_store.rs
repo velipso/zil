@@ -845,7 +845,6 @@ impl GitStore {
                             );
                             buffer_diff.set_base_text(
                                 content.clone(),
-                                buffer_snapshot.language().cloned(),
                                 buffer_snapshot.text,
                                 cx,
                             )
@@ -2229,7 +2228,6 @@ impl BufferGitState {
                             buffer.clone(),
                             index,
                             index_changed.then_some(false),
-                            language.clone(),
                             cx,
                         )
                     })
@@ -2252,7 +2250,6 @@ impl BufferGitState {
                                 buffer.clone(),
                                 head,
                                 head_changed.then_some(true),
-                                language.clone(),
                                 cx,
                             )
                         })
@@ -2334,7 +2331,6 @@ impl BufferGitState {
                             buffer.clone(),
                             base_text,
                             None,
-                            language.clone(),
                             cx,
                         )
                     })

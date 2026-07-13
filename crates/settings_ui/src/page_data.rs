@@ -1646,7 +1646,7 @@ fn editor_page() -> SettingsPage {
         ]
     }
 
-    fn toolbar_section() -> [SettingsPageItem; 6] {
+    fn toolbar_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Toolbar"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -1692,78 +1692,6 @@ fn editor_page() -> SettingsPage {
                             .toolbar
                             .get_or_insert_default()
                             .quick_actions = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Selections Menu",
-                description: "Show the selections menu in the editor toolbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("toolbar.selections_menu"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .toolbar
-                            .as_ref()?
-                            .selections_menu
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .toolbar
-                            .get_or_insert_default()
-                            .selections_menu = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Agent Review",
-                description: "Show agent review buttons in the editor toolbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("toolbar.agent_review"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .toolbar
-                            .as_ref()?
-                            .agent_review
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .toolbar
-                            .get_or_insert_default()
-                            .agent_review = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Code Actions",
-                description: "Show code action buttons in the editor toolbar.",
-                field: Box::new(SettingField {
-                    json_path: Some("toolbar.code_actions"),
-                    pick: |settings_content| {
-                        settings_content
-                            .editor
-                            .toolbar
-                            .as_ref()?
-                            .code_actions
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .editor
-                            .toolbar
-                            .get_or_insert_default()
-                            .code_actions = value;
                     },
                 }),
                 metadata: None,
@@ -2037,7 +1965,7 @@ fn search_and_files_page() -> SettingsPage {
         ]
     }
 
-    fn file_scan_section() -> [SettingsPageItem; 6] {
+    fn file_scan_section() -> [SettingsPageItem; 5] {
         [
             SettingsPageItem::SectionHeader("File Scan"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2100,21 +2028,6 @@ fn search_and_files_page() -> SettingsPage {
                 files: USER,
             }),
             SettingsPageItem::SettingItem(SettingItem {
-                title: "Restore File State",
-                description: "Restore previous file state when reopening.",
-                field: Box::new(SettingField {
-                    json_path: Some("restore_on_file_reopen"),
-                    pick: |settings_content| {
-                        settings_content.workspace.restore_on_file_reopen.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content.workspace.restore_on_file_reopen = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
                 title: "Close on File Delete",
                 description: "Automatically close files that have been deleted.",
                 field: Box::new(SettingField {
@@ -2139,155 +2052,9 @@ fn search_and_files_page() -> SettingsPage {
 }
 
 fn window_and_layout_page() -> SettingsPage {
-    fn title_bar_section() -> [SettingsPageItem; 10] {
+    fn title_bar_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Title Bar"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Branch Status Icon",
-                description: "Show git status indicators on the branch icon in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_branch_status_icon"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_branch_status_icon
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_branch_status_icon = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Branch Name",
-                description: "Show the branch name button in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_branch_name"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_branch_name
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_branch_name = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Project Items",
-                description: "Show the project host and name in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_project_items"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_project_items
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_project_items = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Onboarding Banner",
-                description: "Show banners announcing new features in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_onboarding_banner"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_onboarding_banner
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_onboarding_banner = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show Sign In",
-                description: "Show the sign in button in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_sign_in"),
-                    pick: |settings_content| {
-                        settings_content.title_bar.as_ref()?.show_sign_in.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_sign_in = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show User Menu",
-                description: "Show the user menu button in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_user_menu"),
-                    pick: |settings_content| {
-                        settings_content.title_bar.as_ref()?.show_user_menu.as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_user_menu = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Show User Picture",
-                description: "Show user picture in the titlebar.",
-                field: Box::new(SettingField {
-                    json_path: Some("title_bar.show_user_picture"),
-                    pick: |settings_content| {
-                        settings_content
-                            .title_bar
-                            .as_ref()?
-                            .show_user_picture
-                            .as_ref()
-                    },
-                    write: |settings_content, value, _| {
-                        settings_content
-                            .title_bar
-                            .get_or_insert_default()
-                            .show_user_picture = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Show Menus",
                 description: "Show the menus in the titlebar.",
@@ -2720,7 +2487,7 @@ fn window_and_layout_page() -> SettingsPage {
         ]
     }
 
-    fn pane_modifiers_section() -> [SettingsPageItem; 4] {
+    fn pane_modifiers_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Pane Modifiers"),
             SettingsPageItem::SettingItem(SettingItem {
@@ -2766,19 +2533,6 @@ fn window_and_layout_page() -> SettingsPage {
                             .active_pane_modifiers
                             .get_or_insert_default()
                             .border_size = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Zoomed Padding",
-                description: "Show padding for zoomed panes.",
-                field: Box::new(SettingField {
-                    json_path: Some("zoomed_padding"),
-                    pick: |settings_content| settings_content.workspace.zoomed_padding.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.workspace.zoomed_padding = value;
                     },
                 }),
                 metadata: None,
@@ -3611,54 +3365,9 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
         ]
     }
 
-    fn miscellaneous_section() -> [SettingsPageItem; 5] {
+    fn miscellaneous_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader("Miscellaneous"),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Word Diff Enabled",
-                description: "Whether to enable word diff highlighting in the editor. When enabled, changed words within modified lines are highlighted to show exactly what changed.",
-                field: Box::new(SettingField {
-                    json_path: Some("languages.$(language).word_diff_enabled"),
-                    pick: |settings_content| {
-                        language_settings_field(settings_content, |language| {
-                            language.word_diff_enabled.as_ref()
-                        })
-                    },
-                    write: |settings_content, value, _| {
-                        language_settings_field_mut(settings_content, value, |language, value| {
-                            language.word_diff_enabled = value;
-                        })
-                    },
-                }),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Debuggers",
-                description: "Preferred debuggers for this language.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("languages.$(language).debuggers"),
-                        pick: |settings_content| {
-                            language_settings_field(settings_content, |language| {
-                                language.debuggers.as_ref()
-                            })
-                        },
-                        write: |settings_content, value, _| {
-                            language_settings_field_mut(
-                                settings_content,
-                                value,
-                                |language, value| {
-                                    language.debuggers = value;
-                                },
-                            )
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER | PROJECT,
-            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "Middle Click Paste",
                 description: "Enable middle-click paste on Linux.",

@@ -739,7 +739,6 @@ pub struct Editor {
         RefCell<BTreeMap<EditorActionId, Box<dyn Fn(&Editor, &mut Window, &mut Context<Self>)>>>,
     >,
     use_selection_highlight: bool,
-    auto_replace_emoji_shortcode: bool,
     buffer_serialization: Option<BufferSerialization>,
     custom_context_menu: Option<
         Box<
@@ -1682,7 +1681,6 @@ impl Editor {
             use_modal_editing: full_mode,
             read_only: is_minimap,
             use_selection_highlight: true,
-            auto_replace_emoji_shortcode: false,
             leader_id: None,
             remote_id: None,
             pending_mouse_down: None,

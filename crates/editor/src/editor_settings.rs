@@ -55,9 +55,6 @@ pub struct StickyScroll {
 pub struct Toolbar {
     pub breadcrumbs: bool,
     pub quick_actions: bool,
-    pub selections_menu: bool,
-    pub agent_review: bool,
-    pub code_actions: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -188,9 +185,6 @@ impl Settings for EditorSettings {
             toolbar: Toolbar {
                 breadcrumbs: toolbar.breadcrumbs.unwrap(),
                 quick_actions: toolbar.quick_actions.unwrap(),
-                selections_menu: toolbar.selections_menu.unwrap(),
-                agent_review: toolbar.agent_review.unwrap(),
-                code_actions: toolbar.code_actions.unwrap(),
             },
             scrollbar: Scrollbar {
                 show_horizontal: scrollbar.show_horizontal.unwrap(),

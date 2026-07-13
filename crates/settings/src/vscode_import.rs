@@ -168,7 +168,6 @@ impl VsCodeSettings {
 
     pub fn settings_content(&self) -> SettingsContent {
         SettingsContent {
-            calls: None,
             credentials_url: None,
             debugger: None,
             editor: self.editor_settings_content(),
@@ -434,11 +433,8 @@ impl VsCodeSettings {
 
     fn default_language_settings_content(&self) -> LanguageSettingsContent {
         LanguageSettingsContent {
-            allow_rewrap: None,
             auto_indent: None,
             auto_indent_on_paste: self.read_bool("editor.formatOnPaste"),
-            code_actions_on_format: None,
-            debuggers: None,
             enable_language_server: None,
             extend_list_on_newline: None,
             indent_list_on_tab: None,
@@ -465,7 +461,6 @@ impl VsCodeSettings {
             }),
             tasks: None,
             whitespace_map: None,
-            word_diff_enabled: None,
         }
     }
 
@@ -609,7 +604,6 @@ impl VsCodeSettings {
             }),
             centered_layout: None,
             close_on_file_delete: None,
-            close_panel_on_toggle: None,
             command_aliases: Default::default(),
             confirm_quit: self.read_enum("window.confirmBeforeClose", |s| match s {
                 "always" | "keyboardOnly" => Some(true),
@@ -629,9 +623,7 @@ impl VsCodeSettings {
             on_last_window_closed: None,
             pane_split_direction_horizontal: None,
             pane_split_direction_vertical: None,
-            restore_on_file_reopen: self.read_bool("workbench.editor.restoreViewState"),
             window_decorations: None,
-            show_call_status_icon: None,
             use_system_path_prompts: self.read_bool("files.simpleDialog.enable").map(|b| !b),
             use_system_prompts: None,
             use_system_window_tabs: self.read_bool("window.nativeTabs"),
@@ -642,7 +634,6 @@ impl VsCodeSettings {
                     CloseWindowWhenNoItems::KeepWindowOpen
                 }
             }),
-            zoomed_padding: None,
             focus_follows_mouse: None,
             default_tab_size: None,
             default_hard_tabs: None,

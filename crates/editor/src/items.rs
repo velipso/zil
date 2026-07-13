@@ -47,11 +47,7 @@ use workspace::{
         SearchableItemHandle,
     },
 };
-use workspace::{
-    Pane, WorkspaceSettings,
-    item::{FollowEvent, ProjectItemKind},
-    searchable::SearchOptions,
-};
+use workspace::{Pane, item::{FollowEvent, ProjectItemKind}, searchable::SearchOptions};
 
 pub const MAX_TAB_TITLE_LEN: usize = 24;
 
@@ -1063,7 +1059,6 @@ impl ProjectItem for Editor {
         let multibuffer_snapshot = editor.buffer().read(cx).snapshot(cx);
 
         if let Some(buffer_snapshot) = editor.buffer().read(cx).snapshot(cx).as_singleton()
-            && WorkspaceSettings::get(None, cx).restore_on_file_reopen
             && let Some(restoration_data) = Self::project_item_kind()
                 .and_then(|kind| pane.as_ref()?.project_item_restoration_data.get(&kind))
                 .and_then(|data| data.downcast_ref::<EditorRestorationData>())
@@ -1125,7 +1120,7 @@ impl Editor {
         cx: &mut Context<Self>,
         write: impl for<'a> FnOnce(&'a mut RestorationData) + 'static,
     ) {
-        if self.mode.is_minimap() || !WorkspaceSettings::get(None, cx).restore_on_file_reopen {
+        if self.mode.is_minimap() {
             return;
         }
 

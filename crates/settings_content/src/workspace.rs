@@ -33,23 +33,10 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: false
     pub confirm_quit: Option<bool>,
-    /// Whether or not to show the call status icon in the status bar.
-    ///
-    /// Default: true
-    pub show_call_status_icon: Option<bool>,
     /// When to automatically save edited buffers.
     ///
     /// Default: off
     pub autosave: Option<AutosaveSetting>,
-    /// Whether to attempt to restore previous file's state when opening it again.
-    /// The state is stored per pane.
-    /// When disabled, defaults are applied instead of the state restoration.
-    ///
-    /// E.g. for editors, selections, folds and scroll positions are restored, if the same file is closed and, later, opened again in the same pane.
-    /// When disabled, a single selection in the very beginning of the file, zero scroll position and no folds state is used as a default.
-    ///
-    /// Default: true
-    pub restore_on_file_reopen: Option<bool>,
     /// The size of the workspace split drop targets on the outer edges.
     /// Given as a fraction that will be multiplied by the smaller dimension of the workspace.
     ///
@@ -95,18 +82,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: false
     pub use_system_window_tabs: Option<bool>,
-    /// Whether to show padding for zoomed panels.
-    /// When enabled, zoomed bottom panels will have some top padding,
-    /// while zoomed left/right panels will have padding to the right/left (respectively).
-    ///
-    /// Default: true
-    pub zoomed_padding: Option<bool>,
-    /// Whether toggling a panel (e.g. with its keyboard shortcut) also closes
-    /// the panel when it is already focused, instead of just moving focus back
-    /// to the editor.
-    ///
-    /// Default: false
-    pub close_panel_on_toggle: Option<bool>,
     /// What draws window decorations/titlebar, the client application (Zed) or display server
     /// Default: client
     pub window_decorations: Option<WindowDecorations>,
