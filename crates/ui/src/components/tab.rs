@@ -146,11 +146,13 @@ impl RenderOnce for Tab {
         };
 
         self.div
-            .h(Tab::container_height(cx))
+            .h(Tab::container_height(cx) + px(1.))
             .bg(tab_bg)
             .border_color(cx.theme().colors().border)
             .pl_px()
+            .mt(px(-1.))
             .border_r_1()
+            .border_t_1()
             .map(|this| match self.position {
                 TabPosition::First => {
                     if self.selected && !stacked_tabs {
@@ -167,10 +169,10 @@ impl RenderOnce for Tab {
                     }
                 }
                 TabPosition::Middle(Ordering::Equal) =>
-                    if stacked_tabs {
-                        this.border_b_1()
-                    } else {
+                    if !stacked_tabs {
                         this.pb_px()
+                    } else {
+                        this.border_b_1()
                     },
                 TabPosition::Middle(Ordering::Less) => this.border_b_1(),
                 TabPosition::Middle(Ordering::Greater) => this.border_b_1(),

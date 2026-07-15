@@ -2842,7 +2842,7 @@ impl Pane {
     ) -> impl IntoElement {
         div()
             .id("tab_bar_drop_target")
-            .min_w_6()
+            .when(!self.show_tab_bar_stacked, |this| this.min_w_6())
             .h(Tab::container_height(cx))
             .flex_grow_1()
             // HACK: This empty child is currently necessary to force the drop target to appear
