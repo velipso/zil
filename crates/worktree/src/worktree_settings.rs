@@ -18,17 +18,11 @@ pub struct WorktreeSettings {
     /// determine whether to terminate worktree scanning for a given dir.
     pub parent_dir_scan_inclusions: PathMatcher,
     pub scan_symlinks: ScanSymlinksSetting,
-    pub private_files: PathMatcher,
     pub hidden_files: PathMatcher,
     pub read_only_files: PathMatcher,
 }
 
 impl WorktreeSettings {
-    pub fn is_path_private(&self, path: &RelPath) -> bool {
-        path.ancestors()
-            .any(|ancestor| self.private_files.is_match(ancestor))
-    }
-
     pub fn is_path_excluded(&self, path: &RelPath) -> bool {
         path.ancestors()
             .any(|ancestor| self.file_scan_exclusions.is_match(ancestor))
@@ -61,7 +55,6 @@ impl Settings for WorktreeSettings {
         let worktree = content.project.worktree.clone();
         let file_scan_exclusions = worktree.file_scan_exclusions.unwrap();
         let file_scan_inclusions = worktree.file_scan_inclusions.unwrap();
-        let private_files = worktree.private_files.unwrap().0;
         let hidden_files = worktree.hidden_files.unwrap();
         let read_only_files = worktree.read_only_files.unwrap_or_default();
         let scan_symlinks = worktree.scan_symlinks.unwrap();
@@ -88,9 +81,6 @@ impl Settings for WorktreeSettings {
             .unwrap(),
             file_scan_inclusions: path_matchers(file_scan_inclusions, "file_scan_inclusions")
                 .unwrap(),
-            private_files: path_matchers(private_files, "private_files")
-                .log_err()
-                .unwrap_or_default(),
             hidden_files: path_matchers(hidden_files, "hidden_files")
                 .log_err()
                 .unwrap_or_default(),

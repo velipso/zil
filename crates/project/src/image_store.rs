@@ -818,7 +818,6 @@ impl LocalImageStore {
                     entry_id: Some(entry.id),
                     path: entry.path.clone(),
                     worktree: worktree.clone(),
-                    is_private: entry.is_private,
                 }
             } else {
                 worktree::File {
@@ -827,7 +826,6 @@ impl LocalImageStore {
                     entry_id: old_file.entry_id,
                     path: old_file.path.clone(),
                     worktree: worktree.clone(),
-                    is_private: old_file.is_private,
                 }
             };
 

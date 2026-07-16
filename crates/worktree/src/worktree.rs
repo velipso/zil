@@ -139,7 +139,6 @@ pub struct LocalWorktree {
     visible: bool,
     next_entry_id: Arc<AtomicUsize>,
     settings: WorktreeSettings,
-    share_private_files: bool,
     scanning_enabled: bool,
     force_defer_watch: bool,
 }
@@ -468,7 +467,6 @@ impl Worktree {
             })
             .detach();
 
-            let share_private_files = false;
             if let Some(metadata) = metadata {
                 let mut entry = Entry::new(
                     RelPath::empty().into(),
@@ -486,7 +484,6 @@ impl Worktree {
                         && let Some(file_name) = file_name.to_str()
                         && let Ok(path) = RelPath::unix(file_name)
                     {
-                        entry.is_private = !share_private_files && settings.is_path_private(path);
                         entry.is_hidden = settings.is_path_hidden(path);
                     }
                 }
@@ -497,7 +494,6 @@ impl Worktree {
             let (scan_requests_tx, scan_requests_rx) = async_channel::unbounded();
             let (path_prefixes_to_scan_tx, path_prefixes_to_scan_rx) = async_channel::unbounded();
             let mut worktree = LocalWorktree {
-                share_private_files,
                 next_entry_id,
                 snapshot,
                 is_scanning: watch::channel_with(true),
@@ -1122,10 +1118,6 @@ impl LocalWorktree {
         &self.fs
     }
 
-    pub fn is_path_private(&self, path: &RelPath) -> bool {
-        !self.share_private_files && self.settings.is_path_private(path)
-    }
-
     pub fn fs_is_case_sensitive(&self) -> bool {
         self.fs_case_sensitive
     }
@@ -1155,7 +1147,6 @@ impl LocalWorktree {
         cx: &Context<Worktree>,
     ) {
         let snapshot = self.snapshot();
-        let share_private_files = self.share_private_files;
         let next_entry_id = self.next_entry_id.clone();
         let fs = self.fs.clone();
         let scanning_enabled = self.scanning_enabled;
@@ -1199,7 +1190,6 @@ impl LocalWorktree {
                         changed_paths: Default::default(),
                     }),
                     phase: BackgroundScannerPhase::InitialScan,
-                    share_private_files,
                     settings,
                     watcher,
                     track_git_repositories,
@@ -1443,7 +1433,6 @@ impl LocalWorktree {
         let abs_path = self.absolutize(&path);
         let fs = self.fs.clone();
         let entry = self.refresh_entry(path.clone(), None, cx);
-        let is_private = self.is_path_private(&path);
 
         let worktree = cx.weak_entity();
         cx.background_spawn(async move {
@@ -1471,7 +1460,6 @@ impl LocalWorktree {
                             size: metadata.len,
                         },
                         is_local: true,
-                        is_private,
                     })
                 }
             };
@@ -1485,7 +1473,6 @@ impl LocalWorktree {
         let abs_path = self.absolutize(&path);
         let fs = self.fs.clone();
         let entry = self.refresh_entry(path.clone(), None, cx);
-        let is_private = self.is_path_private(path.as_ref());
 
         let this = cx.weak_entity();
         cx.background_spawn(async move {
@@ -1527,7 +1514,6 @@ impl LocalWorktree {
                             size: metadata.len,
                         },
                         is_local: true,
-                        is_private,
                     })
                 }
             };
@@ -1625,7 +1611,6 @@ impl LocalWorktree {
         cx: &Context<Worktree>,
     ) -> Task<Result<Arc<File>>> {
         let fs = self.fs.clone();
-        let is_private = self.is_path_private(&path);
         let abs_path = self.absolutize(&path);
 
         let write = cx.background_spawn({
@@ -1726,7 +1711,6 @@ impl LocalWorktree {
                     },
                     entry_id: None,
                     is_local: true,
-                    is_private,
                 }))
             }
         })
@@ -2039,11 +2023,6 @@ impl LocalWorktree {
             resume_updates: resume_updates_tx,
             _maintain_remote_snapshot,
         });
-    }
-
-    pub fn share_private_files(&mut self, cx: &Context<Worktree>) {
-        self.share_private_files = true;
-        self.restart_background_scanners(cx);
     }
 
     pub fn update_abs_path_and_refresh(
@@ -3437,7 +3416,6 @@ pub struct File {
     pub disk_state: DiskState,
     pub entry_id: Option<ProjectEntryId>,
     pub is_local: bool,
-    pub is_private: bool,
 }
 
 impl language::File for File {
@@ -3478,10 +3456,6 @@ impl language::File for File {
             is_deleted: self.disk_state.is_deleted(),
             is_historic: matches!(self.disk_state, DiskState::Historic { .. }),
         }
-    }
-
-    fn is_private(&self) -> bool {
-        self.is_private
     }
 
     fn path_style(&self, cx: &App) -> PathStyle {
@@ -3528,7 +3502,6 @@ impl File {
             },
             entry_id: Some(entry.id),
             is_local: true,
-            is_private: entry.is_private,
         })
     }
 
@@ -3562,7 +3535,6 @@ impl File {
             disk_state,
             entry_id: proto.entry_id.map(ProjectEntryId::from_proto),
             is_local: false,
-            is_private: false,
         })
     }
 
@@ -3620,8 +3592,6 @@ pub struct Entry {
     /// directory is expanded.
     pub is_external: bool,
 
-    /// Whether this entry is considered to be a `.env` file.
-    pub is_private: bool,
     /// The entry's size on disk, in bytes.
     pub size: u64,
     pub char_bag: CharBag,
@@ -3782,7 +3752,6 @@ impl Entry {
             is_hidden: false,
             is_always_included: false,
             is_external: false,
-            is_private: false,
             char_bag,
             is_fifo: metadata.is_fifo,
         }
@@ -3970,7 +3939,6 @@ struct BackgroundScanner {
     phase: BackgroundScannerPhase,
     watcher: Arc<dyn Watcher>,
     settings: WorktreeSettings,
-    share_private_files: bool,
     track_git_repositories: bool,
     /// Whether this is a single-file worktree (root is a file, not a directory).
     /// Used to determine if we should give up after repeated canonicalization failures.
@@ -5020,10 +4988,6 @@ impl BackgroundScanner {
                 let relative_path = job
                     .path
                     .join(RelPath::unix(child_name.to_str().unwrap()).unwrap());
-                if self.is_path_private(&relative_path) {
-                    log::debug!("detected private file: {relative_path:?}");
-                    child_entry.is_private = true;
-                }
                 if self.settings.is_path_hidden(&relative_path) {
                     log::debug!("detected hidden file: {relative_path:?}");
                     child_entry.is_hidden = true;
@@ -5200,7 +5164,6 @@ impl BackgroundScanner {
                     let is_dir = fs_entry.is_dir();
                     fs_entry.is_ignored = ignore_stack.is_abs_path_ignored(&abs_path, is_dir);
                     fs_entry.is_external = is_external;
-                    fs_entry.is_private = self.is_path_private(path);
                     fs_entry.is_always_included =
                         self.settings.is_path_always_included(path, is_dir);
                     fs_entry.is_hidden = self.settings.is_path_hidden(path);
@@ -5655,10 +5618,6 @@ impl BackgroundScanner {
         }
 
         self.executor.timer(FS_WATCH_LATENCY).await
-    }
-
-    fn is_path_private(&self, path: &RelPath) -> bool {
-        !self.share_private_files && self.settings.is_path_private(path)
     }
 
     fn should_scan_directory(&self, state: &BackgroundScannerState, entry: &Entry) -> bool {
@@ -6421,7 +6380,6 @@ impl TryFrom<(&CharBag, &PathMatcher, proto::Entry)> for Entry {
             is_hidden: entry.is_hidden,
             is_always_included,
             is_external: entry.is_external,
-            is_private: false,
             char_bag,
             is_fifo: entry.is_fifo,
         })

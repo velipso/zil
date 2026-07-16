@@ -103,12 +103,6 @@ pub struct EditorSettingsContent {
     /// Default: always
     pub seed_search_query_from_cursor: Option<SeedQuerySetting>,
     pub use_smartcase_search: Option<bool>,
-    /// Hide the values of variables in `private` files, as defined by the
-    /// private_files setting. This only changes the visual representation,
-    /// the values are still present in the file and can be selected / copied / pasted
-    ///
-    /// Default: false
-    pub redact_private_values: Option<bool>,
 
     /// Whether to enable middle-click paste on Linux
     ///

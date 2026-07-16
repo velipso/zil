@@ -194,37 +194,6 @@ fn general_page(cx: &App) -> SettingsPage {
                 metadata: None,
                 files: USER,
             }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Redact Private Values",
-                description: "Hide the values of variables in private files.",
-                field: Box::new(SettingField {
-                    json_path: Some("redact_private_values"),
-                    pick: |settings_content| settings_content.editor.redact_private_values.as_ref(),
-                    write: |settings_content, value, _| {
-                        settings_content.editor.redact_private_values = value;
-                    },
-                }),
-                metadata: None,
-                files: USER,
-            }),
-            SettingsPageItem::SettingItem(SettingItem {
-                title: "Private Files",
-                description: "Globs to match against file paths to determine if a file is private.",
-                field: Box::new(
-                    SettingField {
-                        json_path: Some("worktree.private_files"),
-                        pick: |settings_content| {
-                            settings_content.project.worktree.private_files.as_ref()
-                        },
-                        write: |settings_content, value, _| {
-                            settings_content.project.worktree.private_files = value;
-                        },
-                    }
-                    .unimplemented(),
-                ),
-                metadata: None,
-                files: USER,
-            }),
         ]
     }
     fn security_section() -> [SettingsPageItem; 2] {

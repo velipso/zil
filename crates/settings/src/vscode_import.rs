@@ -228,7 +228,6 @@ impl VsCodeSettings {
             middle_click_paste: None,
             minimap: self.minimap_content(),
             minimum_contrast_for_highlights: None,
-            redact_private_values: None,
             relative_line_numbers: self.read_enum("editor.lineNumbers", |s| match s {
                 "relative" => Some(RelativeLineNumbers::Enabled),
                 _ => None,
@@ -675,7 +674,6 @@ impl VsCodeSettings {
                 })
                 .filter(|r| !r.is_empty()),
             scan_symlinks: None,
-            private_files: None,
             hidden_files: None,
             read_only_files: self
                 .read_value("files.readonlyExclude")

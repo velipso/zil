@@ -177,12 +177,6 @@ impl FollowableItem for Editor {
     }
 
     fn to_state_proto(&self, _: &mut Window, cx: &mut App) -> Option<proto::view::Variant> {
-        let buffer = self.buffer.read(cx).as_singleton();
-        let is_private = buffer.read(cx).file().is_some_and(|file| file.is_private());
-        if is_private {
-            return None;
-        }
-
         let display_snapshot = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let scroll_anchor = self.scroll_manager.native_anchor(&display_snapshot, cx);
         let buffer = self.buffer.read(cx);

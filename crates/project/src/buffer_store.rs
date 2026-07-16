@@ -251,7 +251,6 @@ impl LocalBufferStore {
                     entry_id: Some(entry.id),
                     path: entry.path.clone(),
                     worktree: worktree.clone(),
-                    is_private: entry.is_private,
                 }
             } else {
                 File {
@@ -260,7 +259,6 @@ impl LocalBufferStore {
                     entry_id: old_file.entry_id,
                     path: old_file.path.clone(),
                     worktree: worktree.clone(),
-                    is_private: old_file.is_private,
                 }
             };
 
@@ -384,7 +382,6 @@ impl LocalBufferStore {
                             disk_state: DiskState::New,
                             entry_id: None,
                             is_local: true,
-                            is_private: false,
                         })),
                         Capability::ReadWrite,
                     );

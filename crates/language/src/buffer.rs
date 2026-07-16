@@ -378,9 +378,6 @@ pub trait File: Send + Sync + Any {
     /// Converts this file into a protobuf message.
     fn to_proto(&self, cx: &App) -> rpc::proto::File;
 
-    /// Return whether Zed considers this to be a private file.
-    fn is_private(&self) -> bool;
-
     fn can_open(&self) -> bool {
         !self.is_local()
     }
@@ -4621,43 +4618,6 @@ impl BufferSnapshot {
         })
     }
 
-    /// Returns anchor ranges for any matches of the redaction query.
-    /// The buffer can be associated with multiple languages, and the redaction query associated with each
-    /// will be run on the relevant section of the buffer.
-    pub fn redacted_ranges<T: ToOffset>(
-        &self,
-        range: Range<T>,
-    ) -> impl Iterator<Item = Range<usize>> + '_ {
-        let offset_range = range.start.to_offset(self)..range.end.to_offset(self);
-        let mut syntax_matches = self.syntax.matches(offset_range, self, |grammar| {
-            grammar
-                .redactions_config
-                .as_ref()
-                .map(|config| &config.query)
-        });
-
-        let configs = syntax_matches
-            .grammars()
-            .iter()
-            .map(|grammar| grammar.redactions_config.as_ref())
-            .collect::<Vec<_>>();
-
-        iter::from_fn(move || {
-            let redacted_range = syntax_matches
-                .peek()
-                .and_then(|mat| {
-                    configs[mat.grammar_index].and_then(|config| {
-                        mat.captures
-                            .iter()
-                            .find(|capture| capture.index == config.redaction_capture_ix)
-                    })
-                })
-                .map(|mat| mat.node.byte_range());
-            syntax_matches.advance();
-            redacted_range
-        })
-    }
-
     pub fn injections_intersecting_range<T: ToOffset>(
         &self,
         range: Range<T>,
@@ -5386,10 +5346,6 @@ impl File for TestFile {
 
     fn to_proto(&self, _: &App) -> rpc::proto::File {
         unimplemented!()
-    }
-
-    fn is_private(&self) -> bool {
-        false
     }
 
     fn path_style(&self, _cx: &App) -> PathStyle {

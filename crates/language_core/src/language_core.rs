@@ -10,7 +10,7 @@ pub use diagnostic::{Diagnostic, DiagnosticSourceKind};
 pub use grammar::{
     BracketsConfig, BracketsPatternConfig, DebugVariablesConfig, DebuggerTextObject, Grammar,
     GrammarId, HighlightsConfig, InjectionConfig, InjectionPatternConfig,
-    NEXT_GRAMMAR_ID, OutlineConfig, OverrideConfig, OverrideEntry, RedactionConfig,
+    NEXT_GRAMMAR_ID, OutlineConfig, OverrideConfig, OverrideEntry,
     TextObject, TextObjectConfig,
 };
 pub use highlight_map::{HighlightId, HighlightMap};

@@ -2517,7 +2517,6 @@ dependencies = [
  "convert_case 0.11.0",
  "criterion",
  "ctor",
- "emojis",
  "fs",
  "futures",
  "futures-lite 1.13.0",
@@ -2598,15 +2597,6 @@ name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
-
-[[package]]
-name = "emojis"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99e1f1df1f181f2539bac8bf027d31ca5ffbf9e559e3f2d09413b9107b5c02f4"
-dependencies = [
- "phf 0.11.3",
-]
 
 [[package]]
 name = "ena"

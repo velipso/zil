@@ -41,7 +41,7 @@ pub use language_core::{
     DecreaseIndentConfig, Grammar, GrammarId, HighlightsConfig, InjectionConfig,
     InjectionPatternConfig, LanguageConfig, LanguageConfigOverride,
     LanguageId, LanguageMatcher, OrderedListConfig, OutlineConfig, Override, OverrideConfig,
-    OverrideEntry, PromptResponseContext, RedactionConfig,
+    OverrideEntry, PromptResponseContext,
     Symbol, TaskListConfig, TextObject, TextObjectConfig, ToLspPosition,
     WrapCharactersConfig, deserialize_regex,
     deserialize_regex_vec, regex_json_schema, regex_vec_json_schema, serialize_regex,
@@ -792,10 +792,6 @@ impl Language {
             self.grammar = Some(Arc::new(grammar));
         }
         Ok(self)
-    }
-
-    pub fn with_redaction_query(self, source: &str) -> Result<Self> {
-        self.with_grammar_query_and_name(|grammar, name| grammar.with_redaction_query(source, name))
     }
 
     fn with_grammar_query(

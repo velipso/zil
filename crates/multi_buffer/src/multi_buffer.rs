@@ -4682,22 +4682,6 @@ impl MultiBufferSnapshot {
         .flatten()
     }
 
-    pub fn redacted_ranges<'a, T: ToOffset>(
-        &'a self,
-        range: Range<T>,
-        redaction_enabled: impl Fn(Option<&Arc<dyn File>>) -> bool + 'a,
-    ) -> impl Iterator<Item = Range<MultiBufferOffset>> + 'a {
-        let range = range.start.to_offset(self)..range.end.to_offset(self);
-        self.lift_buffer_metadata(range, move |buffer, range| {
-            if redaction_enabled(buffer.file()) {
-                Some(buffer.redacted_ranges(range).map(|range| (range, ())))
-            } else {
-                None
-            }
-        })
-        .map(|(range, _, _)| range)
-    }
-
     pub fn line_indents(
         &self,
         start_row: MultiBufferRow,

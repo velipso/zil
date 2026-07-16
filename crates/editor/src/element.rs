@@ -610,7 +610,6 @@ impl EditorElement {
         em_width: Pixels,
         em_advance: Pixels,
         autoscroll_containing_element: bool,
-        redacted_ranges: &[Range<DisplayPoint>],
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<CursorLayout> {
@@ -650,11 +649,7 @@ impl EditorElement {
                     let mut block_width = cell_width;
                     let mut block_text = None;
 
-                    let is_cursor_in_redacted_range = redacted_ranges
-                        .iter()
-                        .any(|range| range.start <= cursor_position && cursor_position < range.end);
-
-                    if selection.cursor_shape == CursorShape::Block && !is_cursor_in_redacted_range
+                    if selection.cursor_shape == CursorShape::Block
                     {
                         if let Some(text) = snapshot.grapheme_at(cursor_position).or_else(|| {
                             if snapshot.is_empty() {
@@ -2731,7 +2726,6 @@ impl EditorElement {
                 let invisible_display_ranges = self.paint_highlights(layout, window, cx);
                 self.paint_document_colors(layout, window);
                 self.paint_lines(&invisible_display_ranges, layout, window, cx);
-                self.paint_redactions(layout, window);
                 self.paint_navigation_overlays(layout, window, cx);
                 self.paint_cursors(layout, window, cx);
                 window.with_element_namespace("crease_trailers", |window| {
@@ -2834,31 +2828,6 @@ impl EditorElement {
             let row = DisplayRow(layout.visible_display_row_range.start.0 + ix as u32);
             line_with_invisibles.draw_background(layout, row, layout.content_origin, window, cx);
         }
-    }
-
-    fn paint_redactions(&mut self, layout: &EditorLayout, window: &mut Window) {
-        if layout.redacted_ranges.is_empty() {
-            return;
-        }
-
-        let line_end_overshoot = layout.line_end_overshoot();
-
-        // A softer than perfect black
-        let redaction_color = gpui::rgb(0x0e1111);
-
-        window.paint_layer(layout.position_map.text_hitbox.bounds, |window| {
-            for range in layout.redacted_ranges.iter() {
-                self.paint_highlighted_range(
-                    range.clone(),
-                    true,
-                    redaction_color.into(),
-                    Pixels::ZERO,
-                    line_end_overshoot,
-                    layout,
-                    window,
-                );
-            }
-        });
     }
 
     fn paint_navigation_overlays(
@@ -4984,11 +4953,6 @@ impl Element for EditorElement {
                         .colors
                         .as_ref()
                         .map(|colors| colors.editor_display_highlights(&snapshot));
-                    let redacted_ranges = self.editor.read(cx).redacted_ranges(
-                        start_anchor..end_anchor,
-                        &snapshot.display_snapshot,
-                        cx,
-                    );
 
                     let local_selections: Vec<Selection<Point>> = self
                         .editor_with_selections(cx)
@@ -5376,7 +5340,6 @@ impl Element for EditorElement {
                         em_width,
                         em_advance,
                         autoscroll_containing_element,
-                        &redacted_ranges,
                         window,
                         cx,
                     );
@@ -5528,7 +5491,6 @@ impl Element for EditorElement {
                         highlighted_rows,
                         highlighted_ranges,
                         highlighted_gutter_ranges,
-                        redacted_ranges,
                         document_colors,
                         line_elements,
                         line_numbers,
@@ -5696,7 +5658,6 @@ pub struct EditorLayout {
     spacer_blocks: Vec<BlockLayout>,
     highlighted_ranges: Vec<(Range<DisplayPoint>, Hsla)>,
     highlighted_gutter_ranges: Vec<(Range<DisplayPoint>, Hsla)>,
-    redacted_ranges: Vec<Range<DisplayPoint>>,
     cursors: Vec<(DisplayPoint, Hsla)>,
     visible_cursors: Vec<CursorLayout>,
     navigation_overlay_paint_commands: Vec<NavigationOverlayPaintCommand>,
